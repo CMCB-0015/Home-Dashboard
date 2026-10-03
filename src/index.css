@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+/* ── Design tokens ─────────────────────────────────────────────────────────
+   Every color in the app comes from here. Change a value once and the whole
+   dashboard follows. */
+@theme static {
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  --color-bg: #0e1318;
+  --color-surface: #161d24;
+  --color-surface-raised: #1c242c;
+  --color-edge: #29333d;
+  --color-edge-soft: #1f2730;
+  --color-ink: #e8edf2;
+  --color-ink-dim: #8493a1;
+  --color-ink-faint: #56636f;
+
+  --color-climate: #5b8fc7;     --color-climate-dim: #20303f;
+  --color-lights: #9fe3ec;      --color-lights-dim: #1c3438;
+  --color-cameras: #7c8cf0;     --color-cameras-dim: #262d52;
+  --color-vacuum: #8b9baa;      --color-vacuum-dim: #232a30;
+  --color-irrigation: #35c2d6;  --color-irrigation-dim: #143138;
+  --color-vehicles: #a7b4c2;    --color-vehicles-dim: #232b33;
+  --color-sonos: #e0a1c8;       --color-sonos-dim: #3a2433;
+  --color-weather: #f2c14e;     --color-weather-dim: #3a3220;
+  --color-calendar: #6fa8ff;    --color-calendar-dim: #1b2a44;
+  --color-list: #7fd1b9;        --color-list-dim: #183630;
+  --color-charge: #7fd1b9;
+  --color-fuel: #d6b46a;
+  --color-rain: #6fa8ff;
+  --color-critical: #e2584a;    --color-critical-dim: #3d2420;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+.font-display { font-family: var(--font-display); }
+.font-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Horizontal swipe between the two pages — native touch scrolling with snap */
+.pager {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.pager::-webkit-scrollbar { display: none; }
+.pager > section {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  overflow-y: auto;
+}
+
+input[type="range"] { accent-color: currentColor; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}
