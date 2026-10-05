@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { useHome } from '../lib/useHome'
+import type { Category } from '../types'
 
 interface CardProps {
   accent: string
@@ -16,14 +18,19 @@ interface CardProps {
   padded?: boolean
   /** Extra classes for the body (e.g. to make it scroll) */
   bodyClassName?: string
+  /** Which service this card shows — adds a small "Demo" tag until it's connected */
+  category?: Category
 }
 
-export function Card({ accent, children, to, actions, headerRight, title, subtitle, className = '', padded = true, bodyClassName = '' }: CardProps) {
+export function Card({ accent, children, to, actions, headerRight, title, subtitle, className = '', padded = true, bodyClassName = '', category }: CardProps) {
+  const { live, data } = useHome()
+  const demo = !!category && (!live || data?.sources?.[category] !== 'live')
   const header = title ? (
     <div className="flex items-center justify-between gap-3 px-5 pt-4">
       <div className="flex min-w-0 items-baseline gap-2.5">
         <h2 className="font-display text-[15px] font-semibold text-ink">{title}</h2>
         {subtitle && <span className="truncate text-[11px] text-ink-faint">{subtitle}</span>}
+        {demo && <span className="shrink-0 rounded-full border border-edge px-1.5 py-px text-[9px] font-medium uppercase tracking-wider text-ink-faint" title="Placeholder data — this service isn't connected yet">Demo</span>}
       </div>
       {headerRight}
     </div>

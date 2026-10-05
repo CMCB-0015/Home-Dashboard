@@ -1,7 +1,10 @@
-import { Minus, Plus, Play, Pause, Square, SkipBack, SkipForward } from 'lucide-react'
+import { Minus, Plus, Play, Pause, Square, SkipBack, SkipForward, Check } from 'lucide-react'
 import { useHome } from '../../lib/useHome'
 import { categories } from '../../lib/categories'
-import { relativeTime, untilTime, mmss } from '../../lib/format'
+import { relativeTime, untilTime, mmss, clockTime } from '../../lib/format'
+import { QuickRunButton, ConfirmButton } from '../QuickRunButton'
+import { PAUSE_MINUTES } from '../../config/irrigation'
+import type { QuickRun, IrrigationZone } from '../../types'
 import { Card } from '../Card'
 import { Pill, RoundButton } from '../Buttons'
 import { Dial, DotRow, Bar } from '../Gauges'
@@ -20,7 +23,7 @@ export function ClimateTile() {
     send('nest/set', { deviceId: t.id, targetTempF: target })
   }
   return (
-    <Card className={tile} accent={cfg.color} title="Climate" subtitle={`${t.room} · ${t.mode}`} to={cfg.path}
+    <Card className={tile} accent={cfg.color} title="Climate" category="climate" subtitle={`${t.room} · ${t.mode}`} to={cfg.path}
       actions={
         <div className="flex w-full items-center justify-between">
           <RoundButton color={cfg.color} dim={cfg.dim} onClick={() => adjust(-1)} label="Lower target"><Minus size={14} /></RoundButton>
@@ -46,7 +49,7 @@ export function LightsTile() {
     send('hue/set', { all: true, on: false })
   }
   return (
-    <Card className={tile} accent={cfg.color} title="Lights" to={cfg.path}
+    <Card className={tile} accent={cfg.color} title="Lights" category="lights" to={cfg.path}
       actions={<Pill color={cfg.color} dim={cfg.dim} onClick={allOff} disabled={on === 0}>All off</Pill>}>
       <div className="flex items-baseline gap-2 pt-4">
         <span className="font-mono text-5xl">{on}</span>
@@ -73,7 +76,7 @@ export function SonosTile() {
     send('sonos/command', { command: 'volume', value: v })
   }
   return (
-    <Card className={tile} accent={cfg.color} title="Sonos" subtitle={`${p.room}${p.groupSize > 1 ? ` +${p.groupSize - 1}` : ''}`}
+    <Card className={tile} accent={cfg.color} title="Sonos" category="sonos" subtitle={`${p.room}${p.groupSize > 1 ? ` +${p.groupSize - 1}` : ''}`}
       actions={
         <div className="flex w-full items-center justify-center gap-5">
           <button onClick={() => cmd('previous')} aria-label="Previous" className="text-ink-dim hover:text-ink"><SkipBack size={18} fill="currentColor" /></button>
@@ -115,10 +118,9 @@ export function VacuumTile() {
     send('roborock/command', { action: next === 'cleaning' ? 'start' : 'pause', profileId })
   }
   return (
-    <Card className={tile} accent={cfg.color} title="Vacuum" subtitle={`Last clean ${relativeTime(v.lastCleanAt)}`} to={cfg.path}
+    <Card className={tile} accent={cfg.color} title="Vacuum" category="vacuum" subtitle={`Last clean ${relativeTime(v.lastCleanAt)}`} to={cfg.path}
       actions={<>
         <Pill color={cfg.color} dim={cfg.dim} onClick={() => run()}>{v.state === 'cleaning' ? <><Pause size={12} /> Pause</> : <><Play size={12} /> Start</>}</Pill>
-        {v.state !== 'cleaning' && <Pill color={cfg.color} dim={cfg.dim} onClick={() => run('quick')}>Quick</Pill>}
       </>}>
       <div className="flex justify-center py-2">
         <Dial value={v.batteryPct} color={cfg.color} label={`${v.batteryPct}%`} sublabel={v.state} />
@@ -128,36 +130,105 @@ export function VacuumTile() {
 }
 
 // ── Irrigation ───────────────────────────────────────────────────────────
+export function nextRunText(at: string): string {
+  const d = new Date(at)
+  const today = new Date()
+  const tomorrow = new Date(); tomorrow.setDate(today.getDate() + 1)
+  const day = d.toDateString() === today.toDateString() ? 'Today'
+    : d.toDateString() === tomorrow.toDateString() ? 'Tomorrow'
+    : d.toLocaleDateString('en-US', { weekday: 'short' })
+  return `${day} ${clockTime(at, true)}`
+}
+
+export function useIrrigationActions() {
+  const { update, send } = useHome()
+  const setZone = (id: string, change: Partial<IrrigationZone>) =>
+    update((s) => ({ ...s, irrigationZones: s.irrigationZones.map((z) => (z.id === id ? { ...z, ...change } : z)) }))
+  return {
+    quick: (run: QuickRun) => {
+      if (run.zoneIds?.[0]) setZone(run.zoneIds[0], { isWatering: true, isPaused: false, minutesLeft: parseInt(run.detail) || null })
+      send('rachio/command', { action: 'quick', quickId: run.id }, { refresh: true })
+    },
+    stop: (zone: IrrigationZone) => {
+      setZone(zone.id, { isWatering: false, isPaused: false, minutesLeft: null, resumesAt: null })
+      send('rachio/command', { action: 'stop', zoneId: zone.id }, { refresh: true })
+    },
+    pause: (zone: IrrigationZone) => {
+      setZone(zone.id, { isWatering: false, isPaused: true, resumesAt: new Date(Date.now() + PAUSE_MINUTES * 60_000).toISOString() })
+      send('rachio/command', { action: 'pause', zoneId: zone.id }, { refresh: true })
+    },
+    resume: (zone: IrrigationZone) => {
+      setZone(zone.id, { isWatering: true, isPaused: false, resumesAt: null })
+      send('rachio/command', { action: 'resume', zoneId: zone.id }, { refresh: true })
+    },
+    skipTomorrow: () => {
+      update((s) => ({ ...s, irrigation: { ...s.irrigation, skipTomorrow: { available: false, skipped: true, label: "Tomorrow's runs skipped" } } }))
+      send('rachio/command', { action: 'skip-tomorrow' }, { refresh: true })
+    },
+  }
+}
+
+const pauseLabel = PAUSE_MINUTES === 60 ? '1 hr' : `${PAUSE_MINUTES} min`
+
+/** Pause/Resume + Stop while a zone is running or paused; quick runs + skip otherwise. */
+export function IrrigationControls({ stacked = true }: { stacked?: boolean }) {
+  const { data } = useHome()
+  const a = useIrrigationActions()
+  const cfg = categories.irrigation
+  if (!data) return null
+  const active = data.irrigationZones.find((z) => z.isWatering || z.isPaused)
+  if (active) {
+    return (
+      <div className="flex w-full gap-2">
+        {active.isPaused
+          ? <Pill color={cfg.color} dim={cfg.dim} onClick={() => a.resume(active)}><Play size={12} fill="currentColor" /> Resume</Pill>
+          : <Pill color={cfg.color} dim={cfg.dim} onClick={() => a.pause(active)}><Pause size={12} fill="currentColor" /> Pause {pauseLabel}</Pill>}
+        <Pill color={cfg.color} dim={cfg.dim} onClick={() => a.stop(active)}><Square size={11} fill="currentColor" /> Stop</Pill>
+      </div>
+    )
+  }
+  const skip = data.irrigation?.skipTomorrow
+  return (
+    <div className={`flex w-full flex-col ${stacked ? 'gap-1.5' : 'gap-2'}`}>
+      {data.irrigation?.quickRuns.map((r) => <QuickRunButton key={r.id} run={r} onStart={() => a.quick(r)} color={cfg.color} dim={cfg.dim} />)}
+      {skip && (
+        <ConfirmButton label={skip.label} disabled={!skip.available} onConfirm={a.skipTomorrow}
+          icon={skip.skipped ? <Check size={13} /> : <SkipForward size={12} />}
+          color="var(--color-rain)" dim="var(--color-calendar-dim)" />
+      )}
+    </div>
+  )
+}
+
 export function IrrigationTile() {
-  const { data, update, send } = useHome()
+  const { data } = useHome()
   const cfg = categories.irrigation
   if (!data) return null
   const zones = data.irrigationZones
-  const watering = zones.find((z) => z.isWatering)
-  const next = zones.filter((z) => z.nextRunAt).sort((a, b) => a.nextRunAt!.localeCompare(b.nextRunAt!))[0]
+  const active = zones.find((z) => z.isWatering || z.isPaused)
+  const next = data.irrigation?.nextRun
   const delays = zones.filter((z) => z.rainDelay).length
-  const toggle = () => {
-    const target = watering ?? next ?? zones[0]
-    const start = !watering
-    update((s) => ({ ...s, irrigationZones: s.irrigationZones.map((z) => (z.id === target.id ? { ...z, isWatering: start, minutesLeft: start ? 10 : null } : z)) }))
-    send('rachio/command', { action: start ? 'start' : 'stop', zoneId: target.id })
-  }
   return (
-    <Card className={tile} accent={cfg.color} title="Irrigation" to={cfg.path}
-      actions={<Pill color={cfg.color} dim={cfg.dim} onClick={toggle}>{watering ? <><Square size={11} fill="currentColor" /> Stop</> : <><Play size={12} /> Run now</>}</Pill>}>
-      <div className="pt-4">
-        {watering ? (
+    <Card className={tile} accent={cfg.color} title="Irrigation" to={cfg.path} category="irrigation" actions={<IrrigationControls />}>
+      <div className="pt-2">
+        {active ? (
           <>
-            <p className="font-mono text-2xl" style={{ color: cfg.color }}>Watering</p>
-            <p className="mt-1 text-xs text-ink-dim">{watering.name}{watering.minutesLeft ? ` · ${watering.minutesLeft} min left` : ''}</p>
+            <p className="font-mono text-2xl" style={{ color: active.isPaused ? 'var(--color-ink-dim)' : cfg.color }}>{active.isPaused ? 'Paused' : 'Watering'}</p>
+            <p className="mt-1 text-xs text-ink-dim">
+              {active.name}
+              {active.isPaused
+                ? active.resumesAt ? ` · resumes ${clockTime(active.resumesAt, true)}` : ''
+                : active.minutesLeft ? ` · ${active.minutesLeft} min left` : ''}
+            </p>
           </>
         ) : (
           <>
-            <p className="font-mono text-2xl">{untilTime(next?.nextRunAt ?? null)}</p>
-            <p className="mt-1 text-xs text-ink-dim">next run · {next?.name ?? '—'}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Next run</p>
+            <p className="mt-1 font-mono text-xl">{next ? nextRunText(next.at) : '—'}</p>
+            <p className="mt-0.5 truncate text-xs text-ink-dim">{next ? `${next.name} · ${untilTime(next.at)}` : delays ? 'Paused for rain' : 'Nothing scheduled'}</p>
           </>
         )}
-        <p className="mt-6 text-[11px] text-ink-faint">{delays ? `${delays} zone${delays > 1 ? 's' : ''} on rain delay` : 'No rain delays'}</p>
+        {delays > 0 && <p className="mt-2 text-[11px] text-rain">Rain delay on</p>}
       </div>
     </Card>
   )

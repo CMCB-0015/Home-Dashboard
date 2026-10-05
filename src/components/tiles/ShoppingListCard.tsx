@@ -43,7 +43,7 @@ export function ShoppingListCard() {
   )
 
   return (
-    <Card accent={cfg.color} title="Shopping list" subtitle={`${open.length} item${open.length === 1 ? '' : 's'} · Todoist`} className="min-h-0 flex-1" bodyClassName="flex flex-col">
+    <Card accent={cfg.color} title="Shopping list" category="list" subtitle={`${open.length} item${open.length === 1 ? '' : 's'} · Todoist`} className="min-h-0 flex-1" bodyClassName="flex flex-col">
       <form onSubmit={add} className="flex items-center gap-2 rounded-xl border border-edge bg-surface-raised py-1.5 pl-4 pr-1.5">
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Add an item…" aria-label="New item"
           className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint" />

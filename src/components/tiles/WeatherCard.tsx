@@ -61,7 +61,7 @@ export function WeatherCard() {
     ['Air quality', c.aqi === null ? '—' : `${c.aqi} · ${aqiLabel(c.aqi)}`],
   ]
   return (
-    <Card accent={cfg.color} title={w.location} subtitle={`Updated ${relativeTime(w.updatedAt)}`}>
+    <Card accent={cfg.color} title={w.location} category="weather" subtitle={`Updated ${relativeTime(w.updatedAt)}`}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-3">

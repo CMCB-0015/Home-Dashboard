@@ -37,6 +37,27 @@ export interface RunProfile {
 export interface IrrigationZone {
   id: string; name: string; isWatering: boolean; minutesLeft: number | null
   rainDelay: boolean; nextRunAt: string | null; lastRunAt: string | null
+  /** Paused mid-run from the dashboard; resumes on its own at resumesAt */
+  isPaused?: boolean; resumesAt?: string | null
+}
+
+export interface QuickRun {
+  id: string
+  label: string
+  /** e.g. "2 min" or "Schedule" */
+  detail: string
+  available: boolean
+  /** Why it's unavailable (name didn't match), shown on the detail page */
+  reason?: string
+  /** Zones it waters, so the screen can update right away */
+  zoneIds?: string[]
+}
+
+export interface IrrigationSummary {
+  nextRun: { name: string; at: string } | null
+  quickRuns: QuickRun[]
+  /** "Skip tomorrow's runs" button state */
+  skipTomorrow: { available: boolean; skipped: boolean; label: string }
 }
 
 export interface Vehicle {
@@ -97,10 +118,13 @@ export interface HomeState {
   vacuums: Vacuum[]
   vacuumRunProfiles: RunProfile[]
   irrigationZones: IrrigationZone[]
+  irrigation: IrrigationSummary
   vehicles: Vehicle[]
   sonos: SonosState | null
   weather: Weather | null
   calendar: CalendarEvent[]
   shoppingList: ShoppingItem[]
   alerts: AlertItem[]
+  /** Which sections are real data vs. placeholders */
+  sources?: Partial<Record<Category, 'live' | 'demo'>>
 }

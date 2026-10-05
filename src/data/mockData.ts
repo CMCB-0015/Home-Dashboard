@@ -55,9 +55,18 @@ export function buildMockState(): HomeState {
     ],
     irrigationZones: [
       { id: 'rachio-1', name: 'Front Lawn', isWatering: false, minutesLeft: null, rainDelay: false, nextRunAt: at(14 * 60), lastRunAt: ago(28 * 60) },
-      { id: 'rachio-2', name: 'Backyard', isWatering: true, minutesLeft: 8, rainDelay: false, nextRunAt: null, lastRunAt: ago(6) },
-      { id: 'rachio-3', name: 'Side Beds', isWatering: false, minutesLeft: null, rainDelay: true, nextRunAt: null, lastRunAt: ago(52 * 60) },
+      { id: 'rachio-2', name: 'Back Lawn', isWatering: false, minutesLeft: null, rainDelay: false, nextRunAt: at(14 * 60 + 12), lastRunAt: ago(26 * 60) },
+      { id: 'rachio-3', name: 'Back Slope', isWatering: false, minutesLeft: null, rainDelay: false, nextRunAt: at(38 * 60), lastRunAt: ago(52 * 60) },
     ],
+    irrigation: {
+      nextRun: { name: 'Lawns', at: at(14 * 60) },
+      quickRuns: [
+        { id: 'back-slope-2', label: 'Back slope', detail: '2 min', available: true, zoneIds: ['rachio-3'] },
+        { id: 'lawns', label: 'Quick Run Lawns', detail: '', available: true, zoneIds: [] },
+        { id: 'back-lawn-5', label: 'Back lawn', detail: '5 min', available: true, zoneIds: ['rachio-2'] },
+      ],
+      skipTomorrow: { available: true, skipped: false, label: "Skip tomorrow's runs" },
+    },
     vehicles: [
       {
         id: 'tesla-1', name: 'Model 3', detail: '2024 · Grey', kind: 'ev', color: '#5f666d',
@@ -115,11 +124,10 @@ export function buildMockState(): HomeState {
       { id: 's8', text: 'Eggs', section: 'Grocery', done: true },
     ],
     alerts: [
-      { id: 'a1', category: 'irrigation', severity: 'info', message: 'Started watering', deviceName: 'Backyard', timestamp: ago(6) },
       { id: 'a2', category: 'cameras', severity: 'warning', message: 'Motion detected', deviceName: 'Front Door', timestamp: ago(14) },
       { id: 'a3', category: 'vehicles', severity: 'info', message: 'Finished charging', deviceName: 'Model 3', timestamp: ago(60) },
       { id: 'a4', category: 'cameras', severity: 'warning', message: 'Motion detected', deviceName: 'Driveway', timestamp: ago(52) },
-      { id: 'a5', category: 'irrigation', severity: 'info', message: 'Rain delay applied, schedule skipped', deviceName: 'Side Beds', timestamp: ago(120) },
+      { id: 'a5', category: 'irrigation', severity: 'info', message: 'Rain delay applied, schedule skipped', deviceName: 'Back Slope', timestamp: ago(120) },
       { id: 'a6', category: 'climate', severity: 'info', message: 'Switched to Eco mode', deviceName: 'Upstairs', timestamp: ago(9 * 60) },
       { id: 'a7', category: 'vacuum', severity: 'info', message: 'Finished cleaning, returned to dock', deviceName: 'Roborock', timestamp: ago(20 * 60) },
     ],

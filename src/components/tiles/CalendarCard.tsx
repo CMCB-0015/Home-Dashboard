@@ -58,7 +58,7 @@ export function CalendarCard() {
   })).filter((g) => g.items.length)
 
   return (
-    <Card accent={cfg.color} title="Calendar" subtitle="Google Calendar" className="h-full" bodyClassName="flex flex-col">
+    <Card accent={cfg.color} title="Calendar" category="calendar" subtitle="Google Calendar" className="h-full" bodyClassName="flex flex-col">
       <div className="grid grid-cols-7 gap-1">
         {days.map((d, i) => {
           const count = eventsOn(d).length

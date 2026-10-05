@@ -74,7 +74,7 @@ export function VehiclesCard() {
   return (
     <Card
       accent={cfg.color}
-      title="Vehicles"
+      title="Vehicles" category="vehicles"
       to={cfg.path}
       actions={v.canCommand ? (
         <>

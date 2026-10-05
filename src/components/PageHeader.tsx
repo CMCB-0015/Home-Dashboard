@@ -32,7 +32,7 @@ export function PageHeader({ title, subtitle, page, onPageChange, showWeather }:
         <h1 className="font-display text-2xl font-semibold">{title}</h1>
         <p className="mt-1 truncate text-sm text-ink-dim">
           {subtitle}
-          {!live && <span className="ml-2 text-ink-faint">· demo data</span>}
+          {!live && <span className="ml-2 text-ink-faint">· offline, showing demo data</span>}
         </p>
       </div>
 

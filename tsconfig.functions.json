@@ -11,5 +11,5 @@
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["netlify/functions/**/*.ts", "src/types.ts", "src/data/**/*.ts"]
+  "include": ["netlify/functions/**/*.ts", "src/types.ts", "src/data/**/*.ts", "src/config/**/*.ts"]
 }

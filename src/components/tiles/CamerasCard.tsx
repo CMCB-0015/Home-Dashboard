@@ -59,7 +59,7 @@ export function CamerasCard() {
   if (!data) return null
   const online = data.cameras.filter((c) => c.status === 'online').length
   return (
-    <Card accent={cfg.color} title="Cameras" subtitle={`${online} of ${data.cameras.length} online`} headerRight={<GuardToggle />}>
+    <Card accent={cfg.color} title="Cameras" category="cameras" subtitle={`${online} of ${data.cameras.length} online`} headerRight={<GuardToggle />}>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {data.cameras.map((c) => <Snapshot key={c.id} cam={c} onOpen={() => openLive(c, navigate)} />)}
       </div>

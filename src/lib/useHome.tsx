@@ -20,7 +20,8 @@ interface HomeContextValue {
   lock: LockState
   unlock: (passcode: string) => Promise<'ok' | 'wrong' | 'setup'>
   update: (fn: (s: HomeState) => HomeState) => void
-  send: (path: string, body: unknown) => void
+  /** Tell the backend to do something. `refresh` reloads real status a few seconds later. */
+  send: (path: string, body: unknown, opts?: { refresh?: boolean }) => void
 }
 
 const HomeContext = createContext<HomeContextValue | null>(null)
@@ -67,13 +68,16 @@ export function HomeProvider({ children }: { children: ReactNode }) {
     setData((prev) => (prev ? fn(prev) : prev))
   }, [])
 
-  const send = useCallback((path: string, body: unknown) => {
+  const send = useCallback((path: string, body: unknown, opts?: { refresh?: boolean }) => {
     fetch(`/api/${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-      .then((res) => { if (res.status === 401) setLock('locked') })
+      .then((res) => {
+        if (res.status === 401) { setLock('locked'); return }
+        if (opts?.refresh) setTimeout(() => setReloadKey((k) => k + 1), 3000)
+      })
       .catch(() => { /* backend not running — fine in demo mode */ })
   }, [])
 
