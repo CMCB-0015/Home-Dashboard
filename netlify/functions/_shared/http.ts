@@ -1,7 +1,8 @@
 // Small helpers every backend function uses.
 
+// Same-origin only: the dashboard and backend share one address, so no other
+// website is allowed to call these endpoints from a browser.
 const CORS = {
-  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 }
@@ -25,8 +26,12 @@ export async function readJson<T = Record<string, unknown>>(req: Request): Promi
  * A placeholder for a service that isn't connected yet: it records what was
  * asked and replies "ok", so dashboard buttons are safe to press.
  */
-export async function stub(service: string, req: Request, needs: string[]) {
+export async function stub(service: string, req: Request, needs: string[], open = false) {
   if (req.method === 'OPTIONS') return preflight()
+  if (!open) {
+    const { isAuthed, locked } = await import('./auth.ts')
+    if (!isAuthed(req)) return locked()
+  }
   const body = req.method === 'POST' ? await readJson(req) : {}
   const missing = needs.filter((n) => !env(n))
   console.log(`[${service}] ${new URL(req.url).pathname}`, JSON.stringify(body), missing.length ? `(not connected — missing ${missing.join(', ')})` : '')

@@ -63,16 +63,22 @@ export function WeatherCard() {
   return (
     <Card accent={cfg.color} title={w.location} subtitle={`Updated ${relativeTime(w.updatedAt)}`}>
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <WeatherIcon kind={c.icon} size={52} />
-          <div className="flex items-start">
-            <span className="text-5xl font-light leading-none">{c.tempF}</span>
-            <span className="ml-1 mt-1 text-base text-ink-dim">°F</span>
+        <div className="flex flex-col items-center">
+          <div className="flex items-center gap-3">
+            <WeatherIcon kind={c.icon} size={52} />
+            <div className="flex items-start">
+              <span className="text-5xl font-light leading-none">{c.tempF}</span>
+              <span className="ml-1 mt-1 text-base text-ink-dim">°F</span>
+            </div>
           </div>
+          <p className="mt-1.5 flex gap-3 text-xs font-bold" aria-label={`High ${w.today.highF} degrees, low ${w.today.lowF} degrees`}>
+            <span className="text-temp-high">H {w.today.highF}°</span>
+            <span className="text-temp-low">L {w.today.lowF}°</span>
+          </p>
         </div>
         <div className="text-right">
           <p className="text-lg font-medium">{c.condition}</p>
-          <p className="mt-0.5 text-xs text-ink-dim">Feels like {c.feelsLikeF}° · H {w.today.highF}° L {w.today.lowF}°</p>
+          <p className="mt-0.5 text-xs text-ink-dim">Feels like {c.feelsLikeF}°</p>
         </div>
       </div>
 

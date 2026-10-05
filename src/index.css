@@ -30,6 +30,8 @@
   --color-charge: #7fd1b9;
   --color-fuel: #d6b46a;
   --color-rain: #6fa8ff;
+  --color-temp-high: #ff6b5e;
+  --color-temp-low: #5aa2ff;
   --color-critical: #e2584a;    --color-critical-dim: #3d2420;
 }
 

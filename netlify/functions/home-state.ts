@@ -8,6 +8,7 @@
 
 import type { Config } from '@netlify/functions'
 import { ok } from './_shared/http.ts'
+import { isAuthed, locked } from './_shared/auth.ts'
 import { getWeather } from './_shared/weather.ts'
 import { buildMockState } from '../../src/data/mockData.ts'
 
@@ -18,7 +19,8 @@ async function live<T>(label: string, fn: () => Promise<T>, fallback: T): Promis
   }
 }
 
-export default async () => {
+export default async (req: Request) => {
+  if (!isAuthed(req)) return locked()
   const demo = buildMockState()
   const weather = await live('weather', getWeather, demo.weather)
 

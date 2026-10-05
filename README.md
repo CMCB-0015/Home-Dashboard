@@ -7,6 +7,10 @@ A two-page dashboard for the house. Swipe between them.
 
 Tap any tile for its detail page.
 
+## Passcode
+
+Set `PANEL_PASSCODE` in Netlify → Site configuration → Environment variables. Each device enters it once.
+
 ## What's live
 
 | Service | Status |

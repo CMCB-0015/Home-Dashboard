@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
-import { HomeProvider } from './lib/useHome'
+import { HomeProvider, useHome } from './lib/useHome'
+import { LockScreen } from './components/LockScreen'
 import { Pager } from './pages/Pager'
 import { ClimatePage } from './pages/details/ClimatePage'
 import { LightsPage } from './pages/details/LightsPage'
@@ -9,9 +10,10 @@ import { IrrigationPage } from './pages/details/IrrigationPage'
 import { VehiclesPage } from './pages/details/VehiclesPage'
 import { AlertsPage } from './pages/details/AlertsPage'
 
-export default function App() {
+function Screens() {
+  const { lock } = useHome()
+  if (lock !== 'open') return <LockScreen />
   return (
-    <HomeProvider>
       <Routes>
         <Route path="/" element={<Pager />} />
         <Route path="/climate" element={<ClimatePage />} />
@@ -23,6 +25,13 @@ export default function App() {
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="*" element={<Pager />} />
       </Routes>
+  )
+}
+
+export default function App() {
+  return (
+    <HomeProvider>
+      <Screens />
     </HomeProvider>
   )
 }
