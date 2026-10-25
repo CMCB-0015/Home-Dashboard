@@ -10,7 +10,7 @@
 // (zones, schedules, rain delay) are kept for 30 minutes and upcoming runs
 // for 30 minutes, so a normal day uses a few hundred requests.
 
-import type { IrrigationZone, IrrigationSummary, QuickRun } from '../src/types.ts'
+import type { IrrigationZone, IrrigationSummary, IrrigationRun, IrrigationWatering, QuickRun } from '../src/types.ts'
 import { QUICK_RUNS, PAUSE_MINUTES, matchByName } from '../src/config/irrigation.ts'
 import { env } from './env.ts'
 import { cached, cacheDelete, cacheGet, cacheSet } from './cache.ts'
@@ -104,7 +104,15 @@ function readUpcoming(data: unknown): Upcoming[] {
   return out.sort((a, b) => a.at.localeCompare(b.at))
 }
 
-interface Schedule { id: string; name: string; zoneIds: string[] }
+interface Schedule {
+  id: string; name: string; zoneIds: string[]
+  /** Zones in watering order with their run time (seconds) */
+  zoneRuns: { zoneId: string; seconds: number }[]
+  totalSeconds: number | null
+  enabled: boolean
+  /** Fixed schedules: which days and when (flex schedules have none of this) */
+  jobTypes: string[]; startHour: number | null; startMinute: number | null; startDate: number | null
+}
 
 interface RachioState {
   zones: IrrigationZone[]
@@ -116,8 +124,11 @@ interface RachioState {
 }
 
 // Small bits of state the dashboard remembers itself (Rachio doesn't report them clearly)
-interface PauseFlag { zoneId: string; deviceId: string; until: number }
+interface PauseFlag { zoneId: string; deviceId: string; until: number; remainingSec?: number | null; watering?: IrrigationWatering | null }
 interface SkipFlag { date: string; scheduleIds: string[] }
+/** Single runs skipped from the week strip (schedule + local date) */
+interface RunSkip { scheduleId: string; date: string }
+const runSkipKey = () => `rachio-run-skips-${keyTag()}`
 const pauseKey = () => `rachio-pause-${keyTag()}`
 const skipKey = () => `rachio-skipped-${keyTag()}`
 
@@ -126,15 +137,79 @@ function localDate(ms: number, tz: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(ms)
 }
 
+/** Epoch ms for a local date + time in Rachio's time zone */
+function zonedTime(date: string, hour: number, minute: number, tz: string): number {
+  const [y, m, d] = date.split('-').map(Number)
+  const guess = Date.UTC(y, m - 1, d, hour, minute)
+  // How far the zone's clock is from UTC at that moment
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    .formatToParts(guess).reduce<Record<string, number>>((o, p) => (p.type !== 'literal' ? { ...o, [p.type]: Number(p.value) } : o), {})
+  const asUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute)
+  return guess - (asUtc - guess)
+}
+
+/**
+ * Fixed schedules' runs over the next days, from their rules (day of week,
+ * every N days, odd/even days). Flex schedules decide day by day, so only
+ * Rachio's upcoming-runs list knows those.
+ */
+function projectRuns(rules: Schedule[], dates: string[], tz: string): Upcoming[] {
+  const out: Upcoming[] = []
+  for (const r of rules) {
+    if (!r.enabled || r.startHour === null || !r.jobTypes.length) continue
+    for (const date of dates) {
+      const [y, m, d] = date.split('-').map(Number)
+      const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+      const runs = r.jobTypes.some((j) => {
+        let k = /^DAY_OF_WEEK_(\d)$/.exec(j)
+        if (k) return Number(k[1]) === weekday
+        k = /^INTERVAL_(\d+)$/.exec(j)
+        if (k && r.startDate) {
+          const startDay = localDateUtcDays(r.startDate, tz)
+          const n = Number(k[1])
+          return n > 0 && (Date.UTC(y, m - 1, d) / 86_400_000 - startDay) % n === 0
+        }
+        if (j === 'ODD') return d % 2 === 1 && d !== 31
+        if (j === 'EVEN') return d % 2 === 0
+        return false
+      })
+      if (!runs) continue
+      const at = zonedTime(date, r.startHour, r.startMinute ?? 0, tz)
+      if (at > Date.now()) out.push({ at: new Date(at).toISOString(), zoneIds: r.zoneIds, scheduleId: r.id, name: r.name })
+    }
+  }
+  return out
+}
+
+/** Whole days since 1970 for the local date of a timestamp */
+function localDateUtcDays(ms: number, tz: string): number {
+  const [y, m, d] = localDate(ms, tz).split('-').map(Number)
+  return Date.UTC(y, m - 1, d) / 86_400_000
+}
+
 function schedulesOf(d: any): Schedule[] {
   const rules = [...(d.scheduleRules ?? []), ...(d.flexScheduleRules ?? [])]
   return rules
     .filter((r: any) => r && typeof r.id === 'string')
-    .map((r: any) => ({
-      id: r.id,
-      name: r.name ?? 'Schedule',
-      zoneIds: Array.isArray(r.zones) ? r.zones.map((z: any) => z?.zoneId ?? z?.id).filter(Boolean) : [],
-    }))
+    .map((r: any): Schedule => {
+      const zr = (Array.isArray(r.zones) ? r.zones : [])
+        .filter((z: any) => z && (z.zoneId ?? z.id))
+        .sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+        .map((z: any) => ({ zoneId: String(z.zoneId ?? z.id), seconds: Number(z.duration) || 0 }))
+      const total = Number(r.totalDuration) || zr.reduce((n: number, z: { seconds: number }) => n + z.seconds, 0) || null
+      return {
+        id: r.id,
+        name: r.name ?? 'Schedule',
+        zoneIds: zr.map((z: { zoneId: string }) => z.zoneId),
+        zoneRuns: zr,
+        totalSeconds: total,
+        enabled: r.enabled !== false,
+        jobTypes: Array.isArray(r.scheduleJobTypes) ? r.scheduleJobTypes.map(String) : [],
+        startHour: Number.isFinite(r.startHour) ? r.startHour : null,
+        startMinute: Number.isFinite(r.startMinute) ? r.startMinute : null,
+        startDate: typeof r.startDate === 'number' ? r.startDate : null,
+      }
+    })
 }
 
 async function loadState(): Promise<RachioState> {
@@ -153,8 +228,16 @@ async function loadState(): Promise<RachioState> {
   const paused = pause && pause.until > Date.now() ? pause : null
   const skip = await cacheGet<SkipFlag>(skipKey())
   const skipped = skip?.date === tomorrow ? skip.scheduleIds : []
+  const today = localDate(Date.now(), tz)
+  const runSkips = ((await cacheGet<RunSkip[]>(runSkipKey())) ?? []).filter((r) => r.date >= today)
+  const isSkipped = (u: Upcoming) => {
+    if (!u.scheduleId) return false
+    const date = localDate(Date.parse(u.at), tz)
+    return (date === tomorrow && skipped.includes(u.scheduleId)) || runSkips.some((r) => r.scheduleId === u.scheduleId && r.date === date)
+  }
   // Runs you've skipped no longer count as "next"
-  const notSkipped = (u: Upcoming) => !(u.scheduleId && skipped.includes(u.scheduleId) && localDate(Date.parse(u.at), tz) === tomorrow)
+  const notSkipped = (u: Upcoming) => !isSkipped(u)
+  let watering: IrrigationWatering | null = null
 
   for (const d of devices) {
     const [current, upcomingRaw] = await Promise.all([
@@ -163,7 +246,12 @@ async function loadState(): Promise<RachioState> {
     ])
     const deviceSchedules = schedulesOf(d)
     schedules.push(...deviceSchedules)
-    const upcomingRawList = readUpcoming(upcomingRaw)
+    const fromRachio = readUpcoming(upcomingRaw)
+    // Add fixed schedules' runs Rachio's list leaves out (it may only cover the next few)
+    const dates = Array.from({ length: 7 }, (_, k) => localDate(Date.now() + k * 86_400_000, tz))
+    const projected = projectRuns(deviceSchedules, dates, tz).filter((p) =>
+      !fromRachio.some((u) => u.scheduleId === p.scheduleId && localDate(Date.parse(u.at), tz) === localDate(Date.parse(p.at), tz)))
+    const upcomingRawList = [...fromRachio, ...projected].sort((a, b) => a.at.localeCompare(b.at))
     upcomingAll.push(...upcomingRawList)
     const upcoming = upcomingRawList.filter(notSkipped)
 
@@ -175,6 +263,27 @@ async function loadState(): Promise<RachioState> {
     if (wateringZone && typeof current.zoneStartDate === 'number' && typeof current.zoneDuration === 'number') {
       const endMs = current.zoneStartDate + current.zoneDuration * 1000
       minutesLeft = Math.max(1, Math.ceil((endMs - Date.now()) / 60_000))
+    }
+    if (wateringZone && !(paused?.zoneId === wateringZone)) {
+      // For the countdown ring: this zone, the one after it, and when the run ends
+      const rule = deviceSchedules.find((r) => r.id === current.scheduleRuleId || r.id === current.scheduleId)
+      const order = rule?.zoneRuns ?? []
+      const i = order.findIndex((z) => z.zoneId === wateringZone)
+      const nextZoneId = i >= 0 ? order[i + 1]?.zoneId : undefined
+      const zoneName = (id?: string) => (id ? d.zones.find((z: any) => z.id === id)?.name ?? null : null)
+      const zoneEnd = typeof current.zoneStartDate === 'number' && typeof current.zoneDuration === 'number' ? current.zoneStartDate + current.zoneDuration * 1000 : null
+      let doneAt: number | null = null
+      if (typeof current.startDate === 'number' && typeof current.duration === 'number' && current.duration > 0) doneAt = current.startDate + current.duration * 1000
+      else if (zoneEnd) doneAt = zoneEnd + (i >= 0 ? order.slice(i + 1).reduce((n, z) => n + z.seconds * 1000, 0) : 0)
+      watering = {
+        zoneId: wateringZone,
+        zoneName: zoneName(wateringZone) ?? 'Zone',
+        zoneStartedAt: iso(current.zoneStartDate),
+        zoneSeconds: typeof current.zoneDuration === 'number' ? current.zoneDuration : null,
+        nextZone: zoneName(nextZoneId),
+        schedule: rule?.name ?? null,
+        doneAt: doneAt ? new Date(doneAt).toISOString() : null,
+      }
     }
 
     // Next run per zone: from the run itself, or from the schedule it belongs to
@@ -212,7 +321,8 @@ async function loadState(): Promise<RachioState> {
   if (first) {
     const name = (first.scheduleId && schedules.find((s) => s.id === first.scheduleId)?.name) || first.name
       || (first.zoneIds.length === 1 ? zones.find((z) => z.id === first.zoneIds[0])?.name : undefined) || 'Scheduled run'
-    nextRun = { name, at: first.at }
+    const rule = first.scheduleId ? schedules.find((x) => x.id === first.scheduleId) : undefined
+    nextRun = { name, at: first.at, minutes: rule?.totalSeconds ? Math.round(rule.totalSeconds / 60) : null }
   } else {
     const soonest = zones.map((z) => z.nextRunAt).filter((t): t is string => !!t).sort()[0]
     if (soonest) nextRun = { name: 'Scheduled run', at: soonest }
@@ -224,12 +334,16 @@ async function loadState(): Promise<RachioState> {
     if (q.schedule) {
       const m = matchByName(q.schedule, schedules)
       if (m.item) quick[q.id] = { scheduleId: m.item.id }
-      return { id: q.id, label: q.label, detail: '', available: !!m.item, reason: m.reason, zoneIds: m.item?.zoneIds ?? [] }
+      const ids = m.item?.zoneIds ?? []
+      return { id: q.id, label: q.label, detail: '', kind: 'schedule' as const, available: !!m.item, reason: m.reason, zoneIds: ids,
+        zoneNames: ids.map((id) => zones.find((z) => z.id === id)?.name).filter((n): n is string => !!n),
+        minutes: m.item?.totalSeconds ? Math.round(m.item.totalSeconds / 60) : undefined }
     }
     const m = matchByName(q.zone ?? '', zones)
     const minutes = Math.min(180, Math.max(1, q.minutes ?? 5))
     if (m.item) quick[q.id] = { zoneId: m.item.id, seconds: minutes * 60 }
-    return { id: q.id, label: q.label, detail: `${minutes} min`, available: !!m.item, reason: m.reason, zoneIds: m.item ? [m.item.id] : [] }
+    return { id: q.id, label: q.label, detail: `${minutes} min`, kind: 'zone' as const, minutes, available: !!m.item, reason: m.reason,
+      zoneIds: m.item ? [m.item.id] : [], zoneNames: m.item ? [m.item.name] : [], lastRunAt: m.item?.lastRunAt ?? null }
   })
 
   // "Skip tomorrow": Rachio can only skip a schedule's *next* run, so a schedule
@@ -244,7 +358,36 @@ async function loadState(): Promise<RachioState> {
   else if (!skipTargets.length) skipTomorrow = { available: false, skipped: false, label: "Can't skip tomorrow from here" }
   else skipTomorrow = { available: true, skipped: false, label: "Skip tomorrow's runs" }
 
-  return { zones, zoneDevice, quick, tomorrow, skipTargets, summary: { nextRun, quickRuns, skipTomorrow } }
+  // The week strip: every run over the next 7 days, today first
+  const nextBySchedule = new Map<string, string>()
+  for (const u of upcomingAll) if (u.scheduleId && !isSkipped(u) && !nextBySchedule.has(u.scheduleId)) nextBySchedule.set(u.scheduleId, u.at)
+  const week = Array.from({ length: 7 }, (_, k) => localDate(Date.now() + k * 86_400_000, tz)).map((date) => ({
+    date,
+    runs: upcomingAll.filter((u) => localDate(Date.parse(u.at), tz) === date).map((u): IrrigationRun => {
+      const rule = u.scheduleId ? schedules.find((x) => x.id === u.scheduleId) : undefined
+      const runSkipped = isSkipped(u)
+      const isNext = !!u.scheduleId && nextBySchedule.get(u.scheduleId) === u.at
+      const ids = rule?.zoneIds.length ? rule.zoneIds : u.zoneIds
+      return {
+        id: `${u.scheduleId ?? 'run'}-${u.at}`,
+        scheduleId: u.scheduleId ?? null,
+        name: rule?.name ?? u.name ?? 'Scheduled run',
+        at: u.at,
+        minutes: rule?.totalSeconds ? Math.round(rule.totalSeconds / 60) : null,
+        zoneNames: ids.map((id) => zones.find((z) => z.id === id)?.name).filter((n): n is string => !!n),
+        skipped: runSkipped,
+        canSkip: !runSkipped && isNext,
+        reason: runSkipped || isNext ? undefined : u.scheduleId ? 'Rachio can only skip this schedule’s next run' : 'Not a schedule',
+      }
+    }),
+  }))
+
+  if (paused) {
+    const z = zones.find((x) => x.id === paused.zoneId)
+    watering = { ...(paused.watering ?? { zoneId: paused.zoneId, zoneName: z?.name ?? 'Zone', zoneStartedAt: null, zoneSeconds: null, nextZone: null, schedule: null, doneAt: null }), pausedRemainingSec: paused.remainingSec ?? null }
+  }
+
+  return { zones, zoneDevice, quick, tomorrow, skipTargets, summary: { nextRun, quickRuns, skipTomorrow, week, watering } }
 }
 
 function stateKey() { return `${STATE_KEY}-${keyTag()}` }
@@ -348,13 +491,31 @@ export function pokeRachio(delayMs = 2000) {
 
 const MAX_SECONDS = 3 * 3600
 
-export async function rachioCommand(action: string, zoneId: string, durationSeconds = 600, quickId?: string): Promise<void> {
+export async function rachioCommand(action: string, zoneId: string, durationSeconds = 600, quickId?: string, extra: { minutes?: number; scheduleId?: string; date?: string } = {}): Promise<void> {
   if (action === 'quick') {
     const state = await cached(stateKey(), STATE_MAX_AGE, loadState)
     const q = quickId ? state.quick[quickId] : undefined
     if (!q) throw new Error('That quick run is not matched to a zone or schedule')
     if (q.scheduleId) await api('/schedulerule/start', { method: 'PUT', body: { id: q.scheduleId } })
-    else await api('/zone/start', { method: 'PUT', body: { id: q.zoneId, duration: q.seconds } })
+    else {
+      // The hold panel can pick another time (1–180 minutes)
+      const seconds = extra.minutes ? Math.min(180, Math.max(1, Math.round(Number(extra.minutes)))) * 60 : q.seconds
+      await api('/zone/start', { method: 'PUT', body: { id: q.zoneId, duration: seconds } })
+    }
+    await cacheDelete(stateKey())
+    return
+  }
+  if (action === 'skip-run') {
+    // Skip one schedule's run on one day (the week strip). Rachio can only skip a schedule's next run.
+    const state = await cached(stateKey(), STATE_MAX_AGE, loadState)
+    const run = state.summary.week?.find((d) => d.date === extra.date)?.runs.find((r) => r.scheduleId === extra.scheduleId)
+    if (!run) throw new Error('That run isn’t on the schedule anymore')
+    if (run.skipped) return
+    if (!run.canSkip) throw new Error(run.reason ?? 'Rachio can’t skip that run')
+    await api('/schedulerule/skip', { method: 'PUT', body: { id: run.scheduleId } })
+    const list = (await cacheGet<RunSkip[]>(runSkipKey())) ?? []
+    await cacheSet(runSkipKey(), [...list, { scheduleId: run.scheduleId!, date: extra.date! }].slice(-50))
+    for (const deviceId of new Set(Object.values(state.zoneDevice))) await cacheDelete(`rachio-upcoming-${deviceId}`)
     await cacheDelete(stateKey())
     return
   }
@@ -376,7 +537,11 @@ export async function rachioCommand(action: string, zoneId: string, durationSeco
     if (action === 'pause') {
       const seconds = Math.min(60, Math.max(1, PAUSE_MINUTES)) * 60
       await api('/device/pause_zone_run', { method: 'PUT', body: { id: deviceId, duration: seconds } })
-      await cacheSet(pauseKey(), { zoneId, deviceId, until: Date.now() + seconds * 1000 } satisfies PauseFlag)
+      // Remember where the countdown was, so the ring holds still while paused
+      const w = state.summary.watering
+      const endMs = w?.zoneStartedAt && w.zoneSeconds ? Date.parse(w.zoneStartedAt) + w.zoneSeconds * 1000 : null
+      const remainingSec = endMs ? Math.max(0, Math.round((endMs - Date.now()) / 1000)) : null
+      await cacheSet(pauseKey(), { zoneId, deviceId, until: Date.now() + seconds * 1000, remainingSec, watering: w && w.zoneId === zoneId ? w : null } satisfies PauseFlag)
     } else {
       await api('/device/resume_zone_run', { method: 'PUT', body: { id: deviceId } })
       await cacheDelete(pauseKey())

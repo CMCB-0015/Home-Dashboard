@@ -1,7 +1,7 @@
 import { Minus, Plus, Play, Pause, Square, SkipForward, Check } from 'lucide-react'
 import { useHome } from '../../lib/useHome'
 import { categories } from '../../lib/categories'
-import { untilTime, clockTime } from '../../lib/format'
+import { clockTime } from '../../lib/format'
 import { QuickRunButton, ConfirmButton } from '../QuickRunButton'
 import { PAUSE_MINUTES } from '../../config/irrigation'
 import type { QuickRun, IrrigationZone } from '../../types'
@@ -108,42 +108,5 @@ export function IrrigationControls({ stacked = true }: { stacked?: boolean }) {
           color="var(--color-rain)" dim="var(--color-calendar-dim)" />
       )}
     </div>
-  )
-}
-
-export function IrrigationTile() {
-  const { data } = useHome()
-  const cfg = categories.irrigation
-  if (!data) return null
-  const zones = data.irrigationZones
-  const active = zones.find((z) => z.isWatering || z.isPaused)
-  const next = data.irrigation?.nextRun
-  const delays = zones.filter((z) => z.rainDelay).length
-  return (
-    <Card className={tile} accent={cfg.color} title="Irrigation" to={cfg.path} category="irrigation" actions={<IrrigationControls />}>
-      <div className="pt-2">
-        {active ? (
-          <>
-            <p className="font-mono text-2xl" style={{ color: active.isPaused ? 'var(--color-ink-dim)' : cfg.color }}>{active.isPaused ? 'Paused' : 'Watering'}</p>
-            <p className="mt-1 text-xs text-ink-dim">
-              {active.name}
-              {active.isPaused
-                ? active.resumesAt ? ` · resumes ${clockTime(active.resumesAt, true)}` : ''
-                : active.minutesLeft ? ` · ${active.minutesLeft} min left` : ''}
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Next run</p>
-            <p className="mt-1 font-mono text-xl">{next ? nextRunText(next.at) : '—'}</p>
-            <p className="mt-0.5 truncate text-xs text-ink-dim">{next ? `${next.name} · ${untilTime(next.at)}` : delays ? 'Paused for rain' : 'Nothing scheduled'}</p>
-          </>
-        )}
-        {delays > 0 && <p className="mt-2 text-[11px] text-rain">Rain delay on</p>}
-        {!active && data.irrigation?.lastSkipped && (
-          <p className="mt-2 truncate text-[11px] text-ink-faint">Skipped {data.irrigation.lastSkipped.name} · {clockTime(data.irrigation.lastSkipped.at, true)}</p>
-        )}
-      </div>
-    </Card>
   )
 }

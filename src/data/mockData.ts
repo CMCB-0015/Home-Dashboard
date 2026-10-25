@@ -80,11 +80,20 @@ export function buildMockState(): HomeState {
       { id: 'rachio-3', name: 'Back Slope', isWatering: false, minutesLeft: null, rainDelay: false, nextRunAt: at(38 * 60), lastRunAt: ago(52 * 60) },
     ],
     irrigation: {
-      nextRun: { name: 'Lawns', at: at(14 * 60) },
+      nextRun: { name: 'Lawns', at: todayAt(5, 0, 1), minutes: 19 },
+      week: Array.from({ length: 7 }, (_, k) => ({
+        date: dayISO(k),
+        runs: k === 1 || k === 4 || k === 6 ? [{
+          id: `lawns-${k}`, scheduleId: 'lawns', name: 'Lawns', at: todayAt(5, 0, k), minutes: 19,
+          zoneNames: ['Front Lawn', 'Back Lawn'], skipped: false, canSkip: k === 1,
+          reason: k === 1 ? undefined : 'Rachio can only skip this schedule’s next run',
+        }] : [],
+      })),
+      watering: null,
       quickRuns: [
-        { id: 'back-slope-2', label: 'Back slope', detail: '2 min', available: true, zoneIds: ['rachio-3'] },
-        { id: 'lawns', label: 'Quick Run Lawns', detail: '', available: true, zoneIds: [] },
-        { id: 'back-lawn-5', label: 'Back lawn', detail: '5 min', available: true, zoneIds: ['rachio-2'] },
+        { id: 'back-slope-2', label: 'Back slope', detail: '2 min', kind: 'zone', minutes: 2, available: true, zoneIds: ['rachio-3'], zoneNames: ['Back Slope'], lastRunAt: ago(52 * 60) },
+        { id: 'lawns', label: 'Lawns', detail: '', kind: 'schedule', minutes: 19, available: true, zoneIds: ['rachio-1', 'rachio-2'], zoneNames: ['Front Lawn', 'Back Lawn'] },
+        { id: 'back-lawn-5', label: 'Back lawn', detail: '5 min', kind: 'zone', minutes: 5, available: true, zoneIds: ['rachio-2'], zoneNames: ['Back Lawn'], lastRunAt: ago(26 * 60) },
       ],
       skipTomorrow: { available: true, skipped: false, label: "Skip tomorrow's runs" },
     },

@@ -95,9 +95,9 @@ const routes: Record<string, Handler> = {
   },
   '/api/sonos/refresh': act(async () => { await refreshFavorites(); changed() }),
 
-  '/api/rachio/command': act(async (b: { action?: string; zoneId?: string; durationSeconds?: number; quickId?: string }) => {
+  '/api/rachio/command': act(async (b: { action?: string; zoneId?: string; durationSeconds?: number; quickId?: string; minutes?: number; scheduleId?: string; date?: string }) => {
     if (!rachioConfigured()) throw new Error('Add your Rachio API key in the app settings')
-    await rachioCommand(String(b.action), String(b.zoneId ?? ''), b.durationSeconds, b.quickId)
+    await rachioCommand(String(b.action), String(b.zoneId ?? ''), b.durationSeconds, b.quickId, { minutes: b.minutes, scheduleId: b.scheduleId, date: b.date })
     pokeRachio()
   }),
   '/api/calendar/range': async (req) => {

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.0
+- New Irrigation card: next run, a 7-day strip of scheduled runs (today outlined), and quick-run chips
+- Tap a day to see its runs and skip one (Rachio can only skip a schedule's next run; undo is in the Rachio app)
+- Quick runs: tap to start now, press and hold to pick the time (2 / 5 / 10 / 15 min or − / +)
+- While watering: a countdown ring for the current zone, the zone after it and when the run finishes; Pause 1 h / Resume and Stop, one tap each
+- Decorative rain on the card while a zone waters (off with reduce motion, or RAIN_EFFECT = false in src/config/irrigation.ts)
+- The week strip fills in fixed schedules from their Rachio rules, so it covers all 7 days
+
 ## 1.3.0
 - One tap for everything: no more "tap again to confirm" (All off, Rachio quick runs and Skip tomorrow, Tesla unlock). A short flash shows the tap went through
 - Calendar: Week / Month switch; month grid with paging to any month and the picked day's events underneath

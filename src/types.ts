@@ -142,6 +142,13 @@ export interface IrrigationZone {
 export interface QuickRun {
   id: string
   label: string
+  /** zone = runs one zone for some minutes; schedule = runs a whole Rachio schedule */
+  kind?: 'zone' | 'schedule'
+  /** Default minutes (zone runs) */
+  minutes?: number
+  /** Zone names it waters (shown when holding a schedule chip) */
+  zoneNames?: string[]
+  lastRunAt?: string | null
   /** e.g. "2 min" or "Schedule" */
   detail: string
   available: boolean
@@ -151,8 +158,41 @@ export interface QuickRun {
   zoneIds?: string[]
 }
 
+/** One scheduled run on the week strip */
+export interface IrrigationRun {
+  /** scheduleId + start time */
+  id: string
+  scheduleId: string | null
+  name: string
+  at: string
+  /** Estimated length */
+  minutes: number | null
+  zoneNames: string[]
+  skipped: boolean
+  /** Rachio can only skip a schedule's next run */
+  canSkip: boolean
+  reason?: string
+}
+
+/** What's watering right now (for the countdown ring) */
+export interface IrrigationWatering {
+  zoneId: string
+  zoneName: string
+  /** Current zone: when it started and how long it runs */
+  zoneStartedAt: string | null
+  zoneSeconds: number | null
+  /** While paused: seconds that were left when it paused */
+  pausedRemainingSec?: number | null
+  nextZone: string | null
+  schedule: string | null
+  doneAt: string | null
+}
+
 export interface IrrigationSummary {
-  nextRun: { name: string; at: string } | null
+  nextRun: { name: string; at: string; minutes?: number | null } | null
+  /** The next 7 days, today first (local dates YYYY-MM-DD) */
+  week?: { date: string; runs: IrrigationRun[] }[]
+  watering?: IrrigationWatering | null
   /** A scheduled run that didn't start (rain, wind or skipped in the Rachio app) */
   lastSkipped?: { name: string; at: string } | null
   quickRuns: QuickRun[]

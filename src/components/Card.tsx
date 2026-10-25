@@ -26,11 +26,16 @@ interface CardProps {
   placeholder?: boolean
   /** Extra styles for the outer box (the Lights card tints itself) */
   style?: React.CSSProperties
+  /** Layers drawn over the card's background (rain effect, slide-up panels).
+   *  The header, body and footer sit above z-index 1 so a decorative layer
+   *  never covers them; panels use z-index 3 to cover them on purpose. */
+  overlay?: ReactNode
 }
 
 const HA_CATEGORIES: Category[] = ['climate', 'lights', 'sonos', 'calendar']
 
-export function Card({ accent, children, to, actions, headerRight, title, subtitle, className = '', padded = true, bodyClassName = '', category, placeholder, style }: CardProps) {
+export function Card({ accent, children, to, actions, headerRight, title, subtitle, className = '', padded = true, bodyClassName = '', category, placeholder, style, overlay }: CardProps) {
+  const lift = overlay ? 'relative z-[2]' : ''
   const { live, data } = useHome()
   const source = category ? data?.sources?.[category] : undefined
   const off = !!placeholder || (live && source === 'off')
@@ -38,7 +43,7 @@ export function Card({ accent, children, to, actions, headerRight, title, subtit
   const offLabel = category && HA_CATEGORIES.includes(category) && data?.homeAssistant === 'connecting'
     ? 'Can\u2019t reach Home Assistant' : 'Not connected yet'
   const header = title ? (
-    <div className="flex items-center justify-between gap-3 px-5 pt-4">
+    <div className={`flex items-center justify-between gap-3 px-5 pt-4 ${lift}`}>
       <div className="flex min-w-0 items-baseline gap-2.5">
         <h2 className="font-display text-[15px] font-semibold text-ink">{title}</h2>
         {subtitle && <span className="truncate text-[11px] text-ink-faint">{subtitle}</span>}
@@ -48,7 +53,7 @@ export function Card({ accent, children, to, actions, headerRight, title, subtit
     </div>
   ) : null
 
-  const pad = `${padded ? 'px-5 pb-4 pt-3' : ''} ${bodyClassName}`
+  const pad = `${padded ? 'px-5 pb-4 pt-3' : ''} ${lift} ${bodyClassName}`
   const body = off ? (
     <div className={`relative min-h-0 flex-1 ${pad}`}>
       <div className="pointer-events-none select-none opacity-20 grayscale" aria-hidden>{children}</div>
@@ -65,10 +70,11 @@ export function Card({ accent, children, to, actions, headerRight, title, subtit
   return (
     <div className={`relative flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface ${className}`} style={style}>
       <span className="absolute inset-x-0 top-0 z-[1] h-[3px] transition-colors duration-500" style={{ background: off ? 'var(--color-edge)' : accent }} aria-hidden />
+      {!off && overlay}
       {header}
       {body}
       {actions && (
-        <div className={`flex min-h-[48px] items-center gap-2 border-t border-edge-soft px-5 py-2.5 ${off ? 'pointer-events-none opacity-30' : ''}`} aria-hidden={off || undefined}>
+        <div className={`flex min-h-[48px] items-center gap-2 border-t border-edge-soft px-5 py-2.5 ${lift} ${off ? 'pointer-events-none opacity-30' : ''}`} aria-hidden={off || undefined}>
           {actions}
         </div>
       )}

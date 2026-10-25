@@ -86,3 +86,17 @@ input[type="range"] { accent-color: currentColor; }
 /* Status bar: chips slide sideways without moving the page swipe, no scrollbar */
 .status-bar { scroll-snap-type: x proximity; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .status-bar::-webkit-scrollbar { display: none; }
+
+/* Irrigation rain effect — decorative only, while a zone waters.
+   To remove: delete this block and <RainLayer /> in IrrigationCard (or set RAIN_EFFECT = false). */
+.rain-layer { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden;
+  opacity: 0; transition: opacity .6s ease; }
+.rain-layer.is-on { opacity: 1; }
+.rain-col { position: absolute; top: 0; height: 100%; width: 2px;
+  animation: rain-fall 1.4s linear infinite; animation-play-state: paused; will-change: transform; }
+.rain-layer.is-on .rain-col { animation-play-state: running; }
+.rain-col::before { content: ''; position: absolute; top: -30px; left: 0; width: 1.5px; height: 22px;
+  border-radius: 1px; transform: rotate(8deg);
+  background: linear-gradient(180deg, rgba(53,194,214,0), rgba(53,194,214,.55)); /* irrigation token */ }
+@keyframes rain-fall { from { transform: translate(0, 0); } to { transform: translate(-60px, calc(100% + 30px)); } }
+@media (prefers-reduced-motion: reduce) { .rain-layer { display: none; } }

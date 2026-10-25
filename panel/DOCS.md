@@ -72,3 +72,12 @@ Each calendar gets its own color; pin one in `calendarColors`. The chips above t
 calendar hide or show a calendar on that screen only. The status bar shows events from
 `statusBar.calendars` (Family). Tapping an event shows its details and a Google map of
 its location; maps always open in Google Maps.
+
+## Irrigation card
+
+Quick-run chips come from `src/config/irrigation.ts`: tap to start, hold to choose the
+time. The 7-day strip shows each schedule's runs; tap a day to skip a run. Rachio's API
+can only skip a schedule's **next** run and has no "unskip", so later runs say so and
+an undo has to be done in the Rachio app. There is no "next zone" button because
+Rachio's public API has no command for it. The rain while watering is decoration only;
+set `RAIN_EFFECT = false` in `src/config/irrigation.ts` to turn it off.

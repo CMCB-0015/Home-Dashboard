@@ -1,7 +1,8 @@
 import { StatusBar } from '../components/StatusBar'
 import { CamerasCard } from '../components/tiles/CamerasCard'
 import { TeslaCard } from '../components/vehicles/TeslaCard'
-import { ClimateTile, IrrigationTile } from '../components/tiles/SmallTiles'
+import { ClimateTile } from '../components/tiles/SmallTiles'
+import { IrrigationCard } from '../components/irrigation/IrrigationCard'
 import { VacuumCard } from '../components/vacuum/VacuumCard'
 import { SonosCard } from '../components/sonos/SonosCard'
 import { LightsCard } from '../components/lights/LightsCard'
@@ -20,7 +21,7 @@ export function HomePage({ onOpenPlanner }: { onOpenPlanner: () => void }) {
         <LightsCard />
         <SonosCard />
         <VacuumCard />
-        <IrrigationTile />
+        <IrrigationCard />
       </div>
     </div>
   )

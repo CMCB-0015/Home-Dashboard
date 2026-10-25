@@ -12,6 +12,12 @@
 
 export const PAUSE_MINUTES = 60
 
+/** Time buttons in the hold-to-set panel */
+export const QUICK_MINUTES = [2, 5, 10, 15]
+
+/** Decorative rain on the card while a zone waters. false = plain card. */
+export const RAIN_EFFECT = true
+
 export interface QuickRunConfig {
   id: string
   label: string
@@ -22,7 +28,7 @@ export interface QuickRunConfig {
 
 export const QUICK_RUNS: QuickRunConfig[] = [
   { id: 'back-slope-2', label: 'Back slope', zone: 'Back slope', minutes: 2 },
-  { id: 'lawns', label: 'Quick Run Lawns', schedule: 'Lawns' },
+  { id: 'lawns', label: 'Lawns', schedule: 'Lawns' },
   { id: 'back-lawn-5', label: 'Back lawn', zone: 'Back lawn', minutes: 5 },
 ]
 
