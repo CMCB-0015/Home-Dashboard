@@ -5,7 +5,10 @@
 //   • idle: every 5 minutes
 //   • around a scheduled start: a minute before, then every 20 seconds until it starts
 //   • while watering: every minute, plus right at each expected zone change
-//   • right after you press a button on the dashboard
+//   • right after you press a button on the dashboard, then every 10 seconds
+//     until Rachio confirms the change (Rachio takes a little while to report
+//     a run it just started or stopped; until then the dashboard shows what
+//     you asked for, so the card doesn't flash back)
 // Each check is one request ("what's watering now?"). The account details
 // (zones, schedules, rain delay) are kept for 30 minutes and upcoming runs
 // for 30 minutes, so a normal day uses a few hundred requests.
@@ -121,6 +124,7 @@ interface RachioState {
   quick: Record<string, { zoneId?: string; scheduleId?: string; seconds?: number }>
   tomorrow: string                        // local date, YYYY-MM-DD
   skipTargets: string[]                   // schedules whose next run is tomorrow
+  rules: Record<string, { name: string; zoneRuns: { zoneId: string; seconds: number }[] }>
 }
 
 // Small bits of state the dashboard remembers itself (Rachio doesn't report them clearly)
@@ -387,7 +391,8 @@ async function loadState(): Promise<RachioState> {
     watering = { ...(paused.watering ?? { zoneId: paused.zoneId, zoneName: z?.name ?? 'Zone', zoneStartedAt: null, zoneSeconds: null, nextZone: null, schedule: null, doneAt: null }), pausedRemainingSec: paused.remainingSec ?? null }
   }
 
-  return { zones, zoneDevice, quick, tomorrow, skipTargets, summary: { nextRun, quickRuns, skipTomorrow, week, watering } }
+  const rules: RachioState['rules'] = Object.fromEntries(schedules.map((r) => [r.id, { name: r.name, zoneRuns: r.zoneRuns }]))
+  return { zones, zoneDevice, quick, tomorrow, skipTargets, rules, summary: { nextRun, quickRuns, skipTomorrow, week, watering } }
 }
 
 function stateKey() { return `${STATE_KEY}-${keyTag()}` }
@@ -406,6 +411,92 @@ export async function refreshRachio() {
 // ── The watcher ────────────────────────────────────────────────────────────
 // Decides when to check Rachio next, based on what's happening.
 
+// ── Waiting for Rachio to confirm a button press ──────────────────────────
+// Rachio takes a few seconds (sometimes longer) to report a run it just
+// started. Until it does, the dashboard shows the run as started — with its
+// countdown and Stop — and checks every 10 seconds. If Rachio still hasn't
+// confirmed after 90 seconds, the card goes back to what Rachio says and a
+// short message explains why. Stop works the same way in reverse.
+
+const CONFIRM_EVERY = 10_000
+const CONFIRM_FOR = 90_000
+
+type Pending =
+  | { kind: 'start'; since: number; label: string; zones: { zoneId: string; zoneName: string; seconds: number | null }[]; schedule: string | null }
+  | { kind: 'stop'; since: number }
+let pending: Pending | null = null
+let notice: { text: string; until: number } | null = null
+
+/** Remember what a button press asked for, using the state we have now for names and times */
+function expectStart(state: RachioState, label: string, zoneRuns: { zoneId: string; seconds: number | null }[], schedule: string | null) {
+  const name = (id: string) => state.zones.find((z) => z.id === id)?.name ?? 'Zone'
+  const zones = zoneRuns.filter((z) => z.zoneId).map((z) => ({ zoneId: z.zoneId, zoneName: name(z.zoneId), seconds: z.seconds && z.seconds > 0 ? z.seconds : null }))
+  if (!zones.length) return
+  pending = { kind: 'start', since: Date.now(), label, zones, schedule }
+  notice = null
+}
+
+/** Rachio's state with any not-yet-confirmed button press laid over it */
+function withPending(s: { zones: IrrigationZone[]; summary: IrrigationSummary }): { zones: IrrigationZone[]; summary: IrrigationSummary } {
+  if (!pending) return s
+  const p = pending
+  const now = Date.now()
+  const anyWatering = s.zones.some((z) => z.isWatering)
+  const anyPaused = s.zones.some((z) => z.isPaused)
+
+  if (p.kind === 'start') {
+    if (anyWatering || anyPaused) { pending = null; return s } // Rachio sees it (or something else is running)
+    if (now - p.since > CONFIRM_FOR) {
+      pending = null
+      notice = { text: `Rachio didn’t confirm ${p.label} started — check the Rachio app`, until: now + 10 * MIN_MS }
+      console.log(`[rachio] ${p.label} was started from the dashboard but Rachio never reported it running`)
+      return s
+    }
+    // Which zone should be running by now, going by the zone times
+    let t = p.since, i = 0
+    while (i < p.zones.length - 1 && p.zones[i].seconds && now >= t + p.zones[i].seconds! * 1000) { t += p.zones[i].seconds! * 1000; i++ }
+    const cur = p.zones[i]
+    const left = cur.seconds ? Math.max(0, t + cur.seconds * 1000 - now) : null
+    const total = p.zones.every((z) => z.seconds) ? p.zones.reduce((n, z) => n + z.seconds! * 1000, 0) : null
+    return {
+      zones: s.zones.map((z) => (z.id === cur.zoneId
+        ? { ...z, isWatering: true, isPaused: false, resumesAt: null, minutesLeft: left !== null ? Math.max(1, Math.ceil(left / 60_000)) : null }
+        : { ...z, isWatering: false, isPaused: false, minutesLeft: null })),
+      summary: {
+        ...s.summary,
+        watering: {
+          zoneId: cur.zoneId,
+          zoneName: cur.zoneName,
+          zoneStartedAt: new Date(t).toISOString(),
+          zoneSeconds: cur.seconds,
+          nextZone: p.zones[i + 1]?.zoneName ?? null,
+          schedule: p.schedule,
+          doneAt: total ? new Date(p.since + total).toISOString() : null,
+        },
+      },
+    }
+  }
+
+  // Stop: show it stopped until Rachio agrees
+  if (!anyWatering && !anyPaused) { pending = null; return s }
+  if (now - p.since > CONFIRM_FOR) {
+    pending = null
+    notice = { text: 'Rachio still shows watering after Stop — check the Rachio app', until: now + 10 * MIN_MS }
+    return s
+  }
+  return {
+    zones: s.zones.map((z) => ({ ...z, isWatering: false, isPaused: false, resumesAt: null, minutesLeft: null })),
+    summary: { ...s.summary, watering: null },
+  }
+}
+
+/** A short message about a button press Rachio didn't confirm (shown as an alert for 10 minutes) */
+export function rachioNotice(): string | null {
+  if (notice && notice.until < Date.now()) notice = null
+  return notice?.text ?? null
+}
+
+const MIN_MS = 60_000
 const SEC = 1000, MIN = 60 * SEC
 const IDLE = 5 * MIN
 const NEAR_START = 20 * SEC
@@ -428,20 +519,23 @@ function skippedToShow() {
 }
 
 /** The most recent Rachio status the watcher has (null until the first check). */
-export function latestRachio() { return latest }
+export function latestRachio() { return latest ? withPending(latest) : null }
 export function rachioError() { return lastError }
 
 async function tick() {
   timer = null
   let next = IDLE
   try {
-    const state = await refreshRachio()
+    const raw = await refreshRachio()
     lastError = null
     const now = Date.now()
+    const waiting = !!pending
+    // What the dashboard shows, including a button press Rachio hasn't confirmed yet
+    const state = withPending(raw)
     const active = state.zones.find((z) => z.isWatering || z.isPaused)
 
     // Is the run we were waiting for underway, or did it not happen?
-    if (watched && !watched.started && state.zones.some((z) => z.isWatering)) watched.started = true
+    if (watched && !watched.started && raw.zones.some((z) => z.isWatering)) watched.started = true
     if (watched && !watched.started && now > Date.parse(watched.at) + START_GRACE) {
       skipped = { name: watched.name, at: watched.at }
       console.log(`[rachio] ${watched.name} was scheduled for ${watched.at} but didn't start — showing it as skipped`)
@@ -465,7 +559,9 @@ async function tick() {
     } else if (active?.isPaused && active.resumesAt) {
       next = Math.min(next, Math.max(10 * SEC, Date.parse(active.resumesAt) - now + 5 * SEC), WATERING)
     }
-    latest = { zones: state.zones, summary: { ...state.summary, lastSkipped: skippedToShow() } }
+    // Waiting on Rachio to confirm a button press: look again soon
+    if (waiting && pending) next = Math.min(next, CONFIRM_EVERY)
+    latest = { zones: raw.zones, summary: { ...raw.summary, lastSkipped: skippedToShow() } }
   } catch (e) {
     lastError = e instanceof Error ? e.message : String(e)
     console.warn('[rachio] check failed:', lastError)
@@ -496,13 +592,19 @@ export async function rachioCommand(action: string, zoneId: string, durationSeco
     const state = await cached(stateKey(), STATE_MAX_AGE, loadState)
     const q = quickId ? state.quick[quickId] : undefined
     if (!q) throw new Error('That quick run is not matched to a zone or schedule')
-    if (q.scheduleId) await api('/schedulerule/start', { method: 'PUT', body: { id: q.scheduleId } })
-    else {
+    const label = QUICK_RUNS.find((x) => x.id === quickId)?.label ?? 'the run'
+    if (q.scheduleId) {
+      await api('/schedulerule/start', { method: 'PUT', body: { id: q.scheduleId } })
+      const rule = state.rules[q.scheduleId]
+      expectStart(state, label, rule?.zoneRuns ?? [], rule?.name ?? label)
+    } else {
       // The hold panel can pick another time (1–180 minutes)
       const seconds = extra.minutes ? Math.min(180, Math.max(1, Math.round(Number(extra.minutes)))) * 60 : q.seconds
       await api('/zone/start', { method: 'PUT', body: { id: q.zoneId, duration: seconds } })
+      expectStart(state, label, [{ zoneId: q.zoneId!, seconds: seconds ?? null }], null)
     }
     await cacheDelete(stateKey())
+    showNow()
     return
   }
   if (action === 'skip-run') {
@@ -546,24 +648,34 @@ export async function rachioCommand(action: string, zoneId: string, durationSeco
       await api('/device/resume_zone_run', { method: 'PUT', body: { id: deviceId } })
       await cacheDelete(pauseKey())
     }
+    pending = null
     await cacheDelete(stateKey())
+    showNow()
     return
   }
   if (action === 'start') {
     const duration = Math.min(MAX_SECONDS, Math.max(60, Math.round(Number(durationSeconds) || 600)))
     await api('/zone/start', { method: 'PUT', body: { id: zoneId, duration } })
+    const state = await cached(stateKey(), STATE_MAX_AGE, loadState)
+    expectStart(state, state.zones.find((z) => z.id === zoneId)?.name ?? 'the zone', [{ zoneId, seconds: duration }], null)
   } else if (action === 'stop') {
     const state = await cached(stateKey(), STATE_MAX_AGE, loadState)
     const deviceId = state.zoneDevice[zoneId]
     if (!deviceId) throw new Error('Unknown zone')
     await api('/device/stop_water', { method: 'PUT', body: { id: deviceId } })
     await cacheDelete(pauseKey())
+    pending = { kind: 'stop', since: Date.now() }
+    notice = null
   } else {
     throw new Error(`Unknown action: ${action}`)
   }
   // Next dashboard refresh fetches the new status instead of the cached one.
   await cacheDelete(stateKey())
+  showNow()
 }
+
+/** Send the new picture to open screens right away (before Rachio has caught up) */
+function showNow() { onUpdate?.() }
 
 /** For troubleshooting: what Rachio returns, with nothing cached. */
 export async function rachioDebug() {

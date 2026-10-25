@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.1
+- Fix: starting a run from the Irrigation card no longer flips back to idle. Rachio takes a little while to report a run it just started, so the card now keeps showing it watering (countdown and Stop) while the dashboard checks Rachio every 10 seconds until it confirms
+- Same for Stop: the card stays stopped instead of flashing back to watering while Rachio catches up
+- If Rachio hasn't confirmed after 90 seconds, the card goes back to what Rachio reports and an alert says so ("Rachio didn’t confirm … started — check the Rachio app")
+- Starting the Lawns schedule shows the right zone order and finish time straight away
+
 ## 1.4.0
 - New Irrigation card: next run, a 7-day strip of scheduled runs (today outlined), and quick-run chips
 - Tap a day to see its runs and skip one (Rachio can only skip a schedule's next run; undo is in the Rachio app)

@@ -10,7 +10,7 @@ import type { AlertItem, Category, HomeState, Weather } from '../src/types.ts'
 import { buildMockState } from '../src/data/mockData.ts'
 import { ha } from './ha.ts'
 import { getWeather } from './weather.ts'
-import { latestRachio, rachioConfigured, rachioError } from './rachio.ts'
+import { latestRachio, rachioConfigured, rachioError, rachioNotice } from './rachio.ts'
 import { lightingState } from './lights.ts'
 import { thermostats } from './climate.ts'
 import { refreshFavorites, sonosState } from './sonos.ts'
@@ -93,6 +93,7 @@ export function buildState(): HomeState {
     sources.irrigation = rachioConfigured() ? 'off' : 'demo'
   }
   if (rachioError()) alert('irrigation', 'warning', 'Rachio', rachioError()!)
+  if (rachioNotice()) alert('irrigation', 'warning', 'Rachio', rachioNotice()!)
 
   sources.weather = weather ? 'live' : 'demo'
 
