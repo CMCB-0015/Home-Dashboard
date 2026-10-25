@@ -6,8 +6,9 @@
 //     days out, labeled with the day.
 //   - Calendar and sports chips drop off when the event ends; alert chips drop
 //     off when the alert clears (the server only sends current alerts).
-//   - All Family calendar events. TV channel on games, except F1.
+//   - All Family calendar events (statusBar.calendars in src/config/home.ts). TV channel on games, except F1.
 
+import { HOME, matchName } from '../config/home'
 import type { AlertItem, Category, CalendarEvent, HomeState, SportsEvent } from '../types'
 
 export type StatusKind = 'alert' | 'calendar' | 'sports'
@@ -62,7 +63,9 @@ export function statusItems(data: Pick<HomeState, 'alerts' | 'calendar' | 'sport
   const timed: Timed[] = []
 
   // 2. Family calendar: today and tomorrow, until each event ends
+  const inBar = (cal?: string) => !cal || HOME.statusBar.calendars.some((n) => !!matchName(n, [{ name: cal }]).item)
   for (const e of data.calendar as CalendarEvent[]) {
+    if (!inBar(e.calendar)) continue
     const start = Date.parse(e.start)
     if (Number.isNaN(start)) continue
     const parsedEnd = e.end ? Date.parse(e.end) : NaN

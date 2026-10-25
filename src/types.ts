@@ -291,7 +291,12 @@ export interface Weather {
 export interface CalendarEvent {
   id: string; title: string; location: string | null
   start: string; end: string | null; allDay: boolean; color: string
+  /** Which calendar it's on ("Family") */
+  calendar?: string
+  description?: string | null
 }
+
+export interface CalendarInfo { id: string; name: string; color: string }
 
 export interface ShoppingItem {
   id: string; text: string; section: string; done: boolean
@@ -338,6 +343,10 @@ export interface HomeState {
   sonos: SonosState | null
   weather: Weather | null
   calendar: CalendarEvent[]
+  /** The calendars shown, with their colors */
+  calendars?: CalendarInfo[]
+  /** The days the calendar list covers (the month view asks the server for others) */
+  calendarRange?: { start: string; end: string }
   /** Upcoming games and races from The Brief (empty until its schedule feed exists) */
   sports?: SportsEvent[]
   shoppingList: ShoppingItem[]

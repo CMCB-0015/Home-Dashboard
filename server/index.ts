@@ -15,6 +15,7 @@
 //   POST /api/climate/set
 //   POST /api/sonos/command | preset | play | queue-jump · GET /api/sonos/queue
 //   POST /api/tesla/command                       Tesla card and panels (Teslemetry)
+//   GET  /api/calendar/range?start=&end=          Calendar events for another month
 //   POST /api/vacuum/command                      Vacuum card and Map & rooms page (Roborock)
 //   POST /api/sonos/preset-save | preset-rename | preset-delete   quick-play buttons saved from the Sonos page
 //   POST /api/rachio/command          GET /api/rachio/debug
@@ -31,6 +32,7 @@ import { setClimate, thermostats } from './climate.ts'
 import { sportsNotes, sportsEvents } from './sports.ts'
 import { teslaCommand, teslaNotes } from './tesla.ts'
 import { vacuumCommand, vacuumNotes } from './vacuum.ts'
+import { calendarRangeEvents } from './calendar.ts'
 import { sonosCommand, playPreset, playOn, getQueue, jumpToQueue, refreshFavorites, sonosNotes, savePreset, renamePreset, deletePreset } from './sonos.ts'
 import { rachioCommand, rachioConfigured, rachioDebug, startRachioWatcher, pokeRachio, latestRachio, rachioError } from './rachio.ts'
 import { calendarError } from './calendar.ts'
@@ -98,6 +100,10 @@ const routes: Record<string, Handler> = {
     await rachioCommand(String(b.action), String(b.zoneId ?? ''), b.durationSeconds, b.quickId)
     pokeRachio()
   }),
+  '/api/calendar/range': async (req) => {
+    const q = new URL(req.url).searchParams
+    try { return ok(await calendarRangeEvents(q.get('start') ?? '', q.get('end') ?? '')) } catch (e) { return fail(e instanceof Error ? e.message : 'Couldn’t read the calendar', 400) }
+  },
   '/api/rachio/debug': async () => {
     if (!rachioConfigured()) return fail('No Rachio API key set', 409)
     try { return ok(await rachioDebug()) } catch (e) { return fail(e instanceof Error ? e.message : 'Rachio request failed', 502) }

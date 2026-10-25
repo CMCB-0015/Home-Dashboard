@@ -49,7 +49,7 @@ export function VehiclesPage() {
             </dl>
             {t.location && (
               <a className="mt-3 inline-block text-xs text-ink-dim underline hover:text-ink" target="_blank" rel="noreferrer"
-                href={`https://maps.apple.com/?q=${encodeURIComponent(HOME.tesla.name)}&ll=${t.location.lat},${t.location.lon}`}>Open location in Maps</a>
+                href={`https://www.google.com/maps/search/?api=1&query=${t.location.lat},${t.location.lon}`}>Open in Google Maps</a>
             )}
           </Card>
         )}

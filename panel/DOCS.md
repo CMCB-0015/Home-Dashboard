@@ -63,3 +63,12 @@ in `match`.
 
 Drawing areas on the map is off until the floor plan is lined up with the robot's map
 (`vacuum.calibration`); rooms work without it.
+
+## Calendar
+
+Page 2 shows every Google calendar Home Assistant has (`calendars: ['*']` in
+`src/config/home.ts`; list names instead to pick, or add names to `hiddenCalendars`).
+Each calendar gets its own color; pin one in `calendarColors`. The chips above the
+calendar hide or show a calendar on that screen only. The status bar shows events from
+`statusBar.calendars` (Family). Tapping an event shows its details and a Google map of
+its location; maps always open in Google Maps.

@@ -33,7 +33,7 @@ export function IrrigationPage() {
             </>
           ) : <p className="text-sm text-ink-faint">Nothing scheduled.</p>}
         </Card>
-        <Card accent={cfg.color} title="Controls" subtitle="Tap twice to confirm">
+        <Card accent={cfg.color} title="Controls">
           <IrrigationControls stacked={false} />
           {unmatched.length > 0 && (
             <div className="mt-3 rounded-lg bg-critical-dim p-3 text-xs text-ink">

@@ -63,13 +63,11 @@ export function teslaSummary(t: Tesla, waking: boolean) {
 export function TeslaCard({ className = 'h-full' }: { className?: string }) {
   const { data } = useHome()
   const { act, waking } = useTeslaActions()
-  const [confirm, setConfirm] = useState(false)
   const [chooser, setChooser] = useState(false)
   const [opened, setOpened] = useState<string | null>(null)
   const [panel, setPanel] = useState<'climate' | 'charging' | null>(null)
 
-  // "Tap again to unlock" and "Frunk open" fade after a few seconds
-  useEffect(() => { if (!confirm) return; const t = setTimeout(() => setConfirm(false), 4000); return () => clearTimeout(t) }, [confirm])
+  // "Frunk open" fades after a few seconds
   useEffect(() => { if (!opened) return; const t = setTimeout(() => setOpened(null), 6000); return () => clearTimeout(t) }, [opened])
 
   const t = data?.tesla
@@ -90,13 +88,10 @@ export function TeslaCard({ className = 'h-full' }: { className?: string }) {
 
   const tapLock = () => {
     setChooser(false)
-    if (unlocked) { setConfirm(false); void act('lock', {}, { locked: true }); return }
-    if (!confirm) { setConfirm(true); return }
-    setConfirm(false)
-    void act('unlock', {}, { locked: false })
+    void act(unlocked ? 'lock' : 'unlock', {}, { locked: !unlocked })
   }
   const tapFan = () => {
-    setConfirm(false); setChooser(false)
+    setChooser(false)
     if (t.climateOn) setPanel('climate')
     else if (!waking) void act('climate_on', {}, t.online ? { climateOn: true } : undefined)
   }
@@ -105,9 +100,9 @@ export function TeslaCard({ className = 'h-full' }: { className?: string }) {
     void act(what, {}, what === 'frunk' ? { frunkOpen: true } : { trunkOpen: true }).then((ok) => ok && setOpened(what === 'frunk' ? 'Frunk' : 'Trunk'))
   }
 
-  let hint = '', hintColor = DIM
-  if (confirm) { hint = 'Tap again to unlock'; hintColor = AMBER }
-  else if (waking) hint = 'Usually 10–30 seconds'
+  let hint = ''
+  const hintColor = DIM
+  if (waking) hint = 'Usually 10–30 seconds'
   else if (opened) hint = `${opened} open`
 
   const iconBtn = 'flex h-14 items-center justify-center rounded-[14px] transition-colors hover:bg-white/5'
@@ -146,19 +141,19 @@ export function TeslaCard({ className = 'h-full' }: { className?: string }) {
         )}
 
         <div className="grid grid-cols-4 gap-1.5 pt-1.5">
-          <button onClick={tapLock} aria-label={unlocked ? 'Unlocked: tap to lock' : 'Locked: tap twice to unlock'} disabled={t.locked === null}
-            className={`${iconBtn} border disabled:opacity-40`} style={{ borderColor: confirm ? AMBER : 'transparent', color: unlocked ? AMBER : ACC }}>
+          <button onClick={tapLock} aria-label={unlocked ? 'Unlocked: tap to lock' : 'Locked: tap to unlock'} disabled={t.locked === null}
+            className={`${iconBtn} border disabled:opacity-40`} style={{ borderColor: 'transparent', color: unlocked ? AMBER : ACC }}>
             <LockIcon open={unlocked} />
           </button>
           <button onClick={tapFan} aria-label={t.climateOn ? 'Climate on: open climate controls' : 'Start climate'} aria-busy={waking}
             className={iconBtn} style={{ color: t.climateOn ? BLUE : waking ? '#e8edf2' : ACC }}>
             <span className={waking ? 'animate-pulse' : ''}><FanIcon glow={t.climateOn ? tint(BLUE, 0.7) : undefined} /></span>
           </button>
-          <button onClick={() => { setConfirm(false); setChooser(false); setPanel('charging') }} aria-label="Charging"
+          <button onClick={() => { setChooser(false); setPanel('charging') }} aria-label="Charging"
             className={iconBtn} style={{ color: charging ? GREEN : ACC }}>
             <BoltIcon glow={charging ? tint(GREEN, 0.8) : undefined} />
           </button>
-          <button onClick={() => { setConfirm(false); setChooser((c) => !c) }} aria-label="Frunk and trunk" aria-expanded={chooser}
+          <button onClick={() => setChooser((c) => !c)} aria-label="Frunk and trunk" aria-expanded={chooser}
             className={iconBtn} style={{ color: chooser || opened ? '#e8edf2' : ACC }}>
             <CarOpenIcon />
           </button>

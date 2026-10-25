@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0
+- One tap for everything: no more "tap again to confirm" (All off, Rachio quick runs and Skip tomorrow, Tesla unlock). A short flash shows the tap went through
+- Calendar: Week / Month switch; month grid with paging to any month and the picked day's events underneath
+- Calendar: every Google calendar in Home Assistant, each in its own color, with chips to show or hide a calendar on that screen; each event says which calendar it's on
+- Tap an event for its details: calendar, time, the place (name and address) on a Google map, Google Maps and Directions buttons, and the event's notes with working links
+- The status bar still shows Family calendar events only (statusBar.calendars)
+- Maps open in Google Maps everywhere (the Tesla location link no longer uses Apple Maps)
+
 ## 1.2.0
 - New Tesla card (WillaWilla, through Teslemetry): battery and range, lock (two taps to unlock), climate, charging, frunk and trunk; glows green while charging, blue top bar with climate on
 - Climate panel: target temperature, power, front and rear defrost, seat heat and cooling, steering wheel, rear seats

@@ -14,7 +14,7 @@ import { latestRachio, rachioConfigured, rachioError } from './rachio.ts'
 import { lightingState } from './lights.ts'
 import { thermostats } from './climate.ts'
 import { refreshFavorites, sonosState } from './sonos.ts'
-import { calendarEvents, calendarError, refreshCalendar } from './calendar.ts'
+import { calendarEvents, calendarError, calendarList, calendarRange, refreshCalendar } from './calendar.ts'
 import { refreshSports, sportsEvents } from './sports.ts'
 import { teslaState } from './tesla.ts'
 import { vacuumState, vacuumAlerts } from './vacuum.ts'
@@ -115,6 +115,8 @@ export function buildState(): HomeState {
     tesla,
     vacuum,
     calendar,
+    calendars: sources.calendar === 'live' ? calendarList() : demo.calendars,
+    calendarRange: sources.calendar === 'live' ? calendarRange() ?? undefined : demo.calendarRange,
     sports: haConfigured ? sportsEvents() : demo.sports,
     irrigationZones,
     irrigation,

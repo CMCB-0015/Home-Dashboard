@@ -2,37 +2,31 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Play } from 'lucide-react'
 import type { QuickRun } from '../types'
 
-// Tap once to arm, tap again within 3 seconds to confirm — so a bump on the
-// wall tablet doesn't change the sprinklers.
+// One tap and it happens — the dashboard is built to be fast. A short flash
+// confirms the tap went through.
 export function ConfirmButton({ label, detail, icon, disabled, title, onConfirm, color, dim }: {
   label: string; detail?: string; icon?: ReactNode; disabled?: boolean; title?: string
   onConfirm: () => void; color: string; dim: string
 }) {
-  const [armed, setArmed] = useState(false)
+  const [flash, setFlash] = useState(false)
   useEffect(() => {
-    if (!armed) return
-    const t = setTimeout(() => setArmed(false), 3000)
+    if (!flash) return
+    const t = setTimeout(() => setFlash(false), 600)
     return () => clearTimeout(t)
-  }, [armed])
+  }, [flash])
 
   return (
     <button
       disabled={disabled}
-      onClick={() => { if (armed) { setArmed(false); onConfirm() } else setArmed(true) }}
+      onClick={() => { setFlash(true); onConfirm() }}
       title={title}
-      aria-label={armed ? `Confirm: ${label}` : `${label}${detail ? `, ${detail}` : ''}`}
-      className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-medium transition-colors disabled:opacity-40"
-      style={armed ? { background: color, color: 'var(--color-bg)' } : { background: dim, color }}
+      aria-label={`${label}${detail ? `, ${detail}` : ''}`}
+      className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-medium transition-colors duration-150 active:scale-[0.98] disabled:opacity-40"
+      style={flash ? { background: color, color: 'var(--color-bg)' } : { background: dim, color }}
     >
       <span className="shrink-0">{icon ?? <Play size={12} fill="currentColor" />}</span>
-      {armed ? (
-        <span className="flex-1">Tap again to confirm</span>
-      ) : (
-        <>
-          <span className="flex-1 truncate">{label}</span>
-          {detail && <span className="shrink-0 font-mono text-[11px] opacity-80">{detail}</span>}
-        </>
-      )}
+      <span className="flex-1 truncate">{label}</span>
+      {detail && <span className="shrink-0 font-mono text-[11px] opacity-80">{detail}</span>}
     </button>
   )
 }

@@ -56,8 +56,16 @@ export const HOME = {
     ],
   },
 
-  /** Google calendars shown on page 2 */
-  calendars: ['Family'],
+  /**
+   * Calendars on page 2. '*' = every Google calendar in Home Assistant; or
+   * list names, e.g. ['Family', 'Connor']. Each calendar gets a color (pin
+   * one in calendarColors), and the chips on the calendar card show or hide
+   * each one on that screen.
+   */
+  calendars: ['*'] as readonly string[],
+  /** Calendars to leave out even with '*' */
+  hiddenCalendars: [] as readonly string[],
+  calendarColors: { Family: '#6fa8ff' } as Record<string, string>,
 
   /** The Tesla card (Teslemetry in Home Assistant) */
   tesla: {
@@ -118,6 +126,8 @@ export const HOME = {
 
   /** The status bar at the top of the Home page */
   statusBar: {
+    /** Calendars whose events show as chips (other calendars stay on page 2 only) */
+    calendars: ['Family'] as readonly string[],
     /** The Brief — tapping a sports chip opens it (or the game's own page, when the feed gives one) */
     briefUrl: 'https://rad-peony-6d6054.netlify.app' as string | null,
     /**

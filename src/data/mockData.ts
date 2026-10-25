@@ -29,7 +29,11 @@ function dayISO(offset: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// Demo calendar colors (Family is pinned blue in src/config/home.ts)
+const F = '#6fa8ff', C = '#7fd1b9', H = '#f2c14e'
+
 export function buildMockState(): HomeState {
+  const now = new Date()
   return {
     thermostats: [
       { id: 'climate.thermostat', name: 'Thermostat', room: 'Hallway', currentTempF: 71, targetTempF: 70, humidityPct: 48, mode: 'cool',
@@ -157,14 +161,30 @@ export function buildMockState(): HomeState {
       ],
     },
     calendar: [
-      { id: 'e1', title: 'Drop-off at school', location: null, start: todayAt(8, 30), end: todayAt(9), allDay: false, color: '#7fd1b9' },
-      { id: 'e2', title: 'Lunch with Mike', location: "Pedro's Tacos", start: todayAt(12), end: todayAt(13), allDay: false, color: '#6fa8ff' },
-      { id: 'e3', title: 'Date night', location: 'Reservation for 2', start: todayAt(20, 30), end: todayAt(22), allDay: false, color: '#d6a0e0' },
-      { id: 'e4', title: 'Soccer practice', location: 'Field 3', start: todayAt(9, 0, 1), end: todayAt(10, 0, 1), allDay: false, color: '#7fd1b9' },
-      { id: 'e5', title: 'Birthday party', location: 'Backyard BBQ', start: todayAt(14, 0, 1), end: todayAt(17, 0, 1), allDay: false, color: '#d6b46a' },
-      { id: 'e6', title: 'Trash & recycling pickup', location: null, start: todayAt(0, 0, 3), end: null, allDay: true, color: '#56636f' },
-      { id: 'e7', title: 'Dentist', location: 'Dr. Patel', start: todayAt(15, 30, 4), end: todayAt(16, 30, 4), allDay: false, color: '#6fa8ff' },
+      { id: 'e1', title: 'Drop-off at school', location: null, start: todayAt(8, 30), end: todayAt(9), allDay: false, color: F, calendar: 'Family' },
+      { id: 'e2', title: 'Lunch with Mike', location: "Pedro's Tacos, 2801 S El Camino Real, San Clemente, CA 92672, USA", start: todayAt(12), end: todayAt(13), allDay: false, color: C, calendar: 'Connor',
+        description: 'Catch up before the trip. Mike is bringing the drone parts.' },
+      { id: 'e3', title: 'Margaux swim class', location: 'San Clemente Aquatics Center, 987 Avenida Vista Hermosa, San Clemente, CA 92673, USA', start: todayAt(16, 45), end: todayAt(17), allDay: false, color: F, calendar: 'Family',
+        description: 'Bring goggles and a towel.\nCoach Sara: lane 3.' },
+      { id: 'e4', title: 'Date night', location: 'Nick\'s San Clemente, 213 Avenida Del Mar, San Clemente, CA 92672, USA', start: todayAt(19, 30), end: todayAt(21), allDay: false, color: F, calendar: 'Family',
+        description: 'Reservation for 2 under Halberg.' },
+      { id: 'e5', title: 'Soccer game', location: 'Vista Hermosa Sports Park, 987 Avenida Vista Hermosa, San Clemente, CA 92673, USA', start: todayAt(10, 30, 1), end: todayAt(11, 30, 1), allDay: false, color: F, calendar: 'Family' },
+      { id: 'e6', title: 'Pool service', location: null, start: todayAt(0, 0, 1), end: todayAt(0, 0, 2), allDay: true, color: F, calendar: 'Family' },
+      { id: 'e7', title: 'Dentist', location: 'Coastal Dental, 1031 Avenida Pico, San Clemente, CA 92673, USA', start: todayAt(15, 30, 4), end: todayAt(16, 30, 4), allDay: false, color: C, calendar: 'Connor' },
+      { id: 'e8', title: 'Halloween', location: null, start: todayAt(0, 0, 7), end: todayAt(0, 0, 8), allDay: true, color: H, calendar: 'Holidays in United States' },
+      { id: 'e9', title: 'Design review · Blitz', location: null, start: todayAt(9, 0, 3), end: todayAt(10, 30, 3), allDay: false, color: C, calendar: 'Connor' },
+      { id: 'e10', title: 'Trash & recycling pickup', location: null, start: todayAt(0, 0, 5), end: todayAt(0, 0, 6), allDay: true, color: F, calendar: 'Family' },
+      { id: 'e11', title: 'Veterans Day', location: null, start: todayAt(0, 0, 18), end: todayAt(0, 0, 19), allDay: true, color: H, calendar: 'Holidays in United States' },
+      { id: 'e12', title: 'Margaux swim class', location: 'San Clemente Aquatics Center, 987 Avenida Vista Hermosa, San Clemente, CA 92673, USA', start: todayAt(16, 45, 7), end: todayAt(17, 0, 7), allDay: false, color: F, calendar: 'Family' },
+      { id: 'e13', title: 'Car service', location: 'Tesla Service Center, 3 Hughes, Irvine, CA 92618, USA', start: todayAt(8, 0, 10), end: todayAt(9, 0, 10), allDay: false, color: C, calendar: 'Connor' },
+      { id: 'e14', title: 'Thanksgiving at Mom\'s', location: null, start: todayAt(0, 0, 33), end: todayAt(0, 0, 34), allDay: true, color: F, calendar: 'Family' },
     ],
+    calendars: [
+      { id: 'calendar.family', name: 'Family', color: F },
+      { id: 'calendar.connor', name: 'Connor', color: C },
+      { id: 'calendar.holidays', name: 'Holidays in United States', color: H },
+    ],
+    calendarRange: { start: new Date(now.getFullYear(), now.getMonth(), -6).toISOString(), end: new Date(now.getFullYear(), now.getMonth() + 2, 8).toISOString() },
     sports: [
       { id: 'g1', kind: 'suns', title: 'Suns vs. Portland', start: todayAt(19), end: todayAt(21, 30), channel: 'ESPN' },
       { id: 'g2', kind: 'f1', title: 'F1 · Mexico City GP', start: todayAt(13, 0, 2), end: todayAt(15, 0, 2), big: true },
@@ -181,11 +201,11 @@ export function buildMockState(): HomeState {
     ],
     alerts: [
       { id: 'a2', category: 'cameras', severity: 'warning', message: 'Motion detected', deviceName: 'Front Door', timestamp: ago(14) },
-      { id: 'a3', category: 'vehicles', severity: 'info', message: 'Finished charging', deviceName: 'Model 3', timestamp: ago(60) },
+      { id: 'a3', category: 'vehicles', severity: 'info', message: 'Finished charging', deviceName: 'WillaWilla', timestamp: ago(60) },
       { id: 'a4', category: 'cameras', severity: 'warning', message: 'Motion detected', deviceName: 'Driveway', timestamp: ago(52) },
       { id: 'a5', category: 'irrigation', severity: 'info', message: 'Rain delay applied, schedule skipped', deviceName: 'Back Slope', timestamp: ago(120) },
       { id: 'a6', category: 'climate', severity: 'info', message: 'Switched to Eco mode', deviceName: 'Thermostat', timestamp: ago(9 * 60) },
-      { id: 'a7', category: 'vacuum', severity: 'info', message: 'Finished cleaning, returned to dock', deviceName: 'Roborock', timestamp: ago(20 * 60) },
+      { id: 'a7', category: 'vacuum', severity: 'info', message: 'Finished cleaning, returned to dock', deviceName: 'S8 Pro Ultra', timestamp: ago(20 * 60) },
     ],
   }
 }
