@@ -1,4 +1,5 @@
-import type { HomeState } from '../types.ts'
+import { demoVacuum } from '../lib/vacuum'
+import type { HomeState, Light } from '../types.ts'
 
 // Demo data, shaped exactly like the live data will be. Both the frontend
 // (plain `npm run dev`) and the backend (before a service is connected) use
@@ -6,6 +7,14 @@ import type { HomeState } from '../types.ts'
 
 const at = (minutesFromNow: number) => new Date(Date.now() + minutesFromNow * 60_000).toISOString()
 const ago = (m: number) => at(-m)
+
+function L(id: string, name: string, room: string, on: boolean, brightnessPct: number, color: string | null, kelvin: number | null,
+  extra: Partial<Light> = {}): Light {
+  return {
+    id, name, room, on, brightnessPct, color: on ? color : null, kelvin, outdoor: false, timer: false, isGroup: false, available: true,
+    supports: { color: true, white: true, dim: true }, minKelvin: 2000, maxKelvin: 6500, ...extra,
+  }
+}
 
 function todayAt(hour: number, minute = 0, dayOffset = 0): string {
   const d = new Date()
@@ -23,36 +32,44 @@ function dayISO(offset: number): string {
 export function buildMockState(): HomeState {
   return {
     thermostats: [
-      { id: 'nest-1', name: 'Main Floor', room: 'Living Room', currentTempF: 71, targetTempF: 70, humidityPct: 42, mode: 'heat' },
-      { id: 'nest-2', name: 'Upstairs', room: 'Bedroom', currentTempF: 68, targetTempF: 68, humidityPct: 38, mode: 'eco' },
+      { id: 'climate.thermostat', name: 'Thermostat', room: 'Hallway', currentTempF: 71, targetTempF: 70, humidityPct: 48, mode: 'cool',
+        modes: ['heat', 'cool', 'heat_cool', 'eco', 'off'], action: 'idle' },
     ],
     lights: [
-      { id: 'hue-1', name: 'Ceiling', room: 'Living Room', on: true, brightnessPct: 80 },
-      { id: 'hue-2', name: 'Lamp', room: 'Living Room', on: true, brightnessPct: 45 },
-      { id: 'hue-3', name: 'Pendant', room: 'Kitchen', on: true, brightnessPct: 100 },
-      { id: 'hue-4', name: 'Under Cabinet', room: 'Kitchen', on: false, brightnessPct: 0 },
-      { id: 'hue-5', name: 'Ceiling', room: 'Office', on: true, brightnessPct: 65 },
-      { id: 'hue-6', name: 'Desk Lamp', room: 'Office', on: false, brightnessPct: 0 },
-      { id: 'hue-7', name: 'Ceiling', room: 'Bedroom', on: false, brightnessPct: 0 },
-      { id: 'hue-8', name: 'Nightstand', room: 'Bedroom', on: false, brightnessPct: 0 },
-      { id: 'hue-9', name: 'Hallway', room: 'Hallway', on: true, brightnessPct: 30 },
-      { id: 'hue-10', name: 'Porch', room: 'Front Door', on: true, brightnessPct: 100 },
-      { id: 'hue-11', name: 'Garage', room: 'Garage', on: false, brightnessPct: 0 },
+      L('light.patio_string_lights', 'Patio string lights', 'Patio', true, 70, '#ffb347', null, { outdoor: true }),
+      L('light.patio_sconces', 'Patio sconces', 'Patio', true, 55, '#ffc98a', 2700, { outdoor: true }),
+      L('light.bedroom_overhead', 'Bedroom overhead', 'Bedroom', false, 0, null, null, { isGroup: true }),
+      L('light.window', 'Window', 'Bedroom', false, 0, null, null),
+      L('light.dresser', 'Dresser', 'Bedroom', false, 0, null, null),
+      L('light.bedside_lamp', 'Bedside lamp', 'Bedroom', true, 40, '#ff9f5a', 2200),
+      L('light.living_room_lamp', 'Floor lamp', 'Living Room', true, 80, '#7f8cff', null),
+      L('light.kitchen_pendants', 'Pendants', 'Kitchen', false, 0, null, null),
+      L('light.hallway', 'Hallway', 'Hallway', false, 0, null, null),
+      L('light.front_door', 'Front door', 'Front Yard', true, 100, '#ffd6a0', 2900, { outdoor: true, timer: true }),
+      L('light.garage', 'Garage', 'Front Yard', true, 100, '#ffd6a0', 2900, { outdoor: true, timer: true }),
+      L('light.side_yard', 'Side yard', 'Front Yard', false, 0, null, null, { outdoor: true, timer: true }),
     ],
+    lighting: {
+      quick: [
+        { label: 'Patio string lights', lightId: 'light.patio_string_lights' },
+        { label: 'Patio sconces', lightId: 'light.patio_sconces' },
+        { label: 'Bedroom overhead', lightId: 'light.bedroom_overhead' },
+        { label: 'Bedside lamp', lightId: 'light.bedside_lamp' },
+      ],
+      scenes: ['Bright', 'Relax', 'Read', 'Concentrate', 'Nightlight'].flatMap((n) => [
+        { id: `scene.bedroom_${n.toLowerCase()}`, name: n, room: 'Bedroom' },
+        { id: `scene.patio_${n.toLowerCase()}`, name: n, room: 'Patio' },
+      ]),
+      cans: { groupId: 'light.bedroom_overhead', windowId: 'light.window', dresserId: 'light.dresser' },
+      bedtime: { status: 'ready', enabled: true, start: '20:00', end: '22:00', lastRun: ago(23 * 60) },
+      notes: [],
+    },
     cameras: [
       { id: 'eufy-1', name: 'Front Door', status: 'online', lastMotionAt: ago(14), snapshotUrl: '/demo/front-door.svg', liveUrl: null },
       { id: 'eufy-2', name: 'Driveway', status: 'online', lastMotionAt: ago(52), snapshotUrl: '/demo/driveway.svg', liveUrl: null },
     ],
     guardMode: 'home',
-    vacuums: [
-      { id: 'roborock-1', name: 'Roborock', state: 'docked', batteryPct: 92, lastCleanAt: ago(20 * 60) },
-    ],
-    vacuumRunProfiles: [
-      { id: 'whole-home', name: 'Whole Home', rooms: 'All rooms', suction: 'balanced' },
-      { id: 'quick', name: 'Quick Clean', rooms: 'All rooms, single pass', suction: 'quiet' },
-      { id: 'pet-hair', name: 'Pet Hair Focus', rooms: 'Living Room, Bedroom', suction: 'max' },
-      { id: 'kitchen', name: 'Kitchen Only', rooms: 'Kitchen', suction: 'max' },
-    ],
+    vacuum: demoVacuum(ago(20 * 60)),
     irrigationZones: [
       { id: 'rachio-1', name: 'Front Lawn', isWatering: false, minutesLeft: null, rainDelay: false, nextRunAt: at(14 * 60), lastRunAt: ago(28 * 60) },
       { id: 'rachio-2', name: 'Back Lawn', isWatering: false, minutesLeft: null, rainDelay: false, nextRunAt: at(14 * 60 + 12), lastRunAt: ago(26 * 60) },
@@ -67,6 +84,16 @@ export function buildMockState(): HomeState {
       ],
       skipTomorrow: { available: true, skipped: false, label: "Skip tomorrow's runs" },
     },
+    tesla: {
+      name: 'WillaWilla', online: true, batteryPct: 70, rangeMi: 216,
+      charging: 'complete', plugged: true, chargeLimitPct: 80, chargeLimitMin: 50, chargeLimitMax: 100,
+      chargeAmps: 32, chargeAmpsMax: 48, chargerAmps: null, chargeRateMph: null, doneAt: null,
+      portOpen: false, schedule: { enabled: true, time: '23:00' }, locked: true,
+      insideF: 58, outsideF: 54, climateOn: false, targetF: 70, minF: 59, maxF: 82,
+      driver: 0, passenger: 0, rear: 0, coolingSeats: true, wheel: false, frontDefrost: false, rearDefrost: null,
+      frunkOpen: false, trunkOpen: false, atHome: true, driving: false, speedMph: null,
+      enRouteHome: null, location: { lat: 33.427, lon: -117.612 }, updatedAt: ago(5),
+    },
     vehicles: [
       {
         id: 'tesla-1', name: 'Model 3', detail: '2024 · Grey', kind: 'ev', color: '#5f666d',
@@ -79,9 +106,34 @@ export function buildMockState(): HomeState {
       //   locked: true, insideTempF: null, updatedAt: ago(22), canCommand: false },
     ],
     sonos: {
-      room: 'Living Room', groupSize: 2, playing: true,
-      title: 'Sunday Morning', subtitle: 'Acoustic Mix', artUrl: '/demo/album.svg',
-      positionSec: 98, durationSec: 232, volumePct: 35,
+      id: 'media_player.patio_1',
+      room: 'Patio 1 + Patio 2', groupSize: 2, playing: true,
+      title: 'Harvest Moon', subtitle: 'Neil Young', artUrl: '/demo/album.svg',
+      positionSec: 98, durationSec: 303, volumePct: 30, shuffle: false, from: 'Chill',
+      speakers: [
+        { id: 'media_player.patio_1', name: 'Patio 1', room: 'Patio', available: true, volumePct: 30, state: 'playing', group: ['media_player.patio_1', 'media_player.patio_2'] },
+        { id: 'media_player.patio_2', name: 'Patio 2', room: 'Patio', available: true, volumePct: 30, state: 'playing', group: ['media_player.patio_1', 'media_player.patio_2'] },
+        { id: 'media_player.roam_2', name: 'Roam 2', room: 'Garage', available: true, volumePct: 35, state: 'paused', group: ['media_player.roam_2'] },
+        { id: 'media_player.living_room', name: 'Living Room', room: 'Living Room', available: true, volumePct: 25, state: 'idle', group: ['media_player.living_room'] },
+        { id: 'media_player.kitchen', name: 'Kitchen', room: 'Kitchen', available: true, volumePct: 25, state: 'idle', group: ['media_player.kitchen'] },
+      ],
+      favorites: [
+        { id: 'FV:2/1', name: 'All my tracks', kind: 'Playlist', art: null },
+        { id: 'FV:2/2', name: 'Chill', kind: 'Playlist', art: null },
+        { id: 'FV:2/3', name: 'Dinner Jazz', kind: 'Playlist', art: null },
+        { id: 'FV:2/4', name: 'Rock', kind: 'Playlist', art: null },
+        { id: 'FV:2/5', name: 'Sunday Morning', kind: 'Album', art: null },
+      ],
+      presets: [
+        { id: 'chill', name: 'Chill', where: 'Patio 1 + Patio 2', volume: 'Vol 30', shuffle: false, available: true },
+        { id: 'rock', name: 'Rock', where: 'Roam 2', volume: 'Vol 35', shuffle: false, available: true },
+        { id: 'all-tracks', name: 'All my tracks', where: 'Roam 2 · Shuffle', volume: 'Vol 35', shuffle: true, available: true },
+      ],
+      groupChips: [
+        { label: 'Patio 1 + 2', speakerIds: ['media_player.patio_1', 'media_player.patio_2'] },
+        { label: 'Garage', speakerIds: ['media_player.roam_2'] },
+        { label: 'Everywhere', speakerIds: ['media_player.patio_1', 'media_player.patio_2', 'media_player.roam_2', 'media_player.living_room', 'media_player.kitchen'] },
+      ],
     },
     weather: {
       location: 'San Clemente',
@@ -113,6 +165,10 @@ export function buildMockState(): HomeState {
       { id: 'e6', title: 'Trash & recycling pickup', location: null, start: todayAt(0, 0, 3), end: null, allDay: true, color: '#56636f' },
       { id: 'e7', title: 'Dentist', location: 'Dr. Patel', start: todayAt(15, 30, 4), end: todayAt(16, 30, 4), allDay: false, color: '#6fa8ff' },
     ],
+    sports: [
+      { id: 'g1', kind: 'suns', title: 'Suns vs. Portland', start: todayAt(19), end: todayAt(21, 30), channel: 'ESPN' },
+      { id: 'g2', kind: 'f1', title: 'F1 · Mexico City GP', start: todayAt(13, 0, 2), end: todayAt(15, 0, 2), big: true },
+    ],
     shoppingList: [
       { id: 's1', text: 'Milk', section: 'Grocery', done: false },
       { id: 's2', text: 'Bananas', section: 'Grocery', done: false },
@@ -128,7 +184,7 @@ export function buildMockState(): HomeState {
       { id: 'a3', category: 'vehicles', severity: 'info', message: 'Finished charging', deviceName: 'Model 3', timestamp: ago(60) },
       { id: 'a4', category: 'cameras', severity: 'warning', message: 'Motion detected', deviceName: 'Driveway', timestamp: ago(52) },
       { id: 'a5', category: 'irrigation', severity: 'info', message: 'Rain delay applied, schedule skipped', deviceName: 'Back Slope', timestamp: ago(120) },
-      { id: 'a6', category: 'climate', severity: 'info', message: 'Switched to Eco mode', deviceName: 'Upstairs', timestamp: ago(9 * 60) },
+      { id: 'a6', category: 'climate', severity: 'info', message: 'Switched to Eco mode', deviceName: 'Thermostat', timestamp: ago(9 * 60) },
       { id: 'a7', category: 'vacuum', severity: 'info', message: 'Finished cleaning, returned to dock', deviceName: 'Roborock', timestamp: ago(20 * 60) },
     ],
   }

@@ -1,22 +1,25 @@
-import { ActivityStrip } from '../components/tiles/ActivityStrip'
+import { StatusBar } from '../components/StatusBar'
 import { CamerasCard } from '../components/tiles/CamerasCard'
-import { VehiclesCard } from '../components/tiles/VehiclesCard'
-import { ClimateTile, LightsTile, SonosTile, VacuumTile, IrrigationTile } from '../components/tiles/SmallTiles'
+import { TeslaCard } from '../components/vehicles/TeslaCard'
+import { ClimateTile, IrrigationTile } from '../components/tiles/SmallTiles'
+import { VacuumCard } from '../components/vacuum/VacuumCard'
+import { SonosCard } from '../components/sonos/SonosCard'
+import { LightsCard } from '../components/lights/LightsCard'
 
 // Page 1 — the home dashboard.
-export function HomePage() {
+export function HomePage({ onOpenPlanner }: { onOpenPlanner: () => void }) {
   return (
     <div className="flex flex-col gap-5 px-5 pb-8 md:px-8">
-      <ActivityStrip />
+      <StatusBar onOpenPlanner={onOpenPlanner} />
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[2.25fr_1fr]">
         <CamerasCard />
-        <VehiclesCard />
+        <TeslaCard />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <ClimateTile />
-        <LightsTile />
-        <SonosTile />
-        <VacuumTile />
+        <LightsCard />
+        <SonosCard />
+        <VacuumCard />
         <IrrigationTile />
       </div>
     </div>

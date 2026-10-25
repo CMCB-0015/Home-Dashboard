@@ -2,10 +2,10 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 
-export function DetailLayout({ title, subtitle, color, children, action }:
-  { title: string; subtitle?: string; color: string; children: ReactNode; action?: ReactNode }) {
+export function DetailLayout({ title, subtitle, color, children, action, wide }:
+  { title: string; subtitle?: string; color: string; children: ReactNode; action?: ReactNode; wide?: boolean }) {
   return (
-    <div className="mx-auto min-h-full max-w-5xl px-5 py-6 md:px-8">
+    <div className={`mx-auto min-h-full ${wide ? 'max-w-[1360px]' : 'max-w-5xl'} px-5 py-6 md:px-8`}>
       <Link to="/" className="mb-4 inline-flex items-center gap-1 text-sm text-ink-dim hover:text-ink">
         <ChevronLeft size={16} /> Home
       </Link>

@@ -1,0 +1,5 @@
+# Lets Home Assistant install this repo as an app.
+# Settings → Apps → App store → ⋮ → Repositories → add this repo's GitHub address.
+name: Panel
+url: https://github.com/CMCB-0015/Home-Dashboard
+maintainer: Connor

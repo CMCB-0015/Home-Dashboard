@@ -23,12 +23,13 @@ export function Pill({ children, color, dim, onClick, disabled, label }: PillPro
   )
 }
 
-export function RoundButton({ children, color, dim, onClick, label, size = 32 }: PillProps & { size?: number }) {
+export function RoundButton({ children, color, dim, onClick, label, disabled, size = 32 }: PillProps & { size?: number }) {
   return (
     <button
       onClick={onClick}
       aria-label={label}
-      className="inline-flex shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-85"
+      disabled={disabled}
+      className="inline-flex shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-85 disabled:opacity-30"
       style={{ background: dim, color, width: size, height: size }}
     >
       {children}

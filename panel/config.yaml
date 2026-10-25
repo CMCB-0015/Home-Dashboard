@@ -1,0 +1,34 @@
+# The Panel dashboard as a Home Assistant app.
+# To release an update: push the code to GitHub, raise `version` below, push again,
+# then click Update on the app in Home Assistant.
+name: Panel
+version: "1.2.0"
+slug: panel
+description: Connor's home dashboard — open http://192.168.86.207:8099
+url: https://github.com/CMCB-0015/Home-Dashboard
+arch:
+  - amd64
+startup: application
+boot: auto
+init: false
+# Lets the dashboard talk to Home Assistant (Home Assistant hands it a token automatically)
+homeassistant_api: true
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: Dashboard
+webui: http://[HOST]:[PORT:8099]
+options:
+  passcode: ""
+  rachio_api_key: ""
+  brief_feed_key: ""
+  weather_lat: "33.4270"
+  weather_lon: "-117.6120"
+  weather_location_name: San Clemente
+schema:
+  passcode: password
+  rachio_api_key: password?
+  brief_feed_key: password?
+  weather_lat: str
+  weather_lon: str
+  weather_location_name: str

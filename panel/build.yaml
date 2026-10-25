@@ -1,0 +1,4 @@
+# Where Home Assistant downloads the dashboard code from when it builds the app.
+args:
+  REPO_URL: https://github.com/CMCB-0015/Home-Dashboard
+  REPO_BRANCH: main

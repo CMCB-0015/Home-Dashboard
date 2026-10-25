@@ -76,3 +76,13 @@ input[type="range"] { accent-color: currentColor; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
 }
+
+/* Light panel: slides up from the bottom */
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.sheet-up { animation: sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.sheet-backdrop { animation: fade-in 0.2s ease-out; }
+
+/* Status bar: chips slide sideways without moving the page swipe, no scrollbar */
+.status-bar { scroll-snap-type: x proximity; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.status-bar::-webkit-scrollbar { display: none; }
