@@ -100,3 +100,24 @@ input[type="range"] { accent-color: currentColor; }
   background: linear-gradient(180deg, rgba(53,194,214,0), rgba(53,194,214,.55)); /* irrigation token */ }
 @keyframes rain-fall { from { transform: translate(0, 0); } to { transform: translate(-60px, calc(100% + 30px)); } }
 @media (prefers-reduced-motion: reduce) { .rain-layer { display: none; } }
+
+/* Tesla card motion — the charge cable's green pulse, the road's lane dashes and
+   the spinning rims (CarScene.tsx). Stops with the device's reduce-motion setting. */
+@keyframes tesla-spin { to { transform: rotate(-360deg); } }
+@keyframes tesla-dash { to { background-position-y: 150px; } }
+.tesla-rim { animation: tesla-spin .8s linear infinite; }
+.tesla-road-dash { background: repeating-linear-gradient(to bottom, #6b7884 0 60px, transparent 60px 150px);
+  animation: tesla-dash 1.56s linear infinite; }
+@keyframes tesla-pulse-0 { from { stroke-dashoffset: -77.5; } to { stroke-dashoffset: 57.5; } }
+@keyframes tesla-pulse-1 { from { stroke-dashoffset: -85; } to { stroke-dashoffset: 50; } }
+@keyframes tesla-pulse-2 { from { stroke-dashoffset: -92.5; } to { stroke-dashoffset: 42.5; } }
+@keyframes tesla-pulse-3 { from { stroke-dashoffset: -100; } to { stroke-dashoffset: 35; } }
+@keyframes tesla-pulse-4 { from { stroke-dashoffset: -107; } to { stroke-dashoffset: 28; } }
+.tesla-pulse-0 { animation: tesla-pulse-0 2.4s linear infinite; }
+.tesla-pulse-1 { animation: tesla-pulse-1 2.4s linear infinite; }
+.tesla-pulse-2 { animation: tesla-pulse-2 2.4s linear infinite; }
+.tesla-pulse-3 { animation: tesla-pulse-3 2.4s linear infinite; }
+.tesla-pulse-4 { animation: tesla-pulse-4 2.4s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .tesla-rim, .tesla-road-dash, .tesla-pulse-0, .tesla-pulse-1, .tesla-pulse-2, .tesla-pulse-3, .tesla-pulse-4 { animation: none !important; }
+}

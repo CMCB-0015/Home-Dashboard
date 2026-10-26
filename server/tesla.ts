@@ -176,7 +176,18 @@ export function teslaState(): Tesla | null {
     : null
   const coolingSeats = !!(e.coolDriver || e.coolPassenger)
   const seat = (heat?: HAState, cool?: HAState) => { const hl = level(heat); return hl ? hl : -level(cool) }
-  const doneAt = ok(e.doneAt) && !Number.isNaN(Date.parse(e.doneAt!.state)) ? e.doneAt!.state : null
+  // Teslemetry's "Time to full charge" is a timestamp: when charging reaches the limit.
+  // (Some setups report a duration instead — hours or minutes — so take that too.)
+  let doneAt: string | null = null
+  if (ok(e.doneAt)) {
+    const raw = e.doneAt!.state
+    if (e.doneAt!.attributes.device_class === 'timestamp' || /T\d\d:/.test(raw)) doneAt = Number.isNaN(Date.parse(raw)) ? null : raw
+    else if (Number.isFinite(Number(raw)) && Number(raw) > 0) {
+      const unit = String(e.doneAt!.attributes.unit_of_measurement ?? 'h').toLowerCase()
+      const ms = Number(raw) * (unit.startsWith('min') ? 60_000 : unit === 's' ? 1000 : 3_600_000)
+      doneAt = new Date(Date.now() + ms).toISOString()
+    }
+  }
 
   const limit = num(e.chargeLimit)
   const updated = [c, e.battery, e.charging, e.lock].filter(Boolean).map((s) => Date.parse(s!.last_updated)).filter(Number.isFinite)

@@ -5,6 +5,7 @@ import { HOME } from '../../config/home'
 import { Card } from '../Card'
 import { ClimateSheet } from './ClimateSheet'
 import { ChargingSheet } from './ChargingSheet'
+import { CarScene, type SceneMode } from './CarScene'
 import { ACC, AMBER, BLUE, DIM, GREEN, RED, clock, isCharging, tint, useTeslaActions } from './useTesla'
 import type { Tesla } from '../../types'
 
@@ -34,15 +35,30 @@ const CarOpenIcon = () => (
   </svg>
 )
 
+/** When charging reaches the limit, from Teslemetry's "Time to full charge" — only if it's still ahead */
+export function chargeDoneAt(t: Tesla): string | null {
+  if (!isCharging(t) || !t.doneAt) return null
+  const ms = Date.parse(t.doneAt)
+  return Number.isFinite(ms) && ms > Date.now() + 30_000 ? clock(t.doneAt) : null
+}
+
 /** What the card says right now */
 export function teslaSummary(t: Tesla, waking: boolean) {
   const charging = isCharging(t)
-  const header = t.driving ? 'Driving' : charging ? 'Charging' : t.climateOn || waking ? 'Live' : t.atHome ? 'Parked · Home' : 'Parked'
+  const plugged = !t.driving && t.plugged && !charging
+  const where = t.atHome ? ' · Home' : '' // never names a place away from home
+  const header = t.driving ? 'Driving' : charging ? `Charging${where}` : plugged ? `Plugged in${where}` : t.climateOn || waking ? 'Live' : t.atHome ? 'Parked · Home' : 'Parked'
   let status: string, color: string
   if (waking) { status = 'Waking car…'; color = ACC }
   else if (t.enRouteHome) { status = 'En route home'; color = '#6fa8ff' }
   else if (t.driving) { status = t.speedMph ? `Driving · ${t.speedMph} mph` : 'Driving'; color = '#6fa8ff' }
-  else if (charging) { status = `Charging · ${t.batteryPct ?? '–'}% → ${t.chargeLimitPct ?? '–'}%`; color = GREEN }
+  else if (charging) {
+    const done = chargeDoneAt(t)
+    status = done && t.chargeLimitPct !== null
+      ? `Charging · ${t.chargeLimitPct}% by ~${done}`
+      : `Charging · ${t.batteryPct ?? '–'}% → ${t.chargeLimitPct ?? '–'}%`
+    color = GREEN
+  } else if (plugged) { status = t.charging === 'no_power' ? 'Plugged in · no power' : 'Plugged in'; color = BLUE }
   else if (t.climateOn) {
     const heating = t.targetF !== null && t.insideF !== null ? t.targetF >= t.insideF : true
     status = `${heating ? 'Heating' : 'Cooling'} to ${t.targetF ?? '–'}°${t.insideF !== null ? ` · ${t.insideF}° inside` : ''}`
@@ -52,13 +68,16 @@ export function teslaSummary(t: Tesla, waking: boolean) {
     status = [lock, t.insideF !== null ? `Inside ${t.insideF}°` : null].filter(Boolean).join(' · ') || (t.online ? 'Parked' : 'Asleep')
     color = DIM
   }
-  return { header, status, color, charging }
+  const scene: SceneMode = t.driving ? 'driving' : charging ? 'charging' : plugged ? 'plugged' : 'parked'
+  return { header, status, color, charging, plugged, scene }
 }
 
 /**
- * The Tesla card (top-right on Home). Lock (two taps to unlock), climate,
- * charging, and frunk/trunk — the fan and bolt open the Climate and Charging
- * panels. Glows green while charging; the top bar turns blue with climate on.
+ * The Tesla card (top-right on Home). Lock, climate, charging, and
+ * frunk/trunk — the fan and bolt open the Climate and Charging panels. Glows
+ * green while charging; the top bar turns blue with climate on. The picture
+ * shows the charge cable whenever the car is plugged in (anywhere) and the car
+ * on a moving road while driving (CarScene).
  */
 export function TeslaCard({ className = 'h-full' }: { className?: string }) {
   const { data } = useHome()
@@ -80,7 +99,7 @@ export function TeslaCard({ className = 'h-full' }: { className?: string }) {
     )
   }
 
-  const { header, status, color, charging } = teslaSummary(t, waking)
+  const { header, status, color, charging, plugged, scene } = teslaSummary(t, waking)
   const wash = charging ? { backgroundImage: `linear-gradient(180deg, ${tint(GREEN, 0.2)} 0%, ${tint(GREEN, 0.06)} 45%, transparent 80%)` } : undefined
   const accent = charging ? GREEN : t.climateOn ? BLUE : 'var(--color-vehicles)'
   const pct = t.batteryPct ?? 0
@@ -122,8 +141,8 @@ export function TeslaCard({ className = 'h-full' }: { className?: string }) {
           <span className="ml-auto truncate text-right text-sm" style={{ color }}>{status}</span>
         </div>
 
-        <Link to="/vehicles" aria-label="Vehicle details" className="flex min-h-[150px] flex-1 items-center justify-center py-2">
-          <img src={CAR_IMG} alt={`${HOME.tesla.name}, black Model 3`} className={`h-auto ${e ? 'w-[230px]' : 'w-[300px]'} max-w-full [mask-image:radial-gradient(ellipse_at_center,#000_55%,transparent_72%)]`} />
+        <Link to="/vehicles" aria-label="Vehicle details" className="relative flex min-h-[150px] flex-1 items-center justify-center py-2">
+          <CarScene mode={scene} compact={!!e} />
         </Link>
 
         {e && <EnRouteRow e={e} />}
@@ -150,7 +169,7 @@ export function TeslaCard({ className = 'h-full' }: { className?: string }) {
             <span className={waking ? 'animate-pulse' : ''}><FanIcon glow={t.climateOn ? tint(BLUE, 0.7) : undefined} /></span>
           </button>
           <button onClick={() => { setChooser(false); setPanel('charging') }} aria-label="Charging"
-            className={iconBtn} style={{ color: charging ? GREEN : ACC }}>
+            className={iconBtn} style={{ color: charging ? GREEN : plugged ? BLUE : ACC }}>
             <BoltIcon glow={charging ? tint(GREEN, 0.8) : undefined} />
           </button>
           <button onClick={() => setChooser((c) => !c)} aria-label="Frunk and trunk" aria-expanded={chooser}
