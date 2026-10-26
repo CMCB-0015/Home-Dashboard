@@ -93,6 +93,8 @@ export const HOME = {
    */
   vacuum: {
     model: 'S8 Pro Ultra',
+    /** Water flow when mopping, unless a different one is picked on the Map & rooms page for that run */
+    waterDefault: 'medium' as 'low' | 'medium' | 'high',
     rooms: [
       { id: 'kitchen', name: 'Kitchen/Living Room', color: '#6aa6ec', main: 1, match: ['Kitchen/Living Room', 'Living Room', 'Kitchen'],
         rects: [[162, 2, 110, 75], [32, 77, 245, 170], [0, 247, 277, 65], [0, 312, 172, 150], [172, 372, 105, 70]] },

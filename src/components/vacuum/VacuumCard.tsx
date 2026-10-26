@@ -3,7 +3,7 @@ import { useHome } from '../../lib/useHome'
 import { VAC_GREY, roomCenter } from '../../lib/vacuum'
 import { Card } from '../Card'
 import { FloorPlan, tint } from './FloorPlan'
-import { AMBER, GREEN, describe, dockRows, statsText, useVacuumActions } from './useVacuum'
+import { AMBER, GREEN, describe, dockRows, finishText, statsText, useVacuumActions } from './useVacuum'
 import type { VacuumState } from '../../types'
 
 const DOCK_IMG = '/images/vacuum-dock.png'
@@ -84,6 +84,7 @@ export function VacuumCard() {
               <span className="font-display text-lg font-semibold" style={{ color: d.running && d.color !== VAC_GREY ? d.color : '#e8edf2' }}>{d.running ? d.roomName : 'Heading home'}</span>
               <span className="text-[13px] text-[#c9d2db]">{sub}</span>
               {statsText(v) && <span className="font-mono text-[12.5px] font-medium text-[#c9d2db]">{statsText(v)}</span>}
+              {finishText(v) && <span className="text-[13px] font-semibold" style={{ color: d.color !== VAC_GREY ? d.color : '#e8edf2' }}>{finishText(v)}</span>}
               {d.run && n > 1 && (
                 <div className="mt-1 flex gap-[3px]">
                   {d.run.rooms.map((id, i) => {

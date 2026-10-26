@@ -6,7 +6,7 @@ import { VAC_GREY, roomCenter, whatText } from '../../lib/vacuum'
 import { DetailLayout } from '../../components/DetailLayout'
 import { Switch } from '../../components/Sheet'
 import { FloorPlan, tint } from '../../components/vacuum/FloorPlan'
-import { AMBER, GREEN, describe, dockRows, useVacuumActions } from '../../components/vacuum/useVacuum'
+import { AMBER, GREEN, describe, dockRows, finishText, useVacuumActions } from '../../components/vacuum/useVacuum'
 import type { VacuumState } from '../../types'
 
 // ── Icons from the mockup ────────────────────────────────────────────────
@@ -33,7 +33,8 @@ type Box = [number, number, number, number]
 
 function initial(v: VacuumState) {
   const suction = SUCTION.find(([, val]) => val === v.suction)?.[0] ?? 'Balanced'
-  const water = WATER.find(([, re]) => re.test(String(v.mopIntensity ?? '')))?.[0] ?? 'Medium'
+  // Water always starts on the default (Medium), not whatever the robot was last set to
+  const water = WATER.find(([l]) => l.toLowerCase() === HOME.vacuum.waterDefault)?.[0] ?? 'Medium'
   const route = ROUTE.find(([, val]) => val === v.mopRoute)?.[0] ?? 'Standard'
   return { suction, water, route }
 }
@@ -137,7 +138,7 @@ function MapPage({ v }: { v: VacuumState }) {
     </div>
   )
   const has = (list: string[], val: string) => !list.length || list.includes(val)
-  const subtitle = [v.name, d.header, v.batteryPct !== null ? `${v.batteryPct}%` : null].filter(Boolean).join(' · ')
+  const subtitle = [v.name, d.header, v.batteryPct !== null ? `${v.batteryPct}%` : null, finishText(v)].filter(Boolean).join(' · ')
 
   return (
     <DetailLayout title="Vacuum" subtitle={subtitle} color={d.k ? d.color : 'var(--color-vacuum)'} wide

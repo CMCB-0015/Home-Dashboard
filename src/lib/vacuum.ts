@@ -46,6 +46,6 @@ export function demoVacuum(lastCleanAt: string): VacuumState {
     mopIntensity: 'moderate', mopIntensityOptions: ['off', 'mild', 'moderate', 'intense'],
     mopRoute: 'standard', mopRouteOptions: ['standard', 'deep', 'deep_plus', 'fast'],
     rooms: configRooms().map((r, i) => ({ ...r, segment: 16 + i })),
-    presets: configPresets(), areas: false, lastCleanAt,
+    presets: configPresets(), areas: false, lastCleanAt, finishAt: null,
   }
 }

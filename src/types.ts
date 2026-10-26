@@ -115,7 +115,9 @@ export interface VacuumState {
   /** Room the robot is in (our room id), when Home Assistant says */
   currentRoom: string | null
   /** The run started from the dashboard (or a full clean) */
-  run: { name: string; rooms: string[]; startedAt: string } | null
+  run: { name: string; rooms: string[]; startedAt: string; mode?: 'vacmop' | 'vac' | 'mop'; reps?: number } | null
+  /** When the run should be done (learned from past runs); null until every room left has been timed once */
+  finishAt?: string | null
   cleanMinutes: number | null
   cleanAreaFt2: number | null
   /** Current Roborock settings, as Roborock names them */

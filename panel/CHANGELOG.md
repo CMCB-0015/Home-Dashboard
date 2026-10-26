@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.3
+- Vacuum: mopping always uses **Medium** water flow (Start, Kitchen and Bedrooms presets, and the Map & rooms page), unless a different level is picked on the Map & rooms page for that run. Margaux's room stays vacuum only
+- Vacuum: **"Done ~5:42 PM"** while cleaning, on the card and the Map & rooms page. The dashboard learns how long each room takes from real runs (mop-wash trips included, pauses not), separately for vacuum + mop and vacuum only. The first clean of each kind is a learning run, so no time shows until every room left has been timed once
+- Vacuum: a trip back to the dock to wash the mop no longer ends the run on the card
+- Vacuum: a clean started in the Roborock app is followed as a full clean (and timed) the same way
+- Includes 1.4.2 (real Hue names), 1.4.1 and 1.4.0 (Irrigation card)
+
 ## 1.4.2
 - Lights now use the real Hue names: Patio string lights → Patio Lights, Patio sconces → Patio Sconce Lights, Bedroom overhead → the Bedroom Soffit zone, Bedside lamp → Hue color candle 1
 - Bedroom cans: Window = Bedroom Recessed 1, Dresser = Bedroom Recessed 2 (swap in `src/config/home.ts` if backwards)

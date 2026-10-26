@@ -16,6 +16,7 @@ import { HOME } from '../src/config/home.ts'
 import { configPresets, configRooms, fullOrder, whatText } from '../src/lib/vacuum.ts'
 import { ha, type HAState } from './ha.ts'
 import { cacheGet, cacheSet } from './cache.ts'
+import { finishAt, observe, roomsLeft, timingNotes, type CleanMode } from './vacuumTiming.ts'
 
 const FIND = {
   battery: ['sensor', /_battery$/],
@@ -107,8 +108,18 @@ export function vacuumState(): VacuumState | null {
   const state = MODE[e.vac.state] ?? (e.vac.state === 'unavailable' ? 'error' : 'idle')
   const battery = num(e.battery) ?? (Number.isFinite(Number(e.vac.attributes.battery_level)) ? Number(e.vac.attributes.battery_level) : null)
 
+  // Mid-run trip to the dock to wash the mop: the run isn't over while rooms are left
+  const status = ok(e.status) ? e.status!.state : ''
+  const washing = /wash|mop|empty|dust/i.test(status) && !/dry/i.test(status)
+  const midRunWash = !!run && washing && (roomsLeft(run)?.length ?? 1) > 0
   // A run ends once the robot is back on the dock
-  if (run && (state === 'docked' || state === 'idle') && Date.now() - Date.parse(run.startedAt) > 120_000) { run = null; void cacheSet('vacuum-run', null) }
+  if (run && (state === 'docked' || state === 'idle') && !midRunWash && Date.now() - Date.parse(run.startedAt) > 120_000) { run = null; void cacheSet('vacuum-run', null) }
+  // A clean started in the Roborock app (or on the robot): follow it as a full clean
+  if (!run && (state === 'cleaning' || state === 'paused')) {
+    const mode: CleanMode = String(e.vac.attributes.fan_speed) === 'off' ? 'mop' : ok(e.mopIntensity) && e.mopIntensity!.state === 'off' ? 'vac' : 'vacmop'
+    run = { name: 'Full clean', rooms: fullOrder(HOME.vacuum.rooms), startedAt: new Date().toISOString(), mode, reps: 1 }
+    void cacheSet('vacuum-run', run)
+  }
 
   const dockErr = ok(e.dockError) ? e.dockError!.state : 'ok'
   const cleanEmpty = (ok(e.waterShortage) && e.waterShortage!.state === 'on') || /water_empty|clean.*(empty|short)/.test(dockErr)
@@ -127,9 +138,19 @@ export function vacuumState(): VacuumState | null {
     const name = squash(e.currentRoom!.state)
     currentRoom = HOME.vacuum.rooms.find((r) => r.match.some((m) => squash(m) === name) || squash(r.name) === name)?.id ?? null
   }
-  // A full clean started in the Roborock app: show it with every room
-  const shownRun = run ?? (state === 'cleaning' || state === 'paused' || state === 'returning'
-    ? { name: 'Full clean', rooms: fullOrder(rooms), startedAt: e.vac.last_changed } : null)
+  const shownRun = run
+
+  // Time the rooms, and work out when it'll be done
+  const now = Date.now()
+  observe({
+    now,
+    run: run ? { startedAt: run.startedAt, rooms: run.rooms, mode: run.mode ?? 'vacmop', reps: run.reps ?? 1 } : null,
+    active: state === 'cleaning' || state === 'returning' || (state === 'docked' && midRunWash),
+    room: currentRoom,
+    stateChangedAt: Date.parse(e.vac.last_changed),
+    roomChangedAt: e.currentRoom ? Date.parse(e.currentRoom.last_changed) : undefined,
+  })
+  const showFinish = state === 'cleaning' || state === 'paused' || (state === 'returning' && midRunWash) || (state === 'docked' && midRunWash)
 
   const areaM2 = num(e.cleanArea)
   const areaUnit = String(e.cleanArea?.attributes.unit_of_measurement ?? 'm²')
@@ -162,6 +183,7 @@ export function vacuumState(): VacuumState | null {
     presets,
     areas: !!HOME.vacuum.calibration,
     lastCleanAt: ok(e.lastCleanEnd) ? e.lastCleanEnd!.state : null,
+    finishAt: showFinish ? finishAt(run, now) : null,
   }
 }
 
@@ -184,7 +206,7 @@ export function vacuumNotes() {
   if (!HOME.vacuum.calibration) notes.push('Drawn areas are off until the floor plan is calibrated (vacuum.calibration in src/config/home.ts)')
   const found: Record<string, string> = { vacuum: e.vac.entity_id }
   for (const k of Object.keys(FIND) as Key[]) if (e[k]) found[k] = e[k]!.entity_id
-  return { found, notes, roborockRooms, matched: segments }
+  return { found, notes, roborockRooms, matched: segments, roomTimes: timingNotes() }
 }
 
 // ── Commands ─────────────────────────────────────────────────────────────
@@ -277,7 +299,8 @@ async function clean(e: NonNullable<ReturnType<typeof resolve>>, b: VacuumComman
   }
   if (e.mopIntensity) {
     const options = opts(e.mopIntensity)
-    const want = !doMop ? waterOption(options, 'off') : b.water ? waterOption(options, b.water) : e.mopIntensity.state === 'off' ? waterOption(options, 'medium') : null
+    // Mopping: the water flow picked for this run, otherwise the default (Medium)
+    const want = !doMop ? waterOption(options, 'off') : waterOption(options, b.water ?? HOME.vacuum.waterDefault)
     if (!doMop && !want) throw new Error('This vacuum can’t turn the mop off from here')
     if (want && want !== e.mopIntensity.state) await ha.callService('select', 'select_option', { option: want }, [e.mopIntensity.entity_id])
   } else if (!doMop) {
@@ -289,6 +312,7 @@ async function clean(e: NonNullable<ReturnType<typeof resolve>>, b: VacuumComman
   }
 
   const what = whatText(doVac, doMop)
+  const mode: CleanMode = doVac && doMop ? 'vacmop' : doVac ? 'vac' : 'mop'
 
   // 2. Areas (needs calibration)
   if (b.areas?.length) {
@@ -299,16 +323,16 @@ async function clean(e: NonNullable<ReturnType<typeof resolve>>, b: VacuumComman
       return [Math.round(xs[0]), Math.round(ys[0]), Math.round(xs[1]), Math.round(ys[1]), reps]
     })
     await ha.callService('vacuum', 'send_command', { command: 'app_zoned_clean', params: zones }, [id])
-    setRun({ name: b.name ?? `${what} · ${zones.length} area${zones.length > 1 ? 's' : ''}`, rooms: [], startedAt: new Date().toISOString() })
+    setRun({ name: b.name ?? `${what} · ${zones.length} area${zones.length > 1 ? 's' : ''}`, rooms: [], startedAt: new Date().toISOString(), mode, reps })
     return
   }
 
   // 3. Rooms, or the whole home
   if (!picked.length && reps === 1) {
     await ha.callService('vacuum', 'start', {}, [id])
-    setRun({ name: b.name ?? 'Full clean', rooms: allRooms, startedAt: new Date().toISOString() })
+    setRun({ name: b.name ?? 'Full clean', rooms: allRooms, startedAt: new Date().toISOString(), mode, reps: 1 })
     return
   }
   await ha.callService('vacuum', 'send_command', { command: 'app_segment_clean', params: [{ segments: ids.map((r) => segments[r]), repeat: reps }] }, [id])
-  setRun({ name: b.name ?? (picked.length ? `${what} · ${picked.length} room${picked.length > 1 ? 's' : ''}` : 'Full clean'), rooms: ids, startedAt: new Date().toISOString() })
+  setRun({ name: b.name ?? (picked.length ? `${what} · ${picked.length} room${picked.length > 1 ? 's' : ''}` : 'Full clean'), rooms: ids, startedAt: new Date().toISOString(), mode, reps })
 }

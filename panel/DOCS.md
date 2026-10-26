@@ -64,6 +64,12 @@ in `match`.
 Drawing areas on the map is off until the floor plan is lined up with the robot's map
 (`vacuum.calibration`); rooms work without it.
 
+**Finish time:** the card shows "Done ~time" once every room left in the run has been
+timed on an earlier clean (vacuum + mop and vacuum only are timed separately).
+`/api/setup-check` → `vacuum.roomTimes` lists what's been learned. Mopping uses Medium
+water unless another level is picked on the Map & rooms page (`vacuum.waterDefault` in
+`src/config/home.ts`).
+
 ## Calendar
 
 Page 2 shows every Google calendar Home Assistant has (`calendars: ['*']` in
