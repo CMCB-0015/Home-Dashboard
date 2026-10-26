@@ -188,6 +188,19 @@ export interface IrrigationWatering {
   nextZone: string | null
   schedule: string | null
   doneAt: string | null
+  /** Every zone in this run, in order, with its run time (seasonal shift applied) */
+  zones?: RunZone[]
+  /** Position of the current zone in `zones` (0-based) */
+  index?: number
+}
+
+/** One zone in the running schedule's list */
+export interface RunZone {
+  zoneId: string
+  name: string
+  /** Run time in seconds (null if unknown) */
+  seconds: number | null
+  state: 'done' | 'now' | 'next' | 'skipped'
 }
 
 export interface IrrigationSummary {

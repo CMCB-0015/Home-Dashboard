@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Minus, Plus, X } from 'lucide-react'
+import { Check, Minus, Plus, SkipForward, X } from 'lucide-react'
 import { useHome } from '../../lib/useHome'
 import { categories } from '../../lib/categories'
 import { clockTime } from '../../lib/format'
@@ -10,7 +10,7 @@ import { PAUSE_MINUTES, QUICK_MINUTES, RAIN_EFFECT } from '../../config/irrigati
 import { Card } from '../Card'
 import { RainLayer } from './RainLayer'
 import { useIrrigationActions } from '../tiles/SmallTiles'
-import type { HomeState, IrrigationRun, IrrigationZone, QuickRun } from '../../types'
+import type { HomeState, IrrigationRun, IrrigationZone, QuickRun, RunZone } from '../../types'
 
 const CYAN = '#35c2d6'
 const AMBER = '#f2c14e'
@@ -102,6 +102,32 @@ function Ring({ remaining, total, paused, label }: { remaining: number | null; t
         <span className="mt-1 text-[11px] text-ink-dim">{paused ? 'paused' : 'left'}</span>
       </div>
     </div>
+  )
+}
+
+// ── Every zone in the running schedule ────────────────────────────────────
+const mins = (sec: number | null) => (sec ? `${Math.max(1, Math.round(sec / 60))}m` : '')
+const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
+
+function ZoneList({ zones, remaining }: { zones: RunZone[]; remaining: number | null }) {
+  return (
+    <ul aria-label="Zones in this run" className="flex max-h-[124px] flex-col gap-0.5 overflow-y-auto border-t border-edge pt-2">
+      {zones.map((z, k) => {
+        const now = z.state === 'now'
+        return (
+          <li key={`${z.zoneId}-${k}`} className={`grid h-6 shrink-0 grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-2 text-[13px] ${now ? 'font-semibold text-ink' : z.state === 'next' ? 'text-ink-dim' : 'text-ink-faint'}`}>
+            {z.state === 'done' ? <Check size={14} strokeWidth={2.5} aria-label="done" />
+              : z.state === 'skipped' ? <SkipForward size={13} aria-label="skipped" />
+              : now ? <span aria-label="watering now" className="h-2 w-2 justify-self-center rounded-full" style={{ background: CYAN, boxShadow: `0 0 0 3px ${cyan(0.25)}` }} />
+              : <span aria-label="up next" className="h-2 w-2 justify-self-center rounded-full border-[1.5px] border-ink-faint" />}
+            <span className={`truncate ${z.state === 'skipped' ? 'line-through' : ''}`}>{z.name}</span>
+            <span className="text-right font-mono text-xs" style={now ? { color: CYAN } : undefined}>
+              {z.state === 'skipped' ? 'skipped' : now && remaining !== null ? `${clock(remaining)} / ${mins(z.seconds)}` : mins(z.seconds)}
+            </span>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
@@ -246,12 +272,18 @@ export function IrrigationCard() {
 
   const strip = 'flex h-9 items-center justify-center whitespace-nowrap rounded-lg px-2 text-xs font-medium transition-colors duration-150 active:scale-[0.97] disabled:opacity-40'
   const skip = s.skipTomorrow
+  const runZones = watering?.zones && watering.zones.length > 1 ? watering.zones : null
+  const canNext = !!runZones && watering!.index !== undefined && runZones.slice(watering!.index + 1).some((z) => z.state === 'next')
   const actions = active ? (
-    <div className="grid w-full grid-cols-2 gap-2">
+    <div className={`grid w-full gap-2 ${canNext ? 'grid-cols-3' : 'grid-cols-2'}`}>
       {paused
         ? <button onClick={() => a.resume(active)} className={strip} style={{ background: cfg.dim, color: cfg.color }}>Resume</button>
         : <button onClick={() => a.pause(active)} className={strip} style={{ background: cfg.dim, color: cfg.color }}>Pause {PAUSE_MINUTES === 60 ? '1 h' : `${PAUSE_MINUTES} m`}</button>}
-      {/* Next zone: Rachio's public API has no skip-to-next-zone command, so it isn't shown */}
+      {canNext && (
+        <button onClick={() => a.nextZone()} className={`${strip} gap-1`} style={{ background: 'var(--color-surface-raised)', color: 'var(--color-ink)' }}>
+          <SkipForward size={13} aria-hidden />Next zone
+        </button>
+      )}
       <button onClick={() => a.stop(active)} className={strip} style={{ background: 'var(--color-critical-dim)', color: RED }}>Stop</button>
     </div>
   ) : (
@@ -284,12 +316,14 @@ export function IrrigationCard() {
               label={`${active.name}, ${remaining !== null ? `${Math.round(remaining / 60)} minutes left` : 'watering'}`} />
             <div className="flex min-w-0 flex-col items-center gap-1 text-center @min-[300px]:items-start @min-[300px]:text-left">
               <p className="font-display text-xl font-semibold leading-tight">{active.name}</p>
-              {watering?.nextZone && <p className="text-[13px] text-ink-dim">Then {watering.nextZone}</p>}
-              {watering?.doneAt && <p className="text-[13px] text-ink-dim">{watering.schedule ?? 'Run'} done ~<span className="font-mono text-ink">{clockTime(watering.doneAt)}</span></p>}
+              {runZones && watering!.index !== undefined
+                ? <p className="text-[13px] text-ink-dim">{watering!.schedule ?? 'Run'} · zone {watering!.index + 1} of {runZones.length}</p>
+                : watering?.nextZone && <p className="text-[13px] text-ink-dim">Then {watering.nextZone}</p>}
+              {watering?.doneAt && <p className="text-[13px] text-ink-dim">Done ~<span className="font-mono text-ink">{clockTime(watering.doneAt)}</span></p>}
               {paused && active.resumesAt && <p className="text-[13px] text-ink-dim">Resumes {clockTime(active.resumesAt)}</p>}
             </div>
           </div>
-          <WeekStrip data={data} selected={null} faded />
+          {runZones ? <ZoneList zones={runZones} remaining={remaining} /> : <WeekStrip data={data} selected={null} faded />}
         </>
       ) : (
         <>

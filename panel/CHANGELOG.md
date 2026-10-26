@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.0
+- Irrigation card, while watering: every zone in the run is listed (done ✓, watering now with time left / total, up next with run time, skipped), with "Lawns · zone 2 of 3". It replaces the dimmed week strip while a multi-zone run waters
+- Zone times include Rachio's seasonal shift: the current zone's time is live from Rachio, and the rest are scaled by the same amount (Rachio's settings only hold the base times)
+- Next zone button: stops the current zone and starts the rest of the run, in order, with their adjusted times (Rachio's public API has no skip-zone command, so the rest shows as a manual run in Rachio's history). Hidden on the last zone
+- A start from the card only counts as confirmed when Rachio reports that run, not just anything watering; otherwise the "didn't confirm" alert shows
+- The card picks up the next zone within a few seconds of the last one ending (it checks at the zone's actual end time)
+
 ## 1.4.3
 - Vacuum: mopping always uses **Medium** water flow (Start, Kitchen and Bedrooms presets, and the Map & rooms page), unless a different level is picked on the Map & rooms page for that run. Margaux's room stays vacuum only
 - Vacuum: **"Done ~5:42 PM"** while cleaning, on the card and the Map & rooms page. The dashboard learns how long each room takes from real runs (mop-wash trips included, pauses not), separately for vacuum + mop and vacuum only. The first clean of each kind is a learning run, so no time shows until every room left has been timed once

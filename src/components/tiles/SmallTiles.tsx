@@ -68,6 +68,8 @@ export function useIrrigationActions() {
       setZone(zone.id, { isWatering: false, isPaused: true, resumesAt: new Date(Date.now() + PAUSE_MINUTES * 60_000).toISOString() })
       send('rachio/command', { action: 'pause', zoneId: zone.id }, { refresh: true })
     },
+    /** Skip to the next zone of the running schedule (stop + start the rest) */
+    nextZone: () => send('rachio/command', { action: 'next-zone' }, { refresh: true }),
     resume: (zone: IrrigationZone) => {
       setZone(zone.id, { isWatering: true, isPaused: false, resumesAt: null })
       send('rachio/command', { action: 'resume', zoneId: zone.id }, { refresh: true })

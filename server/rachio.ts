@@ -13,7 +13,7 @@
 // (zones, schedules, rain delay) are kept for 30 minutes and upcoming runs
 // for 30 minutes, so a normal day uses a few hundred requests.
 
-import type { IrrigationZone, IrrigationSummary, IrrigationRun, IrrigationWatering, QuickRun } from '../src/types.ts'
+import type { IrrigationZone, IrrigationSummary, IrrigationRun, IrrigationWatering, QuickRun, RunZone } from '../src/types.ts'
 import { QUICK_RUNS, PAUSE_MINUTES, matchByName } from '../src/config/irrigation.ts'
 import { env } from './env.ts'
 import { cached, cacheDelete, cacheGet, cacheSet } from './cache.ts'
@@ -112,6 +112,8 @@ interface Schedule {
   /** Zones in watering order with their run time (seconds) */
   zoneRuns: { zoneId: string; seconds: number }[]
   totalSeconds: number | null
+  /** Seasonal shift as a fraction (+0.33 = 33% longer), if Rachio reports it */
+  seasonal: number | null
   enabled: boolean
   /** Fixed schedules: which days and when (flex schedules have none of this) */
   jobTypes: string[]; startHour: number | null; startMinute: number | null; startDate: number | null
@@ -124,7 +126,7 @@ interface RachioState {
   quick: Record<string, { zoneId?: string; scheduleId?: string; seconds?: number }>
   tomorrow: string                        // local date, YYYY-MM-DD
   skipTargets: string[]                   // schedules whose next run is tomorrow
-  rules: Record<string, { name: string; zoneRuns: { zoneId: string; seconds: number }[] }>
+  rules: Record<string, { name: string; zoneRuns: { zoneId: string; seconds: number }[]; seasonal: number | null }>
 }
 
 // Small bits of state the dashboard remembers itself (Rachio doesn't report them clearly)
@@ -133,6 +135,26 @@ interface SkipFlag { date: string; scheduleIds: string[] }
 /** Single runs skipped from the week strip (schedule + local date) */
 interface RunSkip { scheduleId: string; date: string }
 const runSkipKey = () => `rachio-run-skips-${keyTag()}`
+/**
+ * A run the dashboard started or rearranged (quick run, a schedule started
+ * from the card, or Next zone): its zones in order. Rachio's "what's watering"
+ * only names the current zone, so this is how the card knows the whole list
+ * for a manual run.
+ */
+interface RunPlan { zones: { zoneId: string; name: string; seconds: number | null; state?: 'done' | 'skipped' }[]; schedule: string | null; label: string; startedAt: number }
+const planKey = () => `rachio-plan-${keyTag()}`
+const planAlive = (p: RunPlan | null | undefined): p is RunPlan =>
+  !!p && Date.now() < p.startedAt + p.zones.reduce((n, z) => n + (z.seconds ?? 3600) * 1000, 0) + 30 * 60_000
+
+/** The run's zones with done / now / next, with index of the current one */
+function listFrom(zones: { zoneId: string; name: string; seconds: number | null; state?: 'done' | 'skipped' }[], currentId: string): { list: RunZone[]; i: number } | null {
+  const i = zones.findIndex((z) => z.zoneId === currentId && !z.state)
+  if (i < 0) return null
+  return {
+    i,
+    list: zones.map((z, k) => ({ zoneId: z.zoneId, name: z.name, seconds: z.seconds, state: k < i ? (z.state === 'skipped' ? 'skipped' : 'done') : k === i ? 'now' : z.state === 'skipped' ? 'skipped' : 'next' })),
+  }
+}
 const pauseKey = () => `rachio-pause-${keyTag()}`
 const skipKey = () => `rachio-skipped-${keyTag()}`
 
@@ -207,6 +229,7 @@ function schedulesOf(d: any): Schedule[] {
         zoneIds: zr.map((z: { zoneId: string }) => z.zoneId),
         zoneRuns: zr,
         totalSeconds: total,
+        seasonal: typeof r.seasonalAdjustment === 'number' && Number.isFinite(r.seasonalAdjustment) && Math.abs(r.seasonalAdjustment) < 5 ? r.seasonalAdjustment : null,
         enabled: r.enabled !== false,
         jobTypes: Array.isArray(r.scheduleJobTypes) ? r.scheduleJobTypes.map(String) : [],
         startHour: Number.isFinite(r.startHour) ? r.startHour : null,
@@ -239,6 +262,8 @@ async function loadState(): Promise<RachioState> {
     const date = localDate(Date.parse(u.at), tz)
     return (date === tomorrow && skipped.includes(u.scheduleId)) || runSkips.some((r) => r.scheduleId === u.scheduleId && r.date === date)
   }
+  const savedPlan = await cacheGet<RunPlan>(planKey())
+  const plan = planAlive(savedPlan) ? savedPlan : null
   // Runs you've skipped no longer count as "next"
   const notSkipped = (u: Upcoming) => !isSkipped(u)
   let watering: IrrigationWatering | null = null
@@ -269,24 +294,48 @@ async function loadState(): Promise<RachioState> {
       minutesLeft = Math.max(1, Math.ceil((endMs - Date.now()) / 60_000))
     }
     if (wateringZone && !(paused?.zoneId === wateringZone)) {
-      // For the countdown ring: this zone, the one after it, and when the run ends
-      const rule = deviceSchedules.find((r) => r.id === current.scheduleRuleId || r.id === current.scheduleId)
-      const order = rule?.zoneRuns ?? []
-      const i = order.findIndex((z) => z.zoneId === wateringZone)
-      const nextZoneId = i >= 0 ? order[i + 1]?.zoneId : undefined
       const zoneName = (id?: string) => (id ? d.zones.find((z: any) => z.id === id)?.name ?? null : null)
-      const zoneEnd = typeof current.zoneStartDate === 'number' && typeof current.zoneDuration === 'number' ? current.zoneStartDate + current.zoneDuration * 1000 : null
+      const live = typeof current.zoneDuration === 'number' && current.zoneDuration > 0 ? current.zoneDuration : null
+      const ruleId = current.scheduleRuleId ?? current.scheduleId ?? current.flexScheduleRuleId
+      const rule = deviceSchedules.find((r) => r.id === ruleId)
+      // Every zone in this run, in order, with its run time:
+      //  • a run the dashboard started or rearranged → its saved plan
+      //  • a schedule → the schedule's zones; Rachio's settings hold the base times,
+      //    so scale them by how the live time of this zone compares to its base time
+      //    (that's the seasonal shift), or by the schedule's own seasonal % if cycling
+      let run: { list: RunZone[]; i: number } | null = null
+      let schedule: string | null = rule?.name ?? null
+      // (a schedule Rachio runs on its own later doesn't borrow an old manual plan)
+      if (plan && !(rule && plan.schedule !== rule.name)) {
+        run = listFrom(plan.zones, wateringZone)
+        if (run) schedule = plan.schedule
+      }
+      if (!run && rule) {
+        const base = rule.zoneRuns
+        const k = base.findIndex((z) => z.zoneId === wateringZone)
+        const cycling = current.cycling === true || (typeof current.totalCycleCount === 'number' && current.totalCycleCount > 1)
+        let ratio = 1
+        if (live && k >= 0 && base[k].seconds > 0 && !cycling) ratio = live / base[k].seconds
+        else if (rule.seasonal !== null) ratio = 1 + rule.seasonal
+        if (!(ratio > 0.1 && ratio < 5)) ratio = 1
+        run = listFrom(base.map((z) => ({ zoneId: z.zoneId, name: zoneName(z.zoneId) ?? 'Zone', seconds: z.seconds ? Math.round(z.seconds * ratio) : null })), wateringZone)
+      }
+      if (run && live && !(current.cycling === true)) run.list[run.i].seconds = live
+      const zoneEnd = typeof current.zoneStartDate === 'number' && live ? current.zoneStartDate + live * 1000 : null
       let doneAt: number | null = null
       if (typeof current.startDate === 'number' && typeof current.duration === 'number' && current.duration > 0) doneAt = current.startDate + current.duration * 1000
-      else if (zoneEnd) doneAt = zoneEnd + (i >= 0 ? order.slice(i + 1).reduce((n, z) => n + z.seconds * 1000, 0) : 0)
+      else if (zoneEnd && run) doneAt = zoneEnd + run.list.slice(run.i + 1).filter((z) => z.state === 'next').reduce((n, z) => n + (z.seconds ?? 0) * 1000, 0)
+      else if (zoneEnd) doneAt = zoneEnd
       watering = {
         zoneId: wateringZone,
         zoneName: zoneName(wateringZone) ?? 'Zone',
         zoneStartedAt: iso(current.zoneStartDate),
-        zoneSeconds: typeof current.zoneDuration === 'number' ? current.zoneDuration : null,
-        nextZone: zoneName(nextZoneId),
-        schedule: rule?.name ?? null,
+        zoneSeconds: live,
+        nextZone: run?.list.slice(run.i + 1).find((z) => z.state === 'next')?.name ?? null,
+        schedule,
         doneAt: doneAt ? new Date(doneAt).toISOString() : null,
+        zones: run?.list,
+        index: run?.i,
       }
     }
 
@@ -391,7 +440,7 @@ async function loadState(): Promise<RachioState> {
     watering = { ...(paused.watering ?? { zoneId: paused.zoneId, zoneName: z?.name ?? 'Zone', zoneStartedAt: null, zoneSeconds: null, nextZone: null, schedule: null, doneAt: null }), pausedRemainingSec: paused.remainingSec ?? null }
   }
 
-  const rules: RachioState['rules'] = Object.fromEntries(schedules.map((r) => [r.id, { name: r.name, zoneRuns: r.zoneRuns }]))
+  const rules: RachioState['rules'] = Object.fromEntries(schedules.map((r) => [r.id, { name: r.name, zoneRuns: r.zoneRuns, seasonal: r.seasonal }]))
   return { zones, zoneDevice, quick, tomorrow, skipTargets, rules, summary: { nextRun, quickRuns, skipTomorrow, week, watering } }
 }
 
@@ -422,17 +471,22 @@ const CONFIRM_EVERY = 10_000
 const CONFIRM_FOR = 90_000
 
 type Pending =
-  | { kind: 'start'; since: number; label: string; zones: { zoneId: string; zoneName: string; seconds: number | null }[]; schedule: string | null }
+  | { kind: 'start'; since: number; plan: RunPlan }
   | { kind: 'stop'; since: number }
 let pending: Pending | null = null
 let notice: { text: string; until: number } | null = null
 
-/** Remember what a button press asked for, using the state we have now for names and times */
-function expectStart(state: RachioState, label: string, zoneRuns: { zoneId: string; seconds: number | null }[], schedule: string | null) {
+/** Remember what a button press started (saved, so the card can list the zones the whole run) */
+async function expectStart(state: RachioState, label: string, zoneRuns: { zoneId: string; seconds: number | null; state?: 'done' | 'skipped' }[], schedule: string | null, save = true) {
   const name = (id: string) => state.zones.find((z) => z.id === id)?.name ?? 'Zone'
-  const zones = zoneRuns.filter((z) => z.zoneId).map((z) => ({ zoneId: z.zoneId, zoneName: name(z.zoneId), seconds: z.seconds && z.seconds > 0 ? z.seconds : null }))
-  if (!zones.length) return
-  pending = { kind: 'start', since: Date.now(), label, zones, schedule }
+  const zones = zoneRuns.filter((z) => z.zoneId).map((z) => ({ zoneId: z.zoneId, name: name(z.zoneId), seconds: z.seconds && z.seconds > 0 ? z.seconds : null, ...(z.state ? { state: z.state } : {}) }))
+  if (!zones.some((z) => !z.state)) return
+  const plan: RunPlan = { zones, schedule, label, startedAt: Date.now() }
+  // A schedule's own run isn't saved: once Rachio reports it, the list comes from
+  // the schedule with the live seasonal shift applied (more accurate than base times)
+  if (save) await cacheSet(planKey(), plan)
+  else await cacheDelete(planKey())
+  pending = { kind: 'start', since: Date.now(), plan }
   notice = null
 }
 
@@ -445,19 +499,25 @@ function withPending(s: { zones: IrrigationZone[]; summary: IrrigationSummary })
   const anyPaused = s.zones.some((z) => z.isPaused)
 
   if (p.kind === 'start') {
-    if (anyWatering || anyPaused) { pending = null; return s } // Rachio sees it (or something else is running)
+    // Confirmed only when Rachio reports one of *this run's* zones
+    const ours = new Set(p.plan.zones.filter((z) => !z.state).map((z) => z.zoneId))
+    if (s.zones.some((z) => (z.isWatering || z.isPaused) && ours.has(z.id))) { pending = null; return s }
     if (now - p.since > CONFIRM_FOR) {
       pending = null
-      notice = { text: `Rachio didn’t confirm ${p.label} started — check the Rachio app`, until: now + 10 * MIN_MS }
-      console.log(`[rachio] ${p.label} was started from the dashboard but Rachio never reported it running`)
+      notice = { text: `Rachio didn’t confirm ${p.plan.label} started — check the Rachio app`, until: now + 10 * MIN_MS }
+      console.log(`[rachio] ${p.plan.label} was started from the dashboard but Rachio never reported it running`)
       return s
     }
-    // Which zone should be running by now, going by the zone times
-    let t = p.since, i = 0
-    while (i < p.zones.length - 1 && p.zones[i].seconds && now >= t + p.zones[i].seconds! * 1000) { t += p.zones[i].seconds! * 1000; i++ }
-    const cur = p.zones[i]
+    // Which of the run's zones should be going by now, going by their times
+    const todo = p.plan.zones.filter((z) => !z.state)
+    let t = p.since, k = 0
+    while (k < todo.length - 1 && todo[k].seconds && now >= t + todo[k].seconds! * 1000) { t += todo[k].seconds! * 1000; k++ }
+    const cur = todo[k]
     const left = cur.seconds ? Math.max(0, t + cur.seconds * 1000 - now) : null
-    const total = p.zones.every((z) => z.seconds) ? p.zones.reduce((n, z) => n + z.seconds! * 1000, 0) : null
+    const total = todo.every((z) => z.seconds) ? todo.reduce((n, z) => n + z.seconds! * 1000, 0) : null
+    // Zones already passed in this estimate count as done
+    const passed = new Set(todo.slice(0, k).map((z) => z.zoneId))
+    const run = listFrom(p.plan.zones.map((z) => (passed.has(z.zoneId) && !z.state ? { ...z, state: 'done' as const } : z)), cur.zoneId)
     return {
       zones: s.zones.map((z) => (z.id === cur.zoneId
         ? { ...z, isWatering: true, isPaused: false, resumesAt: null, minutesLeft: left !== null ? Math.max(1, Math.ceil(left / 60_000)) : null }
@@ -466,12 +526,14 @@ function withPending(s: { zones: IrrigationZone[]; summary: IrrigationSummary })
         ...s.summary,
         watering: {
           zoneId: cur.zoneId,
-          zoneName: cur.zoneName,
+          zoneName: cur.name,
           zoneStartedAt: new Date(t).toISOString(),
           zoneSeconds: cur.seconds,
-          nextZone: p.zones[i + 1]?.zoneName ?? null,
-          schedule: p.schedule,
+          nextZone: todo[k + 1]?.name ?? null,
+          schedule: p.plan.schedule,
           doneAt: total ? new Date(p.since + total).toISOString() : null,
+          zones: run?.list,
+          index: run?.i,
         },
       },
     }
@@ -555,7 +617,11 @@ async function tick() {
     if (active?.isWatering) {
       next = Math.min(next, WATERING)
       // Check right after the zone should finish, to catch the next zone starting
-      if (active.minutesLeft) next = Math.min(next, active.minutesLeft * MIN + 5 * SEC)
+      const w = state.summary.watering
+      const zoneEnd = w?.zoneStartedAt && w.zoneSeconds ? Date.parse(w.zoneStartedAt) + w.zoneSeconds * 1000 : null
+      if (zoneEnd && zoneEnd > now) next = Math.min(next, zoneEnd - now + 5 * SEC)
+      else if (zoneEnd) next = Math.min(next, 15 * SEC) // zone should have ended: look again soon
+      else if (active.minutesLeft) next = Math.min(next, active.minutesLeft * MIN + 5 * SEC)
     } else if (active?.isPaused && active.resumesAt) {
       next = Math.min(next, Math.max(10 * SEC, Date.parse(active.resumesAt) - now + 5 * SEC), WATERING)
     }
@@ -595,14 +661,42 @@ export async function rachioCommand(action: string, zoneId: string, durationSeco
     const label = QUICK_RUNS.find((x) => x.id === quickId)?.label ?? 'the run'
     if (q.scheduleId) {
       await api('/schedulerule/start', { method: 'PUT', body: { id: q.scheduleId } })
-      const rule = state.rules[q.scheduleId]
-      expectStart(state, label, rule?.zoneRuns ?? [], rule?.name ?? label)
+      const rule = state.rules?.[q.scheduleId]
+      // Base times with the schedule's seasonal shift, if Rachio reports it (the live times take over once it runs)
+      const k = 1 + (rule?.seasonal ?? 0)
+      await expectStart(state, label, (rule?.zoneRuns ?? []).map((z) => ({ zoneId: z.zoneId, seconds: z.seconds ? Math.round(z.seconds * k) : null })), rule?.name ?? label, false)
     } else {
       // The hold panel can pick another time (1–180 minutes)
       const seconds = extra.minutes ? Math.min(180, Math.max(1, Math.round(Number(extra.minutes)))) * 60 : q.seconds
       await api('/zone/start', { method: 'PUT', body: { id: q.zoneId, duration: seconds } })
-      expectStart(state, label, [{ zoneId: q.zoneId!, seconds: seconds ?? null }], null)
+      await expectStart(state, label, [{ zoneId: q.zoneId!, seconds: seconds ?? null }], null)
     }
+    await cacheDelete(stateKey())
+    showNow()
+    return
+  }
+  if (action === 'next-zone') {
+    // Rachio's public API has no "skip to next zone", so: stop, then start the
+    // zones that were still to come, in order, with their (seasonally adjusted)
+    // times. Rachio's history shows the rest as a manual run.
+    const state = await cached(stateKey(), STATE_MAX_AGE, loadState)
+    const view = latestRachio() ?? state
+    const w = view.summary.watering
+    if (!w?.zones || w.index === undefined || w.index === null) throw new Error('Not sure which zones are left in this run — skip it in the Rachio app')
+    const rest = w.zones.slice(w.index + 1).filter((z) => z.state === 'next')
+    if (!rest.length) throw new Error('This is the last zone')
+    if (rest.some((z) => !z.seconds)) throw new Error('Rachio didn’t say how long the next zones run — skip it in the Rachio app')
+    const deviceId = state.zoneDevice[w.zoneId]
+    if (!deviceId) throw new Error('Unknown zone')
+    await api('/device/stop_water', { method: 'PUT', body: { id: deviceId } })
+    await new Promise((r) => setTimeout(r, 1500)) // let the controller settle before the new run
+    await api('/zone/start_multiple', { method: 'PUT', body: { zones: rest.map((z, k) => ({ id: z.zoneId, duration: Math.min(MAX_SECONDS, Math.max(60, z.seconds!)), sortOrder: k + 1 })) } })
+    await cacheDelete(pauseKey())
+    // Same list as before, with the current zone marked skipped
+    await expectStart(state, w.schedule ?? 'the run', w.zones.map((z, k) => ({
+      zoneId: z.zoneId, seconds: z.seconds,
+      ...(k < w.index! ? { state: z.state === 'skipped' ? 'skipped' as const : 'done' as const } : k === w.index ? { state: 'skipped' as const } : z.state === 'skipped' ? { state: 'skipped' as const } : {}),
+    })), w.schedule)
     await cacheDelete(stateKey())
     showNow()
     return
@@ -657,7 +751,7 @@ export async function rachioCommand(action: string, zoneId: string, durationSeco
     const duration = Math.min(MAX_SECONDS, Math.max(60, Math.round(Number(durationSeconds) || 600)))
     await api('/zone/start', { method: 'PUT', body: { id: zoneId, duration } })
     const state = await cached(stateKey(), STATE_MAX_AGE, loadState)
-    expectStart(state, state.zones.find((z) => z.id === zoneId)?.name ?? 'the zone', [{ zoneId, seconds: duration }], null)
+    await expectStart(state, state.zones.find((z) => z.id === zoneId)?.name ?? 'the zone', [{ zoneId, seconds: duration }], null)
   } else if (action === 'stop') {
     const state = await cached(stateKey(), STATE_MAX_AGE, loadState)
     const deviceId = state.zoneDevice[zoneId]
@@ -666,6 +760,7 @@ export async function rachioCommand(action: string, zoneId: string, durationSeco
     await cacheDelete(pauseKey())
     pending = { kind: 'stop', since: Date.now() }
     notice = null
+    await cacheDelete(planKey())
   } else {
     throw new Error(`Unknown action: ${action}`)
   }
