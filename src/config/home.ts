@@ -9,27 +9,30 @@ export const HOME = {
   lights: {
     /** The four buttons on the Lights card, in order (top-left, top-right, bottom-left, bottom-right) */
     quick: [
-      { label: 'Patio string lights', light: 'Patio string lights' },
-      { label: 'Patio sconces', light: 'Patio sconces' },
-      { label: 'Bedroom overhead', light: 'Bedroom overhead' },
-      { label: 'Bedside lamp', light: 'Bedside lamp' },
+      { label: 'Patio string lights', light: 'Patio Lights' },
+      { label: 'Patio sconces', light: 'Patio Sconce Lights' },
+      { label: 'Bedroom overhead', light: 'Bedroom Soffit' },
+      { label: 'Bedside lamp', light: 'Hue color candle 1' },
     ],
 
     /** Lights on a timer all the time. "All indoor off" leaves these alone. */
-    timer: ['Front door', 'Garage', 'Side yard'],
+    timer: ['Front Door', 'Garage', 'Side Yard'],
 
     /** A light counts as "Out" when its name or its Home Assistant area contains one of these words */
     outdoorWords: ['patio', 'yard', 'garage', 'driveway', 'porch', 'outside', 'outdoor', 'front door', 'side yard'],
 
-    /** The two bedroom cans: the Hue group that holds both, and each can on its own */
-    bedroomCans: { group: 'Bedroom overhead', window: 'Window', dresser: 'Dresser' },
+    /**
+     * The two bedroom cans: the Hue zone that holds only these two, and each can on its own.
+     * Which can is Window and which is Dresser isn't confirmed yet: swap the two names if they're backwards.
+     */
+    bedroomCans: { group: 'Bedroom Soffit', window: 'Bedroom Recessed 1', dresser: 'Bedroom Recessed 2' },
   },
 
   /** "Bedside lamp after TV": when the living room TV turns off in the time window, turn this lamp on */
   bedtime: {
-    lamp: 'Bedside lamp',
+    lamp: 'Hue color candle 1',
     /** Matched against TV names; leave as is if the LG is the only LG TV */
-    tv: 'LG',
+    tv: 'LG C5',
     defaultStart: '20:00',
     defaultEnd: '22:00',
     brightnessPct: 100,

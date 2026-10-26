@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.2
+- Lights now use the real Hue names: Patio string lights → Patio Lights, Patio sconces → Patio Sconce Lights, Bedroom overhead → the Bedroom Soffit zone, Bedside lamp → Hue color candle 1
+- Bedroom cans: Window = Bedroom Recessed 1, Dresser = Bedroom Recessed 2 (swap in `src/config/home.ts` if backwards)
+- Timer lights (left on by "All indoor off"): Front Door, Garage, Side Yard
+- Bedside lamp after TV now looks for the LG C5 and Hue color candle 1
+- Includes 1.4.0 (new Irrigation card) and 1.4.1 (Irrigation card waits for Rachio to confirm starts and stops)
+
 ## 1.4.1
 - Fix: starting a run from the Irrigation card no longer flips back to idle. Rachio takes a little while to report a run it just started, so the card now keeps showing it watering (countdown and Stop) while the dashboard checks Rachio every 10 seconds until it confirms
 - Same for Stop: the card stays stopped instead of flashing back to watering while Rachio catches up
