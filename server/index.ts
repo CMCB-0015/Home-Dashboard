@@ -16,6 +16,8 @@
 //   POST /api/sonos/command | preset | play | queue-jump · GET /api/sonos/queue
 //   POST /api/tesla/command                       Tesla card and panels (Teslemetry)
 //   GET  /api/calendar/range?start=&end=          Calendar events for another month
+//   POST /api/calendar/create | update | delete   add, change or delete an event (Panel's Google link)
+//   POST /api/gcal/link-start | link-finish | unlink   link Panel to Google Calendar (one time)
 //   POST /api/vacuum/command                      Vacuum card and Map & rooms page (Roborock)
 //   POST /api/sonos/preset-save | preset-rename | preset-delete   quick-play buttons saved from the Sonos page
 //   POST /api/rachio/command          GET /api/rachio/debug
@@ -32,7 +34,8 @@ import { setClimate, thermostats } from './climate.ts'
 import { sportsNotes, sportsEvents } from './sports.ts'
 import { teslaCommand, teslaNotes } from './tesla.ts'
 import { vacuumCommand, vacuumNotes } from './vacuum.ts'
-import { calendarRangeEvents } from './calendar.ts'
+import { calendarRangeEvents, createEvent, updateEvent, removeEvent, onCalendarChange } from './calendar.ts'
+import { linkStart, linkFinish, unlink, gcalStatus, listCalendars, gcalLinked } from './gcal.ts'
 import { sonosCommand, playPreset, playOn, getQueue, jumpToQueue, refreshFavorites, sonosNotes, savePreset, renamePreset, deletePreset } from './sonos.ts'
 import { rachioCommand, rachioConfigured, rachioDebug, startRachioWatcher, pokeRachio, latestRachio, rachioError } from './rachio.ts'
 import { calendarError } from './calendar.ts'
@@ -104,6 +107,18 @@ const routes: Record<string, Handler> = {
     const q = new URL(req.url).searchParams
     try { return ok(await calendarRangeEvents(q.get('start') ?? '', q.get('end') ?? '')) } catch (e) { return fail(e instanceof Error ? e.message : 'Couldn’t read the calendar', 400) }
   },
+  '/api/calendar/create': async (req) => {
+    try { const ev = await createEvent(await readJson(req)); changed(); return ok({ ok: true, event: ev }) } catch (e) { return fail(e instanceof Error ? e.message : 'Couldn’t add the event', 502) }
+  },
+  '/api/calendar/update': async (req) => {
+    try { const ev = await updateEvent(await readJson(req)); changed(); return ok({ ok: true, event: ev }) } catch (e) { return fail(e instanceof Error ? e.message : 'Couldn’t change the event', 502) }
+  },
+  '/api/calendar/delete': act(async (b) => { await removeEvent(b); changed() }),
+  '/api/gcal/link-start': async () => {
+    try { return ok(linkStart()) } catch (e) { return fail(e instanceof Error ? e.message : 'Couldn’t start the Google sign-in', 409) }
+  },
+  '/api/gcal/link-finish': act(async (b: { pasted?: string }) => { await linkFinish(String(b.pasted ?? '')); changed() }),
+  '/api/gcal/unlink': act(async () => { unlink(); changed() }),
   '/api/rachio/debug': async () => {
     if (!rachioConfigured()) return fail('No Rachio API key set', 409)
     try { return ok(await rachioDebug()) } catch (e) { return fail(e instanceof Error ? e.message : 'Rachio request failed', 502) }
@@ -117,6 +132,7 @@ const routes: Record<string, Handler> = {
     mediaPlayers: ha.all('media_player').map((p) => ({ id: p.entity_id, name: ha.name(p), platform: ha.platform(p.entity_id), state: p.state })),
     calendars: ha.all('calendar').map((c) => ({ id: c.entity_id, name: ha.name(c) })),
     calendarProblem: calendarError(),
+    googleCalendarLink: { ...gcalStatus(), calendars: gcalLinked() ? await listCalendars(true).catch((e) => String(e instanceof Error ? e.message : e)) : null },
     sonos: { notes: ha.status === 'connected' ? sonosNotes() : [], speakers: ha.all('media_player').filter((p) => ha.platform(p.entity_id) === 'sonos').map((p) => ({ id: p.entity_id, name: ha.name(p), state: p.state })) },
     tesla: ha.status === 'connected' ? teslaNotes() : null,
     vacuum: ha.status === 'connected' ? vacuumNotes() : null,
@@ -223,6 +239,7 @@ const server = http.createServer(async (req, res) => {
 })
 
 ha.onChange(changed)
+onCalendarChange(changed)
 ha.start()
 startRachioWatcher(changed)
 startBackgroundRefresh(changed)

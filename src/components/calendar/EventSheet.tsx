@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { Clock, MapPin, Navigation, ExternalLink, AlignLeft } from 'lucide-react'
+import { Clock, MapPin, Navigation, ExternalLink, AlignLeft, Pencil, Trash2, Repeat } from 'lucide-react'
 import { Sheet } from '../Sheet'
 import { clockTime } from '../../lib/format'
 import { endOf, googleMapsDirections, googleMapsEmbed, googleMapsSearch, splitLocation } from './calendarData'
@@ -30,7 +30,7 @@ function Linkified({ text }: { text: string }) {
  * What tapping an event shows: which calendar, when, the place with a Google
  * map (and buttons to open it or get directions in Google Maps), and the notes.
  */
-export function EventSheet({ e, onClose }: { e: CalendarEvent; onClose: () => void }) {
+export function EventSheet({ e, onClose, onEdit, onDelete }: { e: CalendarEvent; onClose: () => void; onEdit?: () => void; onDelete?: () => void }) {
   const loc = e.location ? splitLocation(e.location) : null
   const row = 'flex items-start gap-3 text-[15px]'
   const btn = 'flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#252e38] px-4 text-sm font-medium hover:bg-[#2c3640]'
@@ -40,6 +40,7 @@ export function EventSheet({ e, onClose }: { e: CalendarEvent; onClose: () => vo
         <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: e.color }} />{e.calendar}</span>
       ) : undefined}>
       <div className={row}><Clock size={18} className="mt-0.5 shrink-0 text-ink-dim" /><span>{whenText(e)}</span></div>
+      {e.repeating && <div className={row}><Repeat size={18} className="mt-0.5 shrink-0 text-ink-dim" /><span className="text-ink-dim">Repeating event</span></div>}
 
       {e.location && loc && (
         <div className="flex flex-col gap-3">
@@ -67,6 +68,14 @@ export function EventSheet({ e, onClose }: { e: CalendarEvent; onClose: () => vo
         <div className={row}>
           <AlignLeft size={18} className="mt-0.5 shrink-0 text-ink-dim" />
           <p className="min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed text-[#c9d2db]"><Linkified text={e.description} /></p>
+        </div>
+      )}
+
+      {/* Edit · Delete (not on read-only calendars like Holidays) */}
+      {(onEdit || onDelete) && (
+        <div className="-mx-5 -mb-8 mt-1 flex border-t border-edge md:-mx-10">
+          {onEdit && <button onClick={onEdit} className="flex min-h-[56px] flex-1 items-center justify-center gap-2 border-r border-edge text-[15px] font-medium hover:bg-[#222b34]"><Pencil size={17} /> Edit</button>}
+          {onDelete && <button onClick={onDelete} className="flex min-h-[56px] flex-1 items-center justify-center gap-2 text-[15px] font-medium text-[#ff6b5e] hover:bg-[#222b34]"><Trash2 size={17} /> Delete</button>}
         </div>
       )}
     </Sheet>

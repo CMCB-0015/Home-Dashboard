@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.0
+- Calendar: **add events** with the **+** next to Week / Month, or **press and hold any day** (a ring fills around it, then the panel opens). Title, calendar (Family by default; read-only calendars like Holidays aren't offered), all day, day and time with quick buttons (start in half hours, then a length), place and notes. Save is one tap
+- Calendar: **Edit · Delete** on event details. Editing changes the real Google event (guests, reminders and Meet links stay). A repeating event asks which ones: delete "This event / This and following", save "This event / All events". The repeat pattern itself is changed in Google Calendar
+- Calendar: delete is one tap with a **5-second Undo**; it only goes to Google when the bar runs out
+- Calendar: a new or changed event shows right away with a small "Saving" tag; Panel asks Home Assistant to sync instead of waiting for the 5-minute refresh. If Google says no, the panel reopens with everything typed and the reason
+- Calendar changes go to Google through Panel's own link (one-time sign-in, new settings **google_client_id** / **google_client_secret**); reading still comes from Home Assistant. The calendar's look is unchanged
+- Weather: new **Sky** card — tints with the sky (day, night, rain, clouds), sunrise → sunset arc with the sun's position (sunrise countdown at night), humidity / dew point / wind / UV / air chips, a temperature curve over hourly rain-chance bars with inches of rain, and the next 6 days as low-to-high bars (high in red, low in blue)
+- Weather: **tap a day** (or today's temperature) for that day in detail: rain total and peak chance, wind and gusts, UV, humidity range, dew point, sunrise/sunset and a 24-hour chart
+- Weather: **Radar** button — the last hour of National Weather Service radar in 5-minute frames, looping on a dark Google map centered on the house, with play/pause, a timeline, zoom and full screen. Needs the new **google_maps_key** setting
+
 ## 1.5.0
 - Fix: skipping a run could skip the wrong schedule. The card now uses Rachio's own list as the only source: each run's skipped flag (and why: rain, wind…), its real zone times (seasonal shift included), and no runs guessed from the schedule rules. Skip only goes to a schedule whose very next run is that one and isn't already skipped (Rachio's skip works on the schedule's next run, so a second skip could undo it or hit another run)
 - After a skip, the dashboard reads Rachio back and checks that exactly that run was skipped; if Rachio skipped something else (or nothing), an alert says what happened

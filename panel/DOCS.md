@@ -9,6 +9,8 @@ phones or computer (home Wi-Fi only) and bookmark it.
 - **rachio_api_key** — Rachio app → Account → API Access.
 - **weather_lat / weather_lon / weather_location_name** — forecast location.
 - **brief_feed_key** — the same value as `PANEL_FEED_KEY` in The Brief's Netlify settings. Turns on sports chips in the status bar.
+- **google_client_id / google_client_secret** — Panel's own Google sign-in key, for adding, editing and deleting calendar events (see Calendar below).
+- **google_maps_key** — a Google Maps key for the weather radar (see Weather below).
 
 Click **Save**, then **Restart** the app after changing settings.
 
@@ -78,6 +80,46 @@ Each calendar gets its own color; pin one in `calendarColors`. The chips above t
 calendar hide or show a calendar on that screen only. The status bar shows events from
 `statusBar.calendars` (Family). Tapping an event shows its details and a Google map of
 its location; maps always open in Google Maps.
+
+**Adding, editing and deleting (1.6.0).** The **+** next to Week / Month adds an event on
+the picked day; **press and hold any day** (week strip or month grid) to add one on that
+day. Family is picked by default. Event details have **Edit · Delete**. A repeating event
+asks "This event / This and following" (delete) or "This event / All events" (save).
+Delete is one tap with a 5-second **Undo**; it goes to Google when the bar runs out.
+
+Reading still comes from Home Assistant. Changes go straight to Google through Panel's
+own link (Home Assistant's Google connection can't edit an event), then Panel asks Home
+Assistant to sync, so a change shows at once ("Saving" until Google confirms).
+
+One-time setup:
+1. Google Cloud Console → the **Home Assistant Dashboard** project → APIs & Services →
+   Credentials → Create credentials → OAuth client ID → **Desktop app**, named "Panel".
+2. Paste the Client ID and Client secret into **google_client_id** and
+   **google_client_secret**, Save, Restart Panel.
+3. On the dashboard tap **+** → **Open Google sign-in** → pick the account → Allow.
+   Google ends on a page that won't load (`http://127.0.0.1:8099/google-linked?…`);
+   copy that whole address and paste it into Panel → **Link**.
+
+The OAuth consent screen of the project must be **In production** (not Testing), or Google
+ends the sign-in after 7 days. The lasting sign-in is saved in Panel's `/data` folder
+(`google-calendar.json`); `/api/setup-check` → `googleCalendarLink` shows its state and the
+calendars Google reports. To undo: Google Account → Security → Third-party access → remove it.
+
+## Weather
+
+The card tints with the sky (warm by day, indigo at night, blue in rain), shows sunrise →
+sunset as an arc, a temperature curve over rain-chance bars for the next 12 hours, and the
+next 6 days as low-to-high bars. Tap a day (or today's temperature) for that day: rain total
+and peak chance, wind and gusts, UV, humidity range, dew point, sunrise/sunset and a 24-hour
+chart with inches of rain per 3 hours. Data: Open-Meteo, every 10 minutes.
+
+**Radar** (header button) loops the last hour of National Weather Service radar in 5-minute
+frames (Iowa State University's free tile service, `nexrad-n0q`), on a dark Google map
+centered on the house; tap the timeline to stop on a frame, pinch or +/− to zoom, full
+screen from the corner button. It needs **google_maps_key**: in the same Google Cloud
+project turn on **Maps JavaScript API** (Google wants a billing account on the project; the
+free monthly allowance covers a home dashboard), create an **API key**, restrict it to that
+API and to `http://192.168.86.207:8099/*`, paste it in, Save, Restart.
 
 ## Irrigation card
 

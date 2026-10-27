@@ -121,3 +121,16 @@ input[type="range"] { accent-color: currentColor; }
 @media (prefers-reduced-motion: reduce) {
   .tesla-rim, .tesla-road-dash, .tesla-pulse-0, .tesla-pulse-1, .tesla-pulse-2, .tesla-pulse-3, .tesla-pulse-4 { animation: none !important; }
 }
+
+/* Calendar: press-and-hold a day — a ring fills around it, then the add panel opens */
+@property --hold { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+@keyframes hold-fill { from { --hold: 0%; } to { --hold: 100%; } }
+.hold-ring { position: absolute; inset: 0; border-radius: inherit; padding: 2.5px; pointer-events: none;
+  background: conic-gradient(var(--color-calendar) var(--hold), transparent 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: hold-fill .45s linear forwards; }
+
+/* Calendar: the 5-second Undo bar after a delete */
+@keyframes undo-shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.undo-progress { transform-origin: left; animation: undo-shrink 5s linear forwards; }

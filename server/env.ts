@@ -14,6 +14,9 @@ const OPTION_NAMES: Record<string, string> = {
   weather_lat: 'WEATHER_LAT',
   weather_lon: 'WEATHER_LON',
   weather_location_name: 'WEATHER_LOCATION_NAME',
+  google_client_id: 'GOOGLE_CLIENT_ID',
+  google_client_secret: 'GOOGLE_CLIENT_SECRET',
+  google_maps_key: 'GOOGLE_MAPS_KEY',
 }
 
 let loaded = false

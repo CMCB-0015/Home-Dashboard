@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, MapPin } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { ChevronLeft, ChevronRight, MapPin, Plus, Trash2, Undo2 } from 'lucide-react'
 import { useHome } from '../../lib/useHome'
 import { categories } from '../../lib/categories'
 import { clockTime, sameDay } from '../../lib/format'
@@ -7,6 +7,10 @@ import { Card } from '../Card'
 import { Segmented } from '../Buttons'
 import { EventSheet } from '../calendar/EventSheet'
 import { addDays, dayStart, endOf, onDay, splitLocation, useEventsBetween, useHiddenCalendars } from '../calendar/calendarData'
+import { EventEditor, RepeatChoice, draftFrom, newDraft, previewEvent, toRequest, type Draft } from '../calendar/EventEditor'
+import { LinkGoogleSheet } from '../calendar/LinkGoogleSheet'
+import { addSaving, applyEdits, dropSaving, editsNow, forgetLater, hide, setPendingDelete, unhide, useCalendarEdits, type PendingDelete } from '../calendar/calendarEdits'
+import { useLongPress } from '../../lib/useLongPress'
 import type { CalendarEvent, CalendarInfo } from '../../types'
 
 const cfg = categories.calendar
@@ -45,7 +49,12 @@ function EventRow({ e, now, onOpen }: { e: CalendarEvent; now: Date; onOpen: () 
           {place && <span className="truncate"><MapPin size={11} className="mr-0.5 inline -translate-y-px" />{place.place ?? place.address}</span>}
         </p>
       </div>
-      {(happening || soon) && (
+      {e.saving && (
+        <span className="flex items-center gap-1.5 self-center rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: cfg.dim, color: cfg.color }}>
+          <span className="h-2.5 w-2.5 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />Saving
+        </span>
+      )}
+      {!e.saving && (happening || soon) && (
         <span className="self-center rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: cfg.dim, color: cfg.color }}>
           {happening ? 'Now' : minsAway < 60 ? `In ${minsAway}m` : `In ${Math.round(minsAway / 60)}h`}
         </span>
@@ -74,11 +83,35 @@ function CalendarChips({ calendars, hidden, toggle }: { calendars: CalendarInfo[
   )
 }
 
-function WeekView({ now, show, open }: { now: Date; show: (e: CalendarEvent) => boolean; open: (e: CalendarEvent) => void }) {
+/**
+ * A day you can tap (pick it) or press and hold (add an event on it). While
+ * held, a ring fills around the day; when it completes the add panel opens.
+ */
+function HoldDay({ onTap, onHold, className, style, label, pressed, children }: {
+  onTap: () => void; onHold: () => void; className: string; style?: CSSProperties; label?: string; pressed: boolean; children: ReactNode
+}) {
+  const [holding, setHolding] = useState(false)
+  const lp = useLongPress(onTap, () => { setHolding(false); onHold() }, 450)
+  const stop = () => setHolding(false)
+  return (
+    <button {...lp} aria-pressed={pressed} aria-label={label} className={`relative ${className}`} style={{ ...style, touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none' }}
+      onPointerDown={() => { setHolding(true); lp.onPointerDown() }}
+      onPointerUp={() => { stop(); lp.onPointerUp() }} onPointerLeave={() => { stop(); lp.onPointerLeave() }} onPointerCancel={() => { stop(); lp.onPointerCancel() }}>
+      {children}
+      {holding && <span className="hold-ring" aria-hidden />}
+    </button>
+  )
+}
+
+type ViewProps = { now: Date; show: (e: CalendarEvent) => boolean; open: (e: CalendarEvent) => void; holdDay: (d: Date) => void; onPick: (d: Date) => void }
+
+function WeekView({ now, show, open, holdDay, onPick }: ViewProps) {
   const days = useMemo(() => Array.from({ length: DAYS }, (_, i) => addDays(dayStart(new Date()), i)), [])
   const [selected, setSelected] = useState(0)
   const { events } = useEventsBetween(days[0], addDays(days[0], DAYS))
-  const visible = events.filter(show)
+  const edits = useCalendarEdits()
+  const visible = applyEdits(events, edits).filter(show)
+  useEffect(() => { onPick(days[selected]) }, [selected]) // eslint-disable-line react-hooks/exhaustive-deps
   const eventsOn = (d: Date) => visible.filter((e) => onDay(e, d)).sort(byTime)
   // Agenda: from the selected day forward, skipping events that already ended today
   const agenda = days.slice(selected).map((d) => ({
@@ -93,7 +126,8 @@ function WeekView({ now, show, open }: { now: Date; show: (e: CalendarEvent) => 
           const list = eventsOn(d)
           const active = i === selected
           return (
-            <button key={i} onClick={() => setSelected(i)} aria-pressed={active}
+            <HoldDay key={i} onTap={() => setSelected(i)} onHold={() => { setSelected(i); holdDay(d) }} pressed={active}
+              label={`${d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} — hold to add an event`}
               className="flex flex-col items-center rounded-xl py-2 transition-colors"
               style={active ? { background: cfg.dim } : undefined}>
               <span className="text-[10px] font-semibold uppercase" style={{ color: active ? cfg.color : 'var(--color-ink-faint)' }}>
@@ -103,7 +137,7 @@ function WeekView({ now, show, open }: { now: Date; show: (e: CalendarEvent) => 
               <span className="flex h-1.5 gap-1">
                 {list.slice(0, 3).map((e) => <span key={e.id} className="h-1 w-1 rounded-full" style={{ background: e.color }} />)}
               </span>
-            </button>
+            </HoldDay>
           )
         })}
       </div>
@@ -120,7 +154,7 @@ function WeekView({ now, show, open }: { now: Date; show: (e: CalendarEvent) => 
   )
 }
 
-function MonthView({ now, show, open }: { now: Date; show: (e: CalendarEvent) => boolean; open: (e: CalendarEvent) => void }) {
+function MonthView({ now, show, open, holdDay, onPick }: ViewProps) {
   const [month, setMonth] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1))
   const [selected, setSelected] = useState<Date>(() => dayStart(now))
   // Six weeks from the Sunday on or before the 1st
@@ -129,7 +163,9 @@ function MonthView({ now, show, open }: { now: Date; show: (e: CalendarEvent) =>
   const cells = Array.from({ length: weeks * 7 }, (_, i) => addDays(gridStart, i))
   const gridEnd = addDays(gridStart, weeks * 7)
   const { events, loading, error } = useEventsBetween(gridStart, gridEnd)
-  const visible = events.filter(show)
+  const edits = useCalendarEdits()
+  const visible = applyEdits(events, edits).filter(show)
+  useEffect(() => { onPick(selected) }, [selected]) // eslint-disable-line react-hooks/exhaustive-deps
   const eventsOn = (d: Date) => visible.filter((e) => onDay(e, d)).sort(byTime)
   const go = (n: number) => {
     const m = new Date(month.getFullYear(), month.getMonth() + n, 1)
@@ -161,8 +197,8 @@ function MonthView({ now, show, open }: { now: Date; show: (e: CalendarEvent) =>
           const today = sameDay(d, now)
           const active = sameDay(d, selected)
           return (
-            <button key={d.toDateString()} onClick={() => setSelected(d)} aria-pressed={active}
-              aria-label={`${d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}, ${list.length} event${list.length === 1 ? '' : 's'}`}
+            <HoldDay key={d.toDateString()} onTap={() => setSelected(d)} onHold={() => { setSelected(d); holdDay(d) }} pressed={active}
+              label={`${d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}, ${list.length} event${list.length === 1 ? '' : 's'} — hold to add an event`}
               className="flex min-h-[52px] min-w-0 flex-col sm:min-h-[64px] gap-[3px] rounded-lg p-1 text-left transition-colors hover:bg-surface-raised"
               style={{ background: active ? cfg.dim : undefined, opacity: inMonth ? 1 : 0.4 }}>
               <span className={`flex h-5 w-5 items-center justify-center self-start rounded-full font-mono text-[11px] ${today ? 'bg-calendar font-semibold text-bg' : active ? 'text-ink' : 'text-ink-dim'}`}>{d.getDate()}</span>
@@ -178,7 +214,7 @@ function MonthView({ now, show, open }: { now: Date; show: (e: CalendarEvent) =>
                 </span>
               ))}
               {list.length > 2 && <span className="hidden px-1 text-[10px] text-ink-faint sm:inline">+{list.length - 2} more</span>}
-            </button>
+            </HoldDay>
           )
         })}
       </div>
@@ -192,34 +228,166 @@ function MonthView({ now, show, open }: { now: Date; show: (e: CalendarEvent) =>
   )
 }
 
+type EditorState = { mode: 'add' | 'edit'; draft: Draft; event?: CalendarEvent; error?: string | null }
+type Choice = { action: 'delete' | 'save'; event: CalendarEvent; draft?: Draft }
+
+async function post(path: string, body: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`/api/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (res.ok) return { ok: true }
+    const j = await res.json().catch(() => ({}))
+    return { ok: false, error: res.status === 401 ? 'Signed out — unlock the dashboard and try again' : j.error ?? 'That didn’t go through' }
+  } catch {
+    return { ok: false, error: 'Couldn’t reach the dashboard server — not saved yet' }
+  }
+}
+
+const keyOf = (e: CalendarEvent) => ({ calendarId: e.calendarId, uid: e.uid ?? null, recurrenceId: e.recurrenceId ?? null })
+
+/** The 5-second Undo bar after a delete; the delete only goes to Google when it runs out */
+function UndoBar({ p, onUndo }: { p: PendingDelete; onUndo: () => void }) {
+  return (
+    <div role="status" className="absolute inset-x-3 bottom-3 z-[3] flex min-h-[56px] items-center gap-2.5 overflow-hidden rounded-xl border border-[#33404c] bg-[#222c36] pl-4 pr-1.5 text-[13px] shadow-[0_8px_24px_rgba(0,0,0,0.4)]">
+      <Trash2 size={16} className="shrink-0 text-ink-dim" />
+      <span className="min-w-0 flex-1 truncate">Deleted “{p.event.title}”{p.event.repeating ? (p.scope === 'following' ? ' · this and following' : ' · this event') : ''}</span>
+      <button onClick={onUndo} className="flex h-11 items-center gap-1.5 rounded-[10px] px-3.5 text-sm font-semibold text-calendar hover:bg-[#2a3540]"><Undo2 size={16} />Undo</button>
+      <span key={p.sendAt} className="undo-progress absolute bottom-0 left-0 h-[3px] w-full bg-calendar" />
+    </div>
+  )
+}
+
 /**
  * Calendar on page 2: a week strip with the agenda, or a month grid with the
  * picked day's events under it. Colors show which calendar each event is on
  * (chips at the top hide or show a calendar); tapping an event shows its
  * details, with the place on a Google map.
+ *
+ * Adding (the + button, or press and hold a day), editing and deleting go to
+ * Google through Panel's own link (one-time setup the first time).
  */
 export function CalendarCard() {
-  const { data } = useHome()
+  const { data, send } = useHome()
   const [view, setView] = useState<View>(() => { try { return localStorage.getItem('panel-calendar-view') === 'month' ? 'month' : 'week' } catch { return 'week' } })
   const [openEvent, setOpenEvent] = useState<CalendarEvent | null>(null)
+  const [editor, setEditor] = useState<EditorState | null>(null)
+  const [choice, setChoice] = useState<Choice | null>(null)
+  const [link, setLink] = useState<{ then: () => void } | null>(null)
+  const pickedDay = useRef<Date>(dayStart(new Date()))
+  const deleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const edits = useCalendarEdits()
   const { hidden, toggle } = useHiddenCalendars()
+
+  const calendars = data?.calendars ?? []
+  const cw = data?.calendarWrite
+  // Calendars Panel can add to and change (until linked, everything but holidays and birthdays)
+  const writableCals = cw?.linked ? calendars.filter((c) => c.writable) : calendars.filter((c) => !/holiday|birthday/i.test(c.name))
+  const canChange = (e: CalendarEvent) => !!e.calendarId && !e.saving && writableCals.some((c) => c.id === e.calendarId)
+
+  /** Link Google first if it isn't yet, then carry on */
+  const linked = (then: () => void) => { if (cw && !cw.linked) setLink({ then }); else then() }
+
+  // ── Delete with Undo ──
+  const commit = useCallback(async (p: PendingDelete) => {
+    if (deleteTimer.current) { clearTimeout(deleteTimer.current); deleteTimer.current = null }
+    setPendingDelete(null)
+    const ok = await send('calendar/delete', { key: keyOf(p.event), scope: p.scope })
+    if (ok) forgetLater(p.event); else unhide(p.event)
+  }, [send])
+  const beginDelete = (e: CalendarEvent, scope: 'one' | 'following') => {
+    const before = editsNow().pendingDelete
+    if (before) void commit(before)
+    hide(e, scope)
+    const p: PendingDelete = { event: e, scope, sendAt: Date.now() + 5000 }
+    setPendingDelete(p)
+    deleteTimer.current = setTimeout(() => void commit(p), 5000)
+  }
+  const undo = () => {
+    const p = editsNow().pendingDelete
+    if (!p) return
+    if (deleteTimer.current) { clearTimeout(deleteTimer.current); deleteTimer.current = null }
+    setPendingDelete(null)
+    unhide(p.event)
+  }
+  // Leaving the page sends a waiting delete right away
+  useEffect(() => () => { const p = editsNow().pendingDelete; if (p) void commit(p) }, [commit])
+
+  // ── Save ──
+  async function doSave(state: EditorState, d: Draft, scope: 'one' | 'all') {
+    setEditor(null)
+    const cal = calendars.find((c) => c.id === d.calendarId)
+    const temp = `saving-${Date.now()}`
+    const ev = state.event
+    addSaving(previewEvent(d, cal, temp, ev), ev?.id)
+    const r = state.mode === 'add'
+      ? await post('calendar/create', { calendarId: d.calendarId, ...toRequest(d) })
+      : await post('calendar/update', { key: keyOf(ev!), scope, moveTo: d.calendarId !== ev!.calendarId ? d.calendarId : undefined, ...toRequest(d) })
+    if (r.ok) {
+      // The server's list has it now; give the live update a moment to arrive
+      setTimeout(() => dropSaving(temp, ev?.id), 1500)
+    } else {
+      dropSaving(temp, ev?.id)
+      setEditor({ ...state, draft: d, error: r.error })
+    }
+  }
+  const save = (d: Draft) => {
+    if (!editor) return
+    if (editor.mode === 'edit' && editor.event?.repeating) setChoice({ action: 'save', event: editor.event, draft: d })
+    else void doSave(editor, d, 'one')
+  }
+
+  const startAdd = (day: Date) => linked(() => setEditor({ mode: 'add', draft: newDraft(day, writableCals) }))
+  const startEdit = (e: CalendarEvent) => linked(() => { setOpenEvent(null); setEditor({ mode: 'edit', draft: draftFrom(e), event: e }) })
+  const startDelete = (e: CalendarEvent) => linked(() => {
+    setOpenEvent(null)
+    if (e.repeating) setChoice({ action: 'delete', event: e })
+    else beginDelete(e, 'one')
+  })
+
   if (!data) return null
   const now = new Date()
-  const calendars = data.calendars ?? []
   const show = (e: CalendarEvent) => !e.calendar || !hidden.includes(e.calendar)
   const pick = (v: View) => { setView(v); try { localStorage.setItem('panel-calendar-view', v) } catch { /* private mode */ } }
+  const onPick = (d: Date) => { pickedDay.current = d }
+  const viewProps = { now, show, open: setOpenEvent, holdDay: startAdd, onPick }
 
   return (
     <>
       <Card accent={cfg.color} title="Calendar" category="calendar" subtitle="Google Calendar" className="h-full" bodyClassName="flex min-h-0 flex-col"
-        headerRight={<Segmented label="Calendar view" value={view} onChange={pick} color={cfg.color} dim={cfg.dim}
-          options={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />}>
+        overlay={edits.pendingDelete ? <UndoBar p={edits.pendingDelete} onUndo={undo} /> : undefined}
+        headerRight={
+          <div className="flex items-center gap-2">
+            <Segmented label="Calendar view" value={view} onChange={pick} color={cfg.color} dim={cfg.dim}
+              options={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />
+            <button onClick={() => startAdd(pickedDay.current)} aria-label="Add event"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-calendar text-bg transition-opacity hover:opacity-90">
+              <Plus size={19} strokeWidth={2.6} />
+            </button>
+          </div>
+        }>
         <CalendarChips calendars={calendars} hidden={hidden} toggle={toggle} />
-        {view === 'week'
-          ? <WeekView now={now} show={show} open={setOpenEvent} />
-          : <MonthView now={now} show={show} open={setOpenEvent} />}
+        {view === 'week' ? <WeekView {...viewProps} /> : <MonthView {...viewProps} />}
       </Card>
-      {openEvent && <EventSheet e={openEvent} onClose={() => setOpenEvent(null)} />}
+      {openEvent && (
+        <EventSheet e={openEvent} onClose={() => setOpenEvent(null)}
+          onEdit={canChange(openEvent) ? () => startEdit(openEvent) : undefined}
+          onDelete={canChange(openEvent) ? () => startDelete(openEvent) : undefined} />
+      )}
+      {editor && (
+        <EventEditor key={`${editor.mode}-${editor.event?.id ?? 'new'}-${editor.error ?? ''}`} mode={editor.mode} initial={editor.draft} error={editor.error}
+          // A repeating event stays on its own calendar (Google can't move one occurrence)
+          calendars={editor.event?.repeating ? writableCals.filter((c) => c.id === editor.event!.calendarId) : writableCals}
+          repeating={editor.event?.repeating} onSave={save} onClose={() => setEditor(null)} />
+      )}
+      {choice && (
+        <RepeatChoice action={choice.action} event={choice.event} onCancel={() => setChoice(null)}
+          onPick={(scope) => {
+            const c = choice
+            setChoice(null)
+            if (c.action === 'delete') beginDelete(c.event, scope === 'following' ? 'following' : 'one')
+            else if (editor && c.draft) void doSave(editor, c.draft, scope === 'all' ? 'all' : 'one')
+          }} />
+      )}
+      {link && cw && <LinkGoogleSheet status={cw} onClose={() => setLink(null)} onLinked={() => { const t = link.then; setLink(null); t() }} />}
     </>
   )
 }

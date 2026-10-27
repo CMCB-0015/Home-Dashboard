@@ -17,6 +17,8 @@ import { refreshFavorites, sonosState } from './sonos.ts'
 import { calendarEvents, calendarError, calendarList, calendarRange, refreshCalendar } from './calendar.ts'
 import { refreshSports, sportsEvents } from './sports.ts'
 import { teslaState } from './tesla.ts'
+import { gcalStatus } from './gcal.ts'
+import { env } from './env.ts'
 import { vacuumState, vacuumAlerts } from './vacuum.ts'
 
 let weather: Weather | null = null
@@ -118,6 +120,8 @@ export function buildState(): HomeState {
     calendar,
     calendars: sources.calendar === 'live' ? calendarList() : demo.calendars,
     calendarRange: sources.calendar === 'live' ? calendarRange() ?? undefined : demo.calendarRange,
+    calendarWrite: gcalStatus(),
+    mapsKey: env('GOOGLE_MAPS_KEY') ?? null,
     sports: haConfigured ? sportsEvents() : demo.sports,
     irrigationZones,
     irrigation,

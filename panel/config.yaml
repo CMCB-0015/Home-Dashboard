@@ -2,7 +2,7 @@
 # To release an update: push the code to GitHub, raise `version` below, push again,
 # then click Update on the app in Home Assistant.
 name: Panel
-version: "1.5.0"
+version: "1.6.0"
 slug: panel
 description: Connor's home dashboard — open http://192.168.86.207:8099
 url: https://github.com/CMCB-0015/Home-Dashboard
@@ -25,6 +25,9 @@ options:
   weather_lat: "33.4270"
   weather_lon: "-117.6120"
   weather_location_name: San Clemente
+  google_client_id: ""
+  google_client_secret: ""
+  google_maps_key: ""
 schema:
   passcode: password
   rachio_api_key: password?
@@ -32,3 +35,6 @@ schema:
   weather_lat: str
   weather_lon: str
   weather_location_name: str
+  google_client_id: str?
+  google_client_secret: password?
+  google_maps_key: password?

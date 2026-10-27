@@ -331,18 +331,44 @@ export interface QueueItem { position: number; title: string; artist: string; cu
 
 export type WeatherIcon = 'sun' | 'moon' | 'pcloudy' | 'pcloudy-night' | 'cloudy' | 'fog' | 'rain' | 'storm' | 'snow'
 
+export interface WeatherHour {
+  time: string; tempF: number; rainChancePct: number
+  /** Rain in this hour, inches */
+  rainIn: number
+  icon: WeatherIcon
+}
+
+export interface WeatherDay {
+  date: string; icon: WeatherIcon; condition: string
+  highF: number; lowF: number; rainChancePct: number
+  /** Total rain for the day, inches */
+  rainIn: number
+  sunrise: string; sunset: string
+  windMph: number; windDir: string; gustMph: number
+  uvIndex: number
+  humidityMin: number; humidityMax: number
+  dewPointF: number
+}
+
 export interface Weather {
   location: string
   updatedAt: string
+  /** For the radar map */
+  lat?: number; lon?: number
   current: {
     tempF: number; feelsLikeF: number; condition: string; icon: WeatherIcon
     humidityPct: number; dewPointF: number
     windMph: number; windDir: string
     rainChancePct: number; uvIndex: number; aqi: number | null
+    isDay?: boolean
   }
   today: { highF: number; lowF: number; sunrise: string; sunset: string }
+  /** Every 2 hours from now (older layout) */
   hourly: { time: string; tempF: number; rainChancePct: number }[]
-  daily: { date: string; icon: WeatherIcon; highF: number; lowF: number; rainChancePct: number }[]
+  /** Every hour from midnight today, 7 days */
+  hours?: WeatherHour[]
+  /** Today first, then the next 6 days */
+  daily: (Pick<WeatherDay, 'date' | 'icon' | 'highF' | 'lowF' | 'rainChancePct'> & Partial<WeatherDay>)[]
 }
 
 export interface CalendarEvent {
@@ -351,9 +377,33 @@ export interface CalendarEvent {
   /** Which calendar it's on ("Family") */
   calendar?: string
   description?: string | null
+  /** Home Assistant's calendar it's on (calendar.family) — needed to change it */
+  calendarId?: string
+  /** Google's id for the event or series (iCalUID) */
+  uid?: string | null
+  /** One occurrence of a repeating event: Google's id for that occurrence */
+  recurrenceId?: string | null
+  /** Part of a repeating series */
+  repeating?: boolean
+  /** Just changed from the dashboard; Google has it, Home Assistant hasn't caught up yet */
+  saving?: boolean
 }
 
-export interface CalendarInfo { id: string; name: string; color: string }
+export interface CalendarInfo {
+  id: string; name: string; color: string
+  /** Panel can add and change events on it (Google says you're an owner or editor) */
+  writable?: boolean
+}
+
+/** Panel's own link to Google Calendar, for adding, editing and deleting events */
+export interface CalendarWrite {
+  /** The Google client ID and secret are in the Configuration tab */
+  configured: boolean
+  /** Linked to a Google account */
+  linked: boolean
+  account: string | null
+  problem: string | null
+}
 
 export interface ShoppingItem {
   id: string; text: string; section: string; done: boolean
@@ -404,6 +454,10 @@ export interface HomeState {
   calendars?: CalendarInfo[]
   /** The days the calendar list covers (the month view asks the server for others) */
   calendarRange?: { start: string; end: string }
+  /** Google Maps key for the weather radar (a browser key; empty = radar shows how to add one) */
+  mapsKey?: string | null
+  /** Whether the calendar can add, edit and delete events (Panel's Google link) */
+  calendarWrite?: CalendarWrite
   /** Upcoming games and races from The Brief (empty until its schedule feed exists) */
   sports?: SportsEvent[]
   shoppingList: ShoppingItem[]

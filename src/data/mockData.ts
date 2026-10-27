@@ -29,6 +29,39 @@ function dayISO(offset: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** A week of demo weather: mild and sunny, with rain on day 3 (heaviest mid-morning) */
+function demoWeatherWeek() {
+  const days = [
+    { hi: 75, lo: 61, icon: 'pcloudy', cond: 'Partly cloudy', pop: 10 },
+    { hi: 72, lo: 58, icon: 'sun', cond: 'Sunny', pop: 0 },
+    { hi: 69, lo: 57, icon: 'pcloudy', cond: 'Partly cloudy', pop: 10 },
+    { hi: 64, lo: 56, icon: 'rain', cond: 'Rain', pop: 80 },
+    { hi: 66, lo: 55, icon: 'rain', cond: 'Light rain', pop: 40 },
+    { hi: 70, lo: 56, icon: 'sun', cond: 'Sunny', pop: 5 },
+    { hi: 74, lo: 58, icon: 'sun', cond: 'Sunny', pop: 0 },
+  ] as const
+  const rainDay3 = [0, 0, 0, 0, 0, 0, 0.01, 0.02, 0.03, 0.05, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01]
+  const hours = days.flatMap((d, k) => Array.from({ length: 24 }, (_, h) => {
+    const t = new Date(); t.setDate(t.getDate() + k); t.setHours(h, 0, 0, 0)
+    // Coolest near sunrise, warmest mid-afternoon
+    const warm = Math.max(0, Math.sin(((h - 7) / 16) * Math.PI))
+    const rainIn = k === 3 ? rainDay3[h] ?? 0 : k === 4 && h >= 4 && h <= 7 ? 0.02 : 0
+    const pop = k === 3 ? (h < 6 ? 30 : h < 16 ? [40, 55, 65, 75, 80, 80, 70, 65, 55, 45][h - 6] ?? 35 : 20) : Math.max(0, d.pop - (h > 12 ? 0 : 5))
+    const night = h < 7 || h >= 18
+    return {
+      time: t.toISOString(), tempF: Math.round(d.lo + (d.hi - d.lo) * warm), rainChancePct: pop, rainIn,
+      icon: (rainIn ? 'rain' : night ? (d.icon === 'sun' ? 'moon' : 'pcloudy-night') : d.icon) as 'sun',
+    }
+  }))
+  const daily = days.map((d, k) => ({
+    date: dayISO(k), icon: d.icon as 'sun', condition: d.cond, highF: d.hi, lowF: d.lo, rainChancePct: d.pop,
+    rainIn: k === 3 ? 0.32 : k === 4 ? 0.08 : 0, sunrise: todayAt(7, 3 + k, k), sunset: todayAt(18, 6 - k, k),
+    windMph: k === 3 ? 14 : 9, windDir: k === 3 ? 'SW' : 'W', gustMph: k === 3 ? 24 : 15, uvIndex: k === 3 ? 1 : 5,
+    humidityMin: k === 3 ? 82 : 55, humidityMax: k === 3 ? 94 : 78, dewPointF: k === 3 ? 54 : 52,
+  }))
+  return { hours, daily }
+}
+
 // Demo calendar colors (Family is pinned blue in src/config/home.ts)
 const F = '#6fa8ff', C = '#7fd1b9', H = '#f2c14e'
 
@@ -160,14 +193,8 @@ export function buildMockState(): HomeState {
       hourly: [67, 65, 63, 62, 61, 61, 64, 70, 74, 75].map((t, i) => ({
         time: at(i * 120), tempF: t, rainChancePct: i < 6 ? 5 : 0,
       })),
-      daily: [
-        { date: dayISO(0), icon: 'pcloudy', highF: 75, lowF: 61, rainChancePct: 10 },
-        { date: dayISO(1), icon: 'sun', highF: 77, lowF: 62, rainChancePct: 0 },
-        { date: dayISO(2), icon: 'sun', highF: 79, lowF: 63, rainChancePct: 0 },
-        { date: dayISO(3), icon: 'pcloudy', highF: 74, lowF: 61, rainChancePct: 5 },
-        { date: dayISO(4), icon: 'cloudy', highF: 70, lowF: 60, rainChancePct: 20 },
-        { date: dayISO(5), icon: 'rain', highF: 67, lowF: 59, rainChancePct: 45 },
-      ],
+      lat: 33.427, lon: -117.612,
+      ...demoWeatherWeek(),
     },
     calendar: [
       { id: 'e1', title: 'Drop-off at school', location: null, start: todayAt(8, 30), end: todayAt(9), allDay: false, color: F, calendar: 'Family' },
@@ -187,11 +214,18 @@ export function buildMockState(): HomeState {
       { id: 'e12', title: 'Margaux swim class', location: 'San Clemente Aquatics Center, 987 Avenida Vista Hermosa, San Clemente, CA 92673, USA', start: todayAt(16, 45, 7), end: todayAt(17, 0, 7), allDay: false, color: F, calendar: 'Family' },
       { id: 'e13', title: 'Car service', location: 'Tesla Service Center, 3 Hughes, Irvine, CA 92618, USA', start: todayAt(8, 0, 10), end: todayAt(9, 0, 10), allDay: false, color: C, calendar: 'Connor' },
       { id: 'e14', title: 'Thanksgiving at Mom\'s', location: null, start: todayAt(0, 0, 33), end: todayAt(0, 0, 34), allDay: true, color: F, calendar: 'Family' },
-    ],
+    ].map((e) => ({
+      ...e,
+      // Which calendar and Google ids, as Home Assistant reports them (swim class repeats weekly)
+      calendarId: e.calendar === 'Family' ? 'calendar.family' : e.calendar === 'Connor' ? 'calendar.connor' : 'calendar.holidays',
+      uid: /swim/i.test(e.title) ? 'swim@google.com' : `${e.id}@google.com`,
+      recurrenceId: /swim/i.test(e.title) ? `swim_${e.id}` : null,
+      repeating: /swim/i.test(e.title),
+    })),
     calendars: [
       { id: 'calendar.family', name: 'Family', color: F },
       { id: 'calendar.connor', name: 'Connor', color: C },
-      { id: 'calendar.holidays', name: 'Holidays in United States', color: H },
+      { id: 'calendar.holidays', name: 'Holidays in United States', color: H, writable: false },
     ],
     calendarRange: { start: new Date(now.getFullYear(), now.getMonth(), -6).toISOString(), end: new Date(now.getFullYear(), now.getMonth() + 2, 8).toISOString() },
     sports: [

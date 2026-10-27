@@ -1,5 +1,5 @@
 // Live weather from Open-Meteo (https://open-meteo.com) — free, no account or API key.
-import type { Weather, WeatherIcon } from '../src/types.ts'
+import type { Weather, WeatherDay, WeatherHour, WeatherIcon } from '../src/types.ts'
 import { env } from './env.ts'
 
 const DEFAULT = { lat: '33.4270', lon: '-117.6120', name: 'San Clemente' }
@@ -43,16 +43,16 @@ export async function getWeather(): Promise<Weather> {
   const name = env('WEATHER_LOCATION_NAME') ?? DEFAULT.name
 
   const q = new URLSearchParams({
-    latitude: lat, longitude: lon, timezone: 'auto', forecast_days: '6',
-    temperature_unit: 'fahrenheit', wind_speed_unit: 'mph',
+    latitude: lat, longitude: lon, timezone: 'auto', forecast_days: '7',
+    temperature_unit: 'fahrenheit', wind_speed_unit: 'mph', precipitation_unit: 'inch',
     current: 'temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,weather_code,is_day,wind_speed_10m,wind_direction_10m',
-    hourly: 'temperature_2m,precipitation_probability,uv_index',
-    daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset',
+    hourly: 'temperature_2m,precipitation_probability,precipitation,weather_code,is_day,relative_humidity_2m,dew_point_2m,uv_index',
+    daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,uv_index_max',
   })
 
   const [fRes, aRes] = await Promise.all([
-    fetch(`https://api.open-meteo.com/v1/forecast?${q}`),
-    fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi`).catch(() => null),
+    fetch(`${env('OPEN_METEO_URL') ?? 'https://api.open-meteo.com/v1/forecast'}?${q}`),
+    fetch(`${env('OPEN_METEO_AQ_URL') ?? 'https://air-quality-api.open-meteo.com/v1/air-quality'}?latitude=${lat}&longitude=${lon}&current=us_aqi`).catch(() => null),
   ])
   if (!fRes.ok) throw new Error(`Open-Meteo returned ${fRes.status}`)
   const f = await fRes.json()
@@ -68,17 +68,44 @@ export async function getWeather(): Promise<Weather> {
     .filter((i) => i < hourTimes.length)
     .map((i) => ({ time: hourTimes[i], tempF: Math.round(f.hourly.temperature_2m[i]), rainChancePct: f.hourly.precipitation_probability[i] ?? 0 }))
 
-  const daily = (f.daily.time as string[]).map((date, i) => ({
-    date,
-    icon: describe(f.daily.weather_code[i], true).icon,
-    highF: Math.round(f.daily.temperature_2m_max[i]),
-    lowF: Math.round(f.daily.temperature_2m_min[i]),
-    rainChancePct: f.daily.precipitation_probability_max[i] ?? 0,
+  // Every hour from midnight today, for the hourly chart and each day's panel
+  const H = f.hourly
+  const hours: WeatherHour[] = hourTimes.map((time, i) => ({
+    time,
+    tempF: Math.round(H.temperature_2m[i]),
+    rainChancePct: H.precipitation_probability[i] ?? 0,
+    rainIn: Math.round((H.precipitation[i] ?? 0) * 100) / 100,
+    icon: describe(H.weather_code[i] ?? 0, H.is_day?.[i] === 1).icon,
   }))
+
+  const D = f.daily
+  const daily: WeatherDay[] = (D.time as string[]).map((date, i) => {
+    const mine = (H.time as string[]).map((t, k) => (t.startsWith(date) ? k : -1)).filter((k) => k >= 0)
+    const hum = mine.map((k) => H.relative_humidity_2m[k]).filter((v: unknown) => typeof v === 'number') as number[]
+    const dew = mine.map((k) => H.dew_point_2m[k]).filter((v: unknown) => typeof v === 'number') as number[]
+    const { icon, condition } = describe(D.weather_code[i], true)
+    return {
+      date, icon, condition,
+      highF: Math.round(D.temperature_2m_max[i]),
+      lowF: Math.round(D.temperature_2m_min[i]),
+      rainChancePct: D.precipitation_probability_max[i] ?? 0,
+      rainIn: Math.round((D.precipitation_sum[i] ?? 0) * 100) / 100,
+      sunrise: withOffset(D.sunrise[i], off),
+      sunset: withOffset(D.sunset[i], off),
+      windMph: Math.round(D.wind_speed_10m_max[i] ?? 0),
+      windDir: compass(D.wind_direction_10m_dominant[i] ?? 0),
+      gustMph: Math.round(D.wind_gusts_10m_max[i] ?? 0),
+      uvIndex: Math.round(D.uv_index_max[i] ?? 0),
+      humidityMin: hum.length ? Math.round(Math.min(...hum)) : 0,
+      humidityMax: hum.length ? Math.round(Math.max(...hum)) : 0,
+      dewPointF: dew.length ? Math.round(dew.reduce((a, b) => a + b, 0) / dew.length) : 0,
+    }
+  })
 
   const data: Weather = {
     location: name,
     updatedAt: new Date().toISOString(),
+    lat: Number(lat), lon: Number(lon),
     current: {
       tempF: Math.round(cur.temperature_2m),
       feelsLikeF: Math.round(cur.apparent_temperature),
@@ -90,6 +117,7 @@ export async function getWeather(): Promise<Weather> {
       rainChancePct: f.hourly.precipitation_probability[nowIdx] ?? 0,
       uvIndex: Math.round(f.hourly.uv_index[nowIdx] ?? 0),
       aqi: aqi === null ? null : Math.round(aqi),
+      isDay: cur.is_day === 1,
     },
     today: {
       highF: daily[0].highF, lowF: daily[0].lowF,
@@ -97,6 +125,7 @@ export async function getWeather(): Promise<Weather> {
       sunset: withOffset(f.daily.sunset[0], off),
     },
     hourly,
+    hours,
     daily,
   }
   cache = { at: Date.now(), data }
