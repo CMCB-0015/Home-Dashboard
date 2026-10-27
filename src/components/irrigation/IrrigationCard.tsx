@@ -105,6 +105,17 @@ function Ring({ remaining, total, paused, label }: { remaining: number | null; t
   )
 }
 
+/** "Skipped", or why Rachio skipped it (weather etc.) */
+function skipText(cause?: string | null) {
+  const c = (cause ?? '').toUpperCase()
+  if (!c || c === 'MANUAL') return 'Skipped'
+  if (c.includes('RAIN') || c.includes('PRECIP')) return 'Skipped · rain'
+  if (c.includes('FREEZE')) return 'Skipped · freeze'
+  if (c.includes('WIND')) return 'Skipped · wind'
+  if (c.includes('SATURAT') || c.includes('MOIST')) return 'Skipped · soil is wet'
+  return `Skipped · ${c.toLowerCase().replace(/_/g, ' ')}`
+}
+
 // ── Every zone in the running schedule ────────────────────────────────────
 const mins = (sec: number | null) => (sec ? `${Math.max(1, Math.round(sec / 60))}m` : '')
 const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
@@ -190,7 +201,7 @@ function DayPanel({ date, runs, onSkip, onClose }: { date: string; runs: Irrigat
               {r.name} <span className="font-mono" style={{ color: r.skipped ? undefined : CYAN }}>{clockTime(r.at)}</span>
             </p>
             {r.skipped
-              ? <p className="mt-0.5 text-xs" style={{ color: AMBER }}>Skipped <span className="text-ink-faint">· undo in the Rachio app</span></p>
+              ? <p className="mt-0.5 text-xs" style={{ color: AMBER }}>{skipText(r.skipCause)} <span className="text-ink-faint">· undo in the Rachio app</span></p>
               : <p className="mt-0.5 text-xs text-ink-dim">{[r.minutes ? `~${r.minutes} min` : null, r.zoneNames.join(', ') || null].filter(Boolean).join(' · ')}</p>}
             {!r.skipped && !r.canSkip && r.reason && <p className="mt-0.5 text-[11px] text-ink-faint">{r.reason}</p>}
           </div>

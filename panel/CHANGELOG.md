@@ -1,6 +1,9 @@
 # Changelog
 
 ## 1.5.0
+- Fix: skipping a run could skip the wrong schedule. The card now uses Rachio's own list as the only source: each run's skipped flag (and why: rain, wind…), its real zone times (seasonal shift included), and no runs guessed from the schedule rules. Skip only goes to a schedule whose very next run is that one and isn't already skipped (Rachio's skip works on the schedule's next run, so a second skip could undo it or hit another run)
+- After a skip, the dashboard reads Rachio back and checks that exactly that run was skipped; if Rachio skipped something else (or nothing), an alert says what happened
+- Skip tomorrow leaves runs Rachio already skipped alone
 - Irrigation card, while watering: every zone in the run is listed (done ✓, watering now with time left / total, up next with run time, skipped), with "Lawns · zone 2 of 3". It replaces the dimmed week strip while a multi-zone run waters
 - Zone times include Rachio's seasonal shift: the current zone's time is live from Rachio, and the rest are scaled by the same amount (Rachio's settings only hold the base times)
 - Next zone button: stops the current zone and starts the rest of the run, in order, with their adjusted times (Rachio's public API has no skip-zone command, so the rest shows as a manual run in Rachio's history). Hidden on the last zone

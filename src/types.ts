@@ -171,6 +171,8 @@ export interface IrrigationRun {
   minutes: number | null
   zoneNames: string[]
   skipped: boolean
+  /** Why Rachio skipped it (MANUAL, WEATHER, …) */
+  skipCause?: string | null
   /** Rachio can only skip a schedule's next run */
   canSkip: boolean
   reason?: string
