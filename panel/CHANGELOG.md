@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.1
+- Radar moves more smoothly: each 5-minute frame now **crossfades** into the next (about a third of a second) instead of cutting, so storms read as moving
+- Radar **loads every frame first** ("Loading radar · 8 of 12") and only then starts playing, so rain no longer pops in mid-loop. Zooming or moving the map waits for the new pictures the same way; if a frame is slow, it plays anyway after 10 seconds
+- **Faster loop:** about 0.4 s per frame, resting about 1.7 s on the latest frame before it starts over
+
 ## 1.6.0
 - Calendar: **add events** with the **+** next to Week / Month, or **press and hold any day** (a ring fills around it, then the panel opens). Title, calendar (Family by default; read-only calendars like Holidays aren't offered), all day, day and time with quick buttons (start in half hours, then a length), place and notes. Save is one tap
 - Calendar: **Edit · Delete** on event details. Editing changes the real Google event (guests, reminders and Meet links stay). A repeating event asks which ones: delete "This event / This and following", save "This event / All events". The repeat pattern itself is changed in Google Calendar

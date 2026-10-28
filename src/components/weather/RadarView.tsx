@@ -12,8 +12,18 @@ import { Maximize2, Minimize2, Minus, Pause, Play, Plus, X } from 'lucide-react'
 const IEM = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0'
 const FRAMES = 12
 const layerName = (i: number) => (i === FRAMES - 1 ? 'nexrad-n0q-900913' : `nexrad-n0q-900913-m${String((FRAMES - 1 - i) * 5).padStart(2, '0')}m`)
-const STEP_MS = 650
-const HOLD_LAST = 3
+/** Each frame shows this long while playing (crossfade included) */
+const STEP_MS = 420
+/** Blend from one frame into the next */
+const FADE_MS = 360
+/** Extra steps to rest on the latest frame before looping (about 1.7 s) */
+const HOLD_LAST = 4
+/** Radar opacity over the map */
+const OP = 0.75
+/** Start playing anyway if some frames are slow to load */
+const LOAD_TIMEOUT_MS = 10_000
+const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+const ease = (t: number) => t * t * (3 - 2 * t)
 
 /** Dark map to match the dashboard */
 const DARK = [
@@ -84,6 +94,12 @@ export function RadarView({ lat, lon, mapsKey, place, onClose }: { lat: number; 
   const [error, setError] = useState<string | null>(null)
   const [base] = useState(() => Math.floor(Date.now() / 300_000) * 300_000)
   const hold = useRef(0)
+  // Which frames have all their tiles loaded for the current view; the loop waits for all 12
+  const [loaded, setLoaded] = useState<Set<number>>(() => new Set())
+  const [timedOut, setTimedOut] = useState(false)
+  const [view, setView] = useState(0)
+  const ready = loaded.size >= FRAMES || timedOut
+  const shown = useRef(FRAMES - 1)
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (full) setFull(false); else onClose() } }
@@ -108,16 +124,20 @@ export function RadarView({ lat, lon, mapsKey, place, onClose }: { lat: number; 
       const bust = String(base)
       layers.current = Array.from({ length: FRAMES }, (_, i) => {
         const t = new gm.ImageMapType({
-          name: layerName(i), tileSize: new gm.Size(256, 256), opacity: i === FRAMES - 1 ? 0.75 : 0,
+          name: layerName(i), tileSize: new gm.Size(256, 256), opacity: i === FRAMES - 1 ? OP : 0,
           getTileUrl: (c: { x: number; y: number }, z: number) => {
             const n = 1 << z
             if (c.y < 0 || c.y >= n) return null
             return `${IEM}/${layerName(i)}/${z}/${((c.x % n) + n) % n}/${c.y}.png?t=${bust}`
           },
         })
+        t.addListener?.('tilesloaded', () => { if (!gone) setLoaded((prev) => (prev.has(i) ? prev : new Set(prev).add(i))) })
         m.overlayMapTypes.push(t)
         return t
       })
+      // Zooming or moving needs new tiles: wait for them again before playing on
+      m.addListener?.('zoom_changed', () => { setLoaded(new Set()); setView((v) => v + 1) })
+      m.addListener?.('dragend', () => { setLoaded(new Set()); setView((v) => v + 1) })
       // The house
       new gm.Marker({ position: { lat, lng: lon }, map: m, clickable: false, icon: { path: gm.SymbolPath.CIRCLE, scale: 11, strokeColor: '#f2c14e', strokeWeight: 2.5, fillOpacity: 0 } })
       new gm.Marker({ position: { lat, lng: lon }, map: m, clickable: false, icon: { path: gm.SymbolPath.CIRCLE, scale: 4.5, fillColor: '#f2c14e', fillOpacity: 1, strokeWeight: 0 } })
@@ -125,12 +145,39 @@ export function RadarView({ lat, lon, mapsKey, place, onClose }: { lat: number; 
     return () => { gone = true; window.removeEventListener('panel-maps-auth', onAuth); layers.current = []; map.current = null }
   }, [mapsKey, lat, lon, base])
 
-  // Show one frame at a time
-  useEffect(() => { layers.current.forEach((t, i) => t.setOpacity(i === frame ? 0.75 : 0)) }, [frame])
-
-  // Play: step through the hour, pause a moment on the latest frame, loop
+  // Never wait forever: if some frames are slow, play what's there after 10 s
   useEffect(() => {
-    if (!playing) return
+    if (!mapsKey) return
+    setTimedOut(false)
+    const t = setTimeout(() => setTimedOut(true), LOAD_TIMEOUT_MS)
+    return () => clearTimeout(t)
+  }, [mapsKey, view])
+
+  // Crossfade from the frame on screen into the new one: the new frame fades in
+  // first and the old one fades out a little behind it, so the rain never dims mid-blend
+  useEffect(() => {
+    const ls = layers.current
+    const from = shown.current, to = frame
+    shown.current = to
+    if (!ls.length) return
+    const snap = () => ls.forEach((t, i) => t.setOpacity(i === to ? OP : 0))
+    if (from === to || reduceMotion()) { snap(); return }
+    ls.forEach((t, i) => { if (i !== from && i !== to) t.setOpacity(0) })
+    const start = performance.now()
+    let raf = 0
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / FADE_MS)
+      ls[to].setOpacity(OP * ease(Math.min(1, p * 1.6)))
+      ls[from].setOpacity(OP * (1 - ease(Math.max(0, (p - 0.35) / 0.65))))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => { cancelAnimationFrame(raf); snap() }
+  }, [frame])
+
+  // Play once every frame has loaded: step through the hour, rest on the latest frame, loop
+  useEffect(() => {
+    if (!playing || !ready) return
     const t = setInterval(() => {
       setFrame((f) => {
         if (f === FRAMES - 1 && hold.current < HOLD_LAST) { hold.current++; return f }
@@ -139,7 +186,7 @@ export function RadarView({ lat, lon, mapsKey, place, onClose }: { lat: number; 
       })
     }, STEP_MS)
     return () => clearInterval(t)
-  }, [playing])
+  }, [playing, ready])
 
   const zoom = useCallback((d: number) => { const m = map.current; if (m) m.setZoom(m.getZoom() + d) }, [])
   const pick = (i: number) => { setPlaying(false); setFrame(i) }
@@ -177,6 +224,12 @@ export function RadarView({ lat, lon, mapsKey, place, onClose }: { lat: number; 
     <div className={`relative min-h-0 flex-1 overflow-hidden bg-[#0d1620] ${full ? '' : 'rounded-xl'}`}>
       {mapsKey ? <div ref={box} className="absolute inset-0" /> : <div className="absolute inset-0"><NoKey /></div>}
       {mapsKey && !error && zoomBtns}
+      {mapsKey && !error && !ready && (
+        <div role="status" className="pointer-events-none absolute left-1/2 top-3 z-[1] flex h-9 -translate-x-1/2 items-center gap-2 rounded-full border border-[#33404c] bg-[rgba(22,29,36,.92)] px-3.5 text-xs font-medium text-ink">
+          <span className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-weather border-t-transparent" />
+          Loading radar · {loaded.size} of {FRAMES}
+        </div>
+      )}
       {error && <div className="absolute inset-x-3 top-3 z-[1] rounded-xl border border-[#f0b24a] bg-[#2a2418] px-3.5 py-2.5 text-sm">{error}</div>}
     </div>
   )

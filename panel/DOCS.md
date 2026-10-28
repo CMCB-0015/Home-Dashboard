@@ -115,7 +115,8 @@ chart with inches of rain per 3 hours. Data: Open-Meteo, every 10 minutes.
 
 **Radar** (header button) loops the last hour of National Weather Service radar in 5-minute
 frames (Iowa State University's free tile service, `nexrad-n0q`), on a dark Google map
-centered on the house; tap the timeline to stop on a frame, pinch or +/− to zoom, full
+centered on the house, blending each frame into the next (it waits until all 12 frames
+have loaded before playing); tap the timeline to stop on a frame, pinch or +/− to zoom, full
 screen from the corner button. It needs **google_maps_key**: in the same Google Cloud
 project turn on **Maps JavaScript API** (Google wants a billing account on the project; the
 free monthly allowance covers a home dashboard), create an **API key**, restrict it to that
