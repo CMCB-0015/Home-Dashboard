@@ -81,6 +81,10 @@ calendar hide or show a calendar on that screen only. The status bar shows event
 `statusBar.calendars` (Family). Tapping an event shows its details and a Google map of
 its location; maps always open in Google Maps.
 
+**Times (1.7.0):** type into the start or end box ("1030a", "2:15 pm", "14:00") or tap the hour,
+minute and AM / PM in the picker under it. On the tablet the first tap opens the picker without the
+keyboard; tap the box again to type.
+
 **Adding, editing and deleting (1.6.0).** The **+** next to Week / Month adds an event on
 the picked day; **press and hold any day** (week strip or month grid) to add one on that
 day. Family is picked by default. Event details have **Edit · Delete**. A repeating event
@@ -106,6 +110,10 @@ ends the sign-in after 7 days. The lasting sign-in is saved in Panel's `/data` f
 calendars Google reports. To undo: Google Account → Security → Third-party access → remove it.
 
 ## Weather
+
+The card starts **collapsed** to its top row; drag the bar along its bottom down to open the rest
+(or tap it), and up to close. The shopping list takes whatever height is left. A rain chip on the
+collapsed row warns of rain (40% or more) later today or in the next 6 days.
 
 The card tints with the sky (warm by day, indigo at night, blue in rain), shows sunrise →
 sunset as an arc, a temperature curve over rain-chance bars for the next 12 hours, and the

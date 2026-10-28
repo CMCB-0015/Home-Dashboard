@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Radar, X } from 'lucide-react'
 import { useHome } from '../../lib/useHome'
 import { relativeTime } from '../../lib/format'
@@ -111,6 +111,96 @@ function DayPanel({ day, hours, onClose }: { day: Weather['daily'][number]; hour
   )
 }
 
+/** The next rain worth a heads-up while the card is collapsed: later today or one of the next 6 days, 40% or more */
+function rainHeadsUp(w: Weather, hours: WeatherHour[], now: number): string | null {
+  const today = w.daily[0]
+  const laterToday = today ? hoursOn(hours, today.date).filter((h) => Date.parse(h.time) + 3_600_000 > now) : []
+  const todayPeak = Math.max(0, ...laterToday.map((h) => h.rainChancePct))
+  if (todayPeak >= 40) return `Rain today · ${todayPeak}%`
+  const day = w.daily.slice(1, 7).find((d) => d.rainChancePct >= 40)
+  return day ? `Rain ${dayName(day.date)} · ${day.rainChancePct}%` : null
+}
+
+const HANDLE = 30
+const EXPANDED_KEY = 'panel-weather-expanded'
+
+/**
+ * Collapsed (just the top row) or expanded (everything), with one snap stop
+ * each way. Drag the bar along the bottom of the card, or tap it. The list
+ * under the card takes whatever height is left. Remembered on this screen.
+ */
+function useCollapse(forceOpen: boolean, ready: boolean) {
+  const wrap = useRef<HTMLDivElement>(null)
+  const top = useRef<HTMLDivElement>(null)
+  const [stops, setStops] = useState<{ col: number; exp: number } | null>(null)
+  const [expanded, setExpanded] = useState(() => { try { return localStorage.getItem(EXPANDED_KEY) === '1' } catch { return false } })
+  const [dragH, setDragH] = useState<number | null>(null)
+  const drag = useRef<{ y: number; h: number; moved: boolean; id: number } | null>(null)
+
+  // Where the two stops are: the top row, and all of the content (they change with the screen width)
+  useLayoutEffect(() => {
+    const el = wrap.current, t = top.current
+    if (!el || !t) return
+    const measure = () => {
+      const card = el.closest('.weather-card') as HTMLElement | null
+      if (!card) return
+      const offset = el.getBoundingClientRect().top - card.getBoundingClientRect().top
+      const col = Math.round(offset + t.offsetHeight + HANDLE + 4)
+      const exp = Math.max(col + 40, Math.round(offset + el.offsetHeight + HANDLE + 6))
+      setStops((s) => (s && s.col === col && s.exp === exp ? s : { col, exp }))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    ro.observe(t)
+    return () => ro.disconnect()
+  }, [ready])
+
+  const save = (v: boolean) => { setExpanded(v); try { localStorage.setItem(EXPANDED_KEY, v ? '1' : '0') } catch { /* private mode */ } }
+  const resting = stops ? (expanded || forceOpen ? stops.exp : stops.col) : null
+  const height = dragH ?? resting
+
+  const onPointerDown = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!stops || forceOpen) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    drag.current = { y: e.clientY, h: expanded ? stops.exp : stops.col, moved: false, id: e.pointerId }
+  }, [stops, expanded, forceOpen])
+  const onPointerMove = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
+    const d = drag.current
+    if (!d || !stops || e.pointerId !== d.id) return
+    const dy = e.clientY - d.y
+    if (!d.moved && Math.abs(dy) < 5) return
+    d.moved = true
+    // A little give past either stop, like pulling on something real
+    let h = d.h + dy
+    if (h < stops.col) h = stops.col - Math.sqrt(stops.col - h) * 2
+    if (h > stops.exp) h = stops.exp + Math.sqrt(h - stops.exp) * 2
+    setDragH(h)
+  }, [stops])
+  const onPointerUp = useCallback(() => {
+    const d = drag.current
+    drag.current = null
+    if (!d || !stops) return
+    const wasOpen = d.h >= stops.exp - 1
+    const p = ((dragH ?? d.h) - stops.col) / (stops.exp - stops.col)
+    // A quarter of the way is enough to snap to the other stop; less springs back
+    const open = !d.moved ? !wasOpen : wasOpen ? p > 0.75 : p > 0.25
+    setDragH(null)
+    save(open)
+  }, [stops, dragH])
+  const toggleKey = (e: { key: string; preventDefault: () => void }) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); save(!expanded) }
+  }
+
+  const progress = stops && height !== null ? Math.max(0, Math.min(1, (height - stops.col) / (stops.exp - stops.col))) : expanded ? 1 : 0
+  return {
+    wrap, top, expanded: expanded || forceOpen, progress, dragging: dragH !== null,
+    cardStyle: height === null ? undefined : { height, transition: dragH !== null ? 'none' : 'height .32s cubic-bezier(.2,.8,.2,1)' },
+    handle: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onKeyDown: toggleKey },
+    canDrag: !forceOpen,
+  }
+}
+
 /**
  * Weather on page 2 ("Sky", chosen October 26, 2026): the card tints with the
  * sky, sunrise → sunset as an arc, a temperature curve over rain-chance bars,
@@ -126,6 +216,8 @@ export function WeatherCard() {
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(t) }, [])
 
   const hours = useMemo(() => w?.hours ?? w?.hourly.map((h) => ({ time: h.time, tempF: h.tempF, rainChancePct: h.rainChancePct, rainIn: 0, icon: w.current.icon })) ?? [], [w])
+  // A day's details or the radar need the room: open the card while they show
+  const fold = useCollapse(dayIdx !== null || radar, !!w)
 
   if (!w) {
     return <Card accent="var(--color-weather)" title="Weather"><p className="py-6 text-sm text-ink-faint">Weather unavailable right now.</p></Card>
@@ -144,17 +236,30 @@ export function WeatherCard() {
     </button>
   )
 
+  const rain = rainHeadsUp(w, hours, now)
+  const more = { opacity: Math.max(0, (fold.progress - 0.15) / 0.85), transition: fold.dragging ? 'none' : 'opacity .32s ease' }
+
   return (
     <Card accent={tone.color} title="Weather" category="weather" subtitle={`${w.location} · updated ${relativeTime(w.updatedAt)}`} headerRight={radarBtn}
+      className="weather-card shrink-0" style={fold.cardStyle}
       overlay={
         <>
           <div className="pointer-events-none absolute inset-x-0 top-0 h-[280px] transition-[background] duration-700" style={{ background: tone.wash }} aria-hidden />
+          {/* The bar along the bottom: drag down to open, up to close, or tap */}
+          {fold.canDrag && (
+            <button type="button" {...fold.handle} aria-label={fold.expanded ? 'Collapse weather' : 'Expand weather'} aria-expanded={fold.expanded}
+              className="group absolute inset-x-0 bottom-0 z-[3] flex h-[30px] cursor-ns-resize items-center justify-center border-t transition-colors"
+              style={{ touchAction: 'none', borderColor: fold.progress > 0.5 ? 'transparent' : 'rgba(255,255,255,.06)', background: 'linear-gradient(180deg, rgba(22,29,36,0), var(--color-surface) 40%)' }}>
+              <span className="h-[5px] rounded-full transition-all duration-200 group-hover:bg-ink-dim"
+                style={{ width: fold.dragging ? 56 : 44, background: fold.dragging ? 'var(--color-weather)' : 'var(--color-ink-faint)' }} />
+            </button>
+          )}
           {openDay && <DayPanel day={openDay} hours={hoursOn(hours, openDay.date)} onClose={() => setDayIdx(null)} />}
           {radar && <RadarView lat={w.lat ?? 33.427} lon={w.lon ?? -117.612} mapsKey={data?.mapsKey ?? null} place={w.location} onClose={() => setRadar(false)} />}
         </>
       }>
-      <div className="flex flex-col gap-2.5">
-        <div className="flex min-h-[100px] flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <div ref={fold.wrap} className="flex flex-col gap-2.5">
+        <div ref={fold.top} className="flex min-h-[100px] flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <button onClick={() => setDayIdx(0)} aria-label={`Today: ${c.tempF}°, high ${w.today.highF}°, low ${w.today.lowF}°. Tap for today in detail`}
             className="flex w-[150px] flex-col items-center gap-1.5 rounded-xl py-1 hover:bg-white/[0.03]">
             <span className="font-display text-[72px] font-light leading-[0.95] tracking-tight">{c.tempF}°</span>
@@ -163,9 +268,17 @@ export function WeatherCard() {
           <div className="flex min-w-[130px] flex-1 flex-col gap-0.5">
             <span className="flex items-center gap-2"><WeatherIcon kind={c.icon} size={32} /><span className="text-base font-medium">{c.condition}</span></span>
             <span className="text-[13px] text-[#a3b0bc]">Feels like {c.feelsLikeF}°</span>
+            {rain && (
+              <span className="mt-1 flex h-6 w-fit items-center gap-1.5 rounded-full border border-[rgba(111,176,255,.35)] bg-[rgba(111,176,255,.14)] px-2.5 text-[11.5px] text-[#cfe3ff]"
+                style={{ opacity: 1 - fold.progress, transition: fold.dragging ? 'none' : 'opacity .25s' }} aria-hidden={fold.progress > 0.5}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6fb0ff" strokeWidth="2.4" strokeLinecap="round" aria-hidden><path d="M16 14v6M8 14v6M12 16v6" /></svg>
+                {rain}
+              </span>
+            )}
           </div>
           <SunArc sunrise={w.today.sunrise} sunset={w.today.sunset} nextSunrise={w.daily[1]?.sunrise} now={now} />
         </div>
+        <div className="flex flex-col gap-2.5" style={more} aria-hidden={!fold.expanded} inert={!fold.expanded}>
         <div className="flex flex-wrap gap-1.5">
           <span className={chip}>Humidity <b className={val}>{c.humidityPct}%</b></span>
           <span className={chip}>Dew point <b className={val}>{c.dewPointF}°</b></span>
@@ -175,6 +288,7 @@ export function WeatherCard() {
         </div>
         <SkyChart hours={next12} color={tone.color} firstLabel="Now" />
         {days.length > 0 && <RangeBars days={days} onPick={(i) => setDayIdx(i + 1)} />}
+        </div>
       </div>
     </Card>
   )

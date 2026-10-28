@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AlignLeft, ChevronLeft, ChevronRight, Clock, MapPin, Repeat, X, AlertTriangle } from 'lucide-react'
 import { Switch } from '../Sheet'
 import { sameDay } from '../../lib/format'
@@ -29,12 +29,40 @@ export function minLabel(min: number, withAmPm = true) {
   const t = `${h % 12 === 0 ? 12 : h % 12}:${pad(mm)}`
   return withAmPm ? `${t} ${h < 12 ? 'AM' : 'PM'}` : t
 }
-const lengthLabel = (min: number) => min < 60 ? `${min} min` : min % 60 === 0 ? `${min / 60} h` : min % 30 === 0 ? `${min / 60} h` : `${Math.floor(min / 60)} h ${min % 60} m`
+const lengthLabel = (min: number) => min < 60 ? `${min} min` : min % 60 === 0 ? `${min / 60} h` : `${Math.floor(min / 60)} h ${min % 60} m`
+
+/** The suggested start on a day: the next whole hour today, otherwise 9 AM */
+const suggestedStart = (day: Date) => { const now = new Date(); return sameDay(day, now) ? Math.min(23 * 60, (now.getHours() + 1) * 60) : 9 * 60 }
+
+/**
+ * A typed time → minutes after midnight, or null. Takes "1030a", "10:30 am",
+ * "2:15p", "2.15 pm", "14:00", "9". Without AM/PM, 1–6 means afternoon and
+ * 7–12 morning/noon; 13–23 is read as a 24-hour time.
+ */
+export function parseTime(text: string): number | null {
+  // "a.m." / "pm" → "a" / "p"; "2.15" → "2:15"
+  const t = text.trim().toLowerCase().replace(/\s+/g, '').replace(/([ap])\.?m?\.?$/, '$1').replace(/\./g, ':')
+  if (!t) return null
+  const m = /^(\d{1,2})(?::?(\d{2}))?([ap])?$/.exec(t)
+  if (!m) return null
+  let h = Number(m[1])
+  const mi = Number(m[2] ?? 0)
+  const ap = m[3]
+  if (mi > 59) return null
+  if (ap) {
+    if (h < 1 || h > 12) return null
+    h = (h % 12) + (ap[0] === 'p' ? 12 : 0)
+  } else if (h > 23) {
+    return null
+  } else if (h >= 1 && h <= 6) {
+    h += 12
+  }
+  return h * 60 + mi
+}
 
 /** Defaults for a new event on a day: the next whole hour today, otherwise 9 AM, for an hour, on Family */
 export function newDraft(day: Date, calendars: CalendarInfo[]): Draft {
-  const now = new Date()
-  const start = sameDay(day, now) ? Math.min(23 * 60, (now.getHours() + 1) * 60) : 9 * 60
+  const start = suggestedStart(day)
   const cal = calendars.find((c) => /family/i.test(c.name)) ?? calendars[0]
   return { title: '', calendarId: cal?.id ?? '', allDay: false, date: ymd(day), endDate: ymd(day), startMin: start, durationMin: 60, location: '', description: '' }
 }
@@ -75,8 +103,6 @@ export function previewEvent(d: Draft, cal: CalendarInfo | undefined, id: string
   }
 }
 
-const START_TIMES = Array.from({ length: 48 }, (_, i) => i * 30)
-const LENGTHS = [30, 60, 90, 120, 180, 240]
 
 /** Small month grid for picking a day */
 function MiniMonth({ value, onPick }: { value: string; onPick: (d: string) => void }) {
@@ -111,33 +137,101 @@ function MiniMonth({ value, onPick }: { value: string; onPick: (d: string) => vo
   )
 }
 
-/** A row of chips that slides sideways, with the chosen one scrolled into view */
-function ChipRow<T extends number>({ label, items, value, onPick, text }: { label: string; items: T[]; value: T; onPick: (v: T) => void; text: (v: T) => string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const el = ref.current?.querySelector<HTMLElement>('[aria-pressed="true"]')
-    if (el && ref.current) ref.current.scrollLeft = Math.max(0, el.offsetLeft - 60)
-  }, [])
+/**
+ * A start or end time you can type into ("1030a", "2:15 pm"…) or set with the
+ * picker below it. On a touchscreen the first tap only opens the picker (no
+ * keyboard covering it); tapping the box again brings the keyboard up. With a
+ * mouse or trackpad it's ready to type straight away.
+ */
+function TimeBox({ label, value, active, draft, onOpen, onType, onDone }: {
+  label: string; value: number; active: boolean; draft: string | null
+  onOpen: () => void; onType: (text: string) => void; onDone: () => void
+}) {
+  const bad = active && draft !== null && draft.trim() !== '' && parseTime(draft) === null
+  const ring = active ? (bad ? '#f0b24a' : 'var(--color-calendar)') : '#33404c'
+  const glow = active ? (bad ? '0 0 0 3px rgba(240,178,74,.22)' : '0 0 0 3px rgba(111,168,255,.2)') : undefined
+  // Touch: stop the first tap from focusing (no keyboard) and open the picker on the
+  // tap's click, after the finger lifts. Opening it on touch-down would grow the
+  // panel upward under the finger, and the lift would land on a picker button.
+  const down = (e: ReactPointerEvent<HTMLInputElement>) => {
+    if (e.pointerType === 'touch' && !active) e.preventDefault()
+  }
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">{label}</span>
-      <div ref={ref} role="group" aria-label={label} className="status-bar -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
-        {items.map((v) => {
-          const on = v === value
-          return (
-            <button type="button" key={v} onClick={() => onPick(v)} aria-pressed={on}
-              className="h-10 shrink-0 rounded-[10px] border px-3 font-mono text-[13px] transition-colors"
-              style={{ background: on ? 'var(--color-calendar)' : 'var(--color-surface)', borderColor: on ? 'var(--color-calendar)' : '#33404c', color: on ? 'var(--color-bg)' : 'var(--color-ink)', fontWeight: on ? 600 : 400 }}>
-              {text(v)}
-            </button>
-          )
+    <input value={active && draft !== null ? draft : minLabel(value)} aria-label={`${label}: ${minLabel(value)}. Type a time or pick one`}
+      aria-expanded={active} inputMode="text" autoComplete="off" spellCheck={false}
+      onPointerDown={down}
+      onClick={(e) => { if (!active) onOpen(); else if (draft === null) e.currentTarget.select() }}
+      onFocus={(e) => { onOpen(); const el = e.target; setTimeout(() => el.select(), 0) }}
+      onChange={(e) => onType(e.target.value)}
+      onBlur={onDone}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur() } }}
+      className="h-10 w-[104px] rounded-[10px] border px-2 text-center font-mono text-[13px] text-ink outline-none transition-colors"
+      style={{ borderColor: ring, boxShadow: glow, background: 'var(--color-surface)' }} />
+  )
+}
+
+/** Hours, minutes in 5s and AM / PM, all on screen at once */
+function TimePicker({ title, value, readout, readoutTone, onPick, onDone }: {
+  title: string; value: number; readout: string; readoutTone: 'dim' | 'good' | 'bad'
+  onPick: (min: number) => void; onDone: () => void
+}) {
+  const v = ((value % 1440) + 1440) % 1440
+  const h24 = Math.floor(v / 60), mi = v % 60, pm = h24 >= 12
+  const chip = (on: boolean) => ({
+    background: on ? 'var(--color-calendar)' : 'var(--color-surface)', borderColor: on ? 'var(--color-calendar)' : '#33404c',
+    color: on ? 'var(--color-bg)' : 'var(--color-ink)', fontWeight: on ? 600 : 400,
+  })
+  /** An hour button picks that hour AM or PM, whichever is closer to the time now set
+   *  (from 11:30 AM, "12" is noon; from 9 AM, "1" is 1 PM). AM / PM switches it. */
+  const nearestHour = (h: number) => {
+    const am = (h % 12) * 60 + mi, pmT = am + 720
+    const dist = (t: number) => { const x = Math.abs(t - v); return Math.min(x, 1440 - x) }
+    return dist(am) <= dist(pmT) ? am : pmT
+  }
+  const tone = readoutTone === 'good' ? '#7fd1b9' : readoutTone === 'bad' ? '#f0b24a' : 'var(--color-ink-dim)'
+  const cell = 'h-11 rounded-[10px] border font-mono text-[15px] transition-colors'
+  // Keep focus in the time box while tapping the picker (so typing can carry on)
+  const keep = (e: ReactPointerEvent) => { if (e.pointerType !== 'touch') e.preventDefault() }
+  return (
+    <div className="flex flex-col gap-2.5 border-b border-edge py-3.5 pl-[33px]">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-dim">{title}</span>
+        <span className="truncate text-xs" style={{ color: tone, fontWeight: readoutTone === 'dim' ? 400 : 600 }} aria-live="polite">{readout}</span>
+      </div>
+      <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Hour</span>
+      <div className="grid grid-cols-6 gap-1.5" role="group" aria-label="Hour">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => {
+          const on = (h24 % 12 || 12) === h
+          return <button type="button" key={h} onPointerDown={keep} onClick={() => onPick(nearestHour(h))} aria-pressed={on} className={cell} style={chip(on)}>{h}</button>
         })}
+      </div>
+      <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Minute</span>
+      <div className="grid grid-cols-6 gap-1.5" role="group" aria-label="Minute">
+        {Array.from({ length: 12 }, (_, k) => k * 5).map((m) => {
+          const on = mi === m
+          return <button type="button" key={m} onPointerDown={keep} onClick={() => onPick(h24 * 60 + m)} aria-pressed={on} className={`${cell} h-10 text-[14px]`} style={chip(on)}>:{pad(m)}</button>
+        })}
+      </div>
+      <div className="mt-1 flex items-center gap-2.5">
+        <div role="radiogroup" aria-label="AM or PM" className="flex rounded-full border border-[#33404c] bg-surface p-[3px]">
+          {(['AM', 'PM'] as const).map((x) => {
+            const on = (x === 'PM') === pm
+            return (
+              <button type="button" key={x} role="radio" aria-checked={on} onPointerDown={keep}
+                onClick={() => { if (!on) onPick(v + (x === 'PM' ? 720 : -720)) }}
+                className="h-[38px] min-w-16 rounded-full px-4 text-sm font-semibold transition-colors"
+                style={{ background: on ? 'var(--color-calendar)' : 'transparent', color: on ? 'var(--color-bg)' : 'var(--color-ink-dim)' }}>{x}</button>
+            )
+          })}
+        </div>
+        <span className="flex-1" />
+        <button type="button" onClick={onDone} className="h-10 rounded-full bg-[#252e38] px-5 text-sm font-medium text-ink hover:bg-[#2c3640]">Done</button>
       </div>
     </div>
   )
 }
 
-type Picker = 'date' | 'end-date' | 'time' | null
+type Picker = 'date' | 'end-date' | 'start' | 'end' | null
 
 /**
  * The add / edit panel: title, which calendar (Family first), all day,
@@ -157,6 +251,10 @@ export function EventEditor({ mode, initial, calendars, repeating, error, onSave
 }) {
   const [d, setD] = useState<Draft>(initial)
   const [picker, setPicker] = useState<Picker>(null)
+  /** What's being typed into the open time box */
+  const [typed, setTyped] = useState<string | null>(null)
+  /** Still the suggested time (a new event whose time hasn't been touched): a new day resets it */
+  const [autoTime, setAutoTime] = useState(mode === 'add')
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }))
   const titleRef = useRef<HTMLInputElement>(null)
 
@@ -167,12 +265,34 @@ export function EventEditor({ mode, initial, calendars, repeating, error, onSave
     return () => window.removeEventListener('keydown', key)
   }, [onClose, mode, error])
 
-  const lengths = useMemo(() => (LENGTHS.includes(d.durationMin) ? LENGTHS : [...LENGTHS, d.durationMin].sort((a, b) => a - b)), [d.durationMin])
-  const starts = useMemo(() => (START_TIMES.includes(d.startMin) ? START_TIMES : [...START_TIMES, d.startMin].sort((a, b) => a - b)), [d.startMin])
   const endMin = d.startMin + d.durationMin
   const field = 'flex h-10 items-center rounded-[10px] border px-3 text-sm transition-colors'
   const fieldStyle = (on: boolean) => ({ borderColor: on ? 'var(--color-calendar)' : '#33404c', background: 'var(--color-surface)', boxShadow: on ? '0 0 0 3px rgba(111,168,255,.2)' : undefined })
-  const toggle = (p: Picker) => setPicker((x) => (x === p ? null : p))
+  const toggle = (p: Picker) => { setTyped(null); setPicker((x) => (x === p ? null : p)) }
+  /** Set the start (the length stays) or the end (the length changes; before the start = the next day) */
+  const setTime = (which: 'start' | 'end', min: number) => {
+    const m = ((min % 1440) + 1440) % 1440
+    setAutoTime(false)
+    if (which === 'start') set({ startMin: m })
+    else setD((x) => { let dur = m - x.startMin; if (dur <= 0) dur += 1440; return { ...x, durationMin: dur } })
+  }
+  const openTime = (which: 'start' | 'end') => { if (picker !== which) { setTyped(null); setPicker(which) } }
+  const typeTime = (which: 'start' | 'end', text: string) => {
+    setPicker(which)
+    setTyped(text)
+    const m = parseTime(text)
+    if (m !== null) setTime(which, m)
+  }
+  const pickDate = (v: string) => {
+    // Still the suggested time: suggest again for the new day (9 AM, or the next hour today)
+    set({ date: v, endDate: d.endDate < v ? v : d.endDate, ...(autoTime ? { startMin: suggestedStart(fromYmd(v)) } : {}) })
+    setPicker(null)
+  }
+  const typing = typed !== null && typed.trim() !== ''
+  const parsedTyped = typing ? parseTime(typed!) : null
+  const timeReadout = (which: 'start' | 'end') => typing
+    ? (parsedTyped === null ? 'Not a time yet — try 1030a, 2:15 pm or 14:00' : `= ${minLabel(parsedTyped)}`)
+    : which === 'start' ? `Starts ${minLabel(d.startMin)} · ends ${minLabel(endMin)}` : `Ends ${minLabel(endMin)} · ${lengthLabel(d.durationMin)} long`
   const cals = calendars
 
   return (
@@ -217,14 +337,15 @@ export function EventEditor({ mode, initial, calendars, repeating, error, onSave
             <div className="flex min-h-[52px] items-center gap-3.5 border-b border-edge">
               <Clock size={19} className="shrink-0 text-ink-dim" />
               <span className="flex-1 text-sm">All day</span>
-              <Switch on={d.allDay} onChange={(v) => { set({ allDay: v, endDate: d.date }); setPicker(null) }} label="All day" color="var(--color-calendar)" />
+              <Switch on={d.allDay} onChange={(v) => { set({ allDay: v, endDate: d.date }); setPicker(null); setTyped(null) }} label="All day" color="var(--color-calendar)" />
             </div>
 
             <div className="flex min-h-[56px] flex-wrap items-center gap-2 border-b border-edge py-2 pl-[33px]">
               <button type="button" className={field} style={fieldStyle(picker === 'date')} onClick={() => toggle('date')} aria-expanded={picker === 'date'}>
                 {dateLabel(d.date)}
               </button>
-              <span className="flex-1" />
+              {/* The times stay together (on a phone they wrap to their own line as a pair) */}
+              <div className="ml-auto flex items-center gap-2">
               {d.allDay ? (
                 <>
                   <span className="text-xs text-ink-dim">through</span>
@@ -234,24 +355,23 @@ export function EventEditor({ mode, initial, calendars, repeating, error, onSave
                 </>
               ) : (
                 <>
-                  <button type="button" className={`${field} font-mono text-[13px]`} style={fieldStyle(picker === 'time')} onClick={() => toggle('time')} aria-expanded={picker === 'time'} aria-label={`Starts ${minLabel(d.startMin)}`}>
-                    {minLabel(d.startMin)}
-                  </button>
+                  <TimeBox label="Starts" value={d.startMin} active={picker === 'start'} draft={picker === 'start' ? typed : null}
+                    onOpen={() => openTime('start')} onType={(t) => typeTime('start', t)} onDone={() => setTyped(null)} />
                   <span className="text-ink-dim">–</span>
-                  <button type="button" className={`${field} font-mono text-[13px]`} style={fieldStyle(false)} onClick={() => toggle('time')} aria-label={`Ends ${minLabel(endMin)}`}>
-                    {minLabel(endMin)}{endMin >= 1440 && <span className="ml-1 font-body text-[11px] text-ink-dim">+1 day</span>}
-                  </button>
+                  <TimeBox label="Ends" value={endMin} active={picker === 'end'} draft={picker === 'end' ? typed : null}
+                    onOpen={() => openTime('end')} onType={(t) => typeTime('end', t)} onDone={() => setTyped(null)} />
+                  {endMin >= 1440 && <span className="text-[11px] text-ink-dim">+1 day</span>}
                 </>
               )}
+              </div>
             </div>
 
-            {picker === 'date' && <div className="border-b border-edge py-3 pl-[33px]"><MiniMonth value={d.date} onPick={(v) => { set({ date: v, endDate: d.endDate < v ? v : d.endDate }); setPicker(null) }} /></div>}
+            {picker === 'date' && <div className="border-b border-edge py-3 pl-[33px]"><MiniMonth value={d.date} onPick={pickDate} /></div>}
             {picker === 'end-date' && <div className="border-b border-edge py-3 pl-[33px]"><MiniMonth value={d.endDate < d.date ? d.date : d.endDate} onPick={(v) => { set({ endDate: v < d.date ? d.date : v }); setPicker(null) }} /></div>}
-            {picker === 'time' && !d.allDay && (
-              <div className="flex flex-col gap-3 border-b border-edge py-3 pl-[33px]">
-                <ChipRow label="Start" items={starts} value={d.startMin} onPick={(v) => set({ startMin: v })} text={(v) => { const t = minLabel(v); return t.replace(' AM', 'a').replace(' PM', 'p') }} />
-                <ChipRow label="Length" items={lengths} value={d.durationMin} onPick={(v) => set({ durationMin: v })} text={lengthLabel} />
-              </div>
+            {(picker === 'start' || picker === 'end') && !d.allDay && (
+              <TimePicker title={picker === 'start' ? 'Start time' : 'End time'} value={picker === 'start' ? d.startMin : endMin}
+                readout={timeReadout(picker)} readoutTone={typing ? (parsedTyped === null ? 'bad' : 'good') : 'dim'}
+                onPick={(m) => { setTyped(null); setTime(picker, m) }} onDone={() => { setTyped(null); setPicker(null) }} />
             )}
 
             {repeating && (

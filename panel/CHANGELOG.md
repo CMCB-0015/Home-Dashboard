@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.0
+- Calendar: **type the time straight into the start and end boxes** — "1030a", "10:30 am", "2:15p", "14:00", "9" all work (without AM/PM, 1–6 means afternoon). The line above the picker shows what it understood, or "Not a time yet" in amber; leaving the box keeps the last good time
+- Calendar: **new time picker** under the times replaces the sliding chips (which only showed a couple of hours): every hour, every 5 minutes and AM / PM on screen at once. An hour button picks whichever AM/PM is closer (from 11:30 AM, "12" is noon). Changing the start keeps the length; setting the end changes the length (an end before the start = the next day, "+1 day")
+- Calendar: on the tablet the first tap on a time only opens the picker (no keyboard covering it); tap the box again for the keyboard. With a mouse or trackpad, just type
+- Calendar: a new event's suggested time follows the day — changing the day while the time is untouched resets it to 9 AM (fixes events added at night starting at 10 PM)
+- Weather: the card is **collapsed** by default to its top row (temperature with high / low, condition, feels-like, sunrise → sunset, Radar). If rain is coming, a chip says when ("Rain Sat · 80%", 40% or more)
+- Weather: **drag the bar along the bottom** of the card down to expand to the full card, up to collapse (one snap stop each way; a quarter of the way is enough), or tap it. Remembered on each screen
+- The shopping list moves down instead of being covered: it takes the rest of the column and scrolls inside itself. Opening a day's details or the radar opens the card while they show
+
 ## 1.6.1
 - Radar moves more smoothly: each 5-minute frame now **crossfades** into the next (about a third of a second) instead of cutting, so storms read as moving
 - Radar **loads every frame first** ("Loading radar · 8 of 12") and only then starts playing, so rain no longer pops in mid-loop. Zooming or moving the map waits for the new pictures the same way; if a frame is slow, it plays anyway after 10 seconds
