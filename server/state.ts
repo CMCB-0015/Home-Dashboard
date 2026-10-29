@@ -17,6 +17,7 @@ import { refreshFavorites, sonosState } from './sonos.ts'
 import { calendarEvents, calendarError, calendarList, calendarRange, refreshCalendar } from './calendar.ts'
 import { refreshSports, sportsEvents } from './sports.ts'
 import { teslaState } from './tesla.ts'
+import { onTeslaMapChange } from './teslaMap.ts'
 import { gcalStatus } from './gcal.ts'
 import { env } from './env.ts'
 import { vacuumState, vacuumAlerts } from './vacuum.ts'
@@ -24,6 +25,7 @@ import { vacuumState, vacuumAlerts } from './vacuum.ts'
 let weather: Weather | null = null
 
 export function startBackgroundRefresh(changed: () => void) {
+  onTeslaMapChange(changed)
   const loadWeather = async () => {
     try { weather = await getWeather(); changed() } catch (e) { console.warn('[weather]', e instanceof Error ? e.message : e) }
   }

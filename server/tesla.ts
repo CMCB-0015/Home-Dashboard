@@ -11,6 +11,7 @@
 import type { Tesla } from '../src/types.ts'
 import { HOME } from '../src/config/home.ts'
 import { ha, type HAState } from './ha.ts'
+import { currentTrail, recordTrail, routeHome, routeNotes, trailHeading } from './teslaMap.ts'
 
 const PLATFORMS = ['teslemetry', 'tesla_fleet', 'tessie']
 
@@ -49,6 +50,8 @@ const FIND = {
   destination: ['sensor', /_destination$/],
   minutesToArrival: ['sensor', /_minutes_to_arrival$|_time_to_arrival$/],
   milesToArrival: ['sensor', /_distance_to_arrival$|_miles_to_arrival$/],
+  trafficDelay: ['sensor', /_traffic_delay$|_traffic_minutes_delay$/],
+  heading: ['sensor', /_gps_heading$|_heading$/],
   shift: ['sensor', /_shift_state$/],
   speed: ['sensor', /_speed$/],
   status: ['binary_sensor', /_status$|_online$/],
@@ -160,11 +163,20 @@ export function teslaState(): Tesla | null {
       if (minutes !== null) arriveAt = new Date(Date.now() + minutes * 60_000).toISOString()
     }
     const zone = e.location?.state
+    const delay = num(e.trafficDelay)
     enRouteHome = {
       minutes, arriveAt, miles: miles(e.milesToArrival),
+      trafficDelayMin: delay !== null && delay >= 1 ? Math.round(delay) : null,
       near: zone && !['not_home', 'home', 'unknown', 'unavailable'].includes(zone) ? zone : null,
     }
   }
+
+  // Live map: this drive's trail, heading, and Google's route home while navigating home
+  recordTrail(loc, driving)
+  const reported = num(e.heading)
+  const heading = reported !== null ? reported : driving ? trailHeading(loc) : null
+  const dest = coords(e.route) ?? coords(e.destination)
+  const routeAhead = enRouteHome ? routeHome(loc, dest ?? home()) : routeHome(null, null)
 
   const steering = e.wheelSelect ? (ok(e.wheelSelect) ? e.wheelSelect.state !== 'off' : null) : on(e.wheelSwitch)
   const sched = e.scheduleTime || e.schedulePending
@@ -229,12 +241,16 @@ export function teslaState(): Tesla | null {
     speedMph: num(e.speed) === null ? null : Math.round(num(e.speed)!),
     enRouteHome,
     location: loc,
+    heading: heading === null ? null : Math.round(heading),
+    trail: driving ? currentTrail(loc) : null,
+    routeAhead,
+    home: home(),
     updatedAt: new Date(updated.length ? Math.max(...updated) : Date.now()).toISOString(),
   }
 }
 
 /** For /api/setup-check: what was found, and what's missing */
-export function teslaNotes(): { found: Record<string, string>; missing: string[] } {
+export function teslaNotes(): { found: Record<string, string>; missing: string[]; map?: Record<string, string> } {
   const e = resolve()
   if (!e) return { found: {}, missing: ['No Teslemetry climate entity found in Home Assistant'] }
   const found: Record<string, string> = {}
@@ -242,7 +258,9 @@ export function teslaNotes(): { found: Record<string, string>; missing: string[]
   const wanted: Key[] = ['battery', 'range', 'charging', 'chargeLimit', 'chargeAmps', 'chargeSwitch', 'port', 'lock', 'inside', 'outside', 'heatDriver', 'heatPassenger', 'frunk', 'trunk', 'location', 'route']
   const missing: string[] = wanted.filter((k) => !e[k])
   if (!e.route && !e.destination) missing.push('The Destination entity is off — enable it in Home Assistant for "en route home"')
-  return { found, missing }
+  if (!e.heading) missing.push('The GPS heading entity is off — enable it in Home Assistant so the map arrow points the way the car faces (until then it follows the drive)')
+  if (!e.trafficDelay) missing.push('The Traffic delay entity is off — enable it in Home Assistant for "+4 min traffic" on the map')
+  return { found, missing, map: routeNotes() }
 }
 
 // ── Commands ─────────────────────────────────────────────────────────────

@@ -10,7 +10,7 @@ phones or computer (home Wi-Fi only) and bookmark it.
 - **weather_lat / weather_lon / weather_location_name** — forecast location.
 - **brief_feed_key** — the same value as `PANEL_FEED_KEY` in The Brief's Netlify settings. Turns on sports chips in the status bar.
 - **google_client_id / google_client_secret** — Panel's own Google sign-in key, for adding, editing and deleting calendar events (see Calendar below).
-- **google_maps_key** — a Google Maps key for the weather radar (see Weather below).
+- **google_maps_key** — a Google Maps key for the weather radar and the Tesla map (see Weather and Tesla map below).
 
 Click **Save**, then **Restart** the app after changing settings.
 
@@ -53,6 +53,30 @@ control shows dimmed on the Climate panel). The "en route home" row needs the
 Teslemetry **Route** or **Destination** entity enabled (Settings → Devices →
 WillaWilla → entities). The dashboard never wakes the car just to refresh; the first
 button press wakes it (10–30 seconds).
+
+### Tesla map
+
+With **google_maps_key** set, the "en route home" row on the card becomes a live map strip
+(the car, home and the way home, with the minutes left), and the Vehicles page gets a
+**Location** map: the car with an arrow for the way it's heading, home, a dotted trail of
+this drive, and — while navigating home — Google's route home in blue, with the arrival time
+and any traffic delay. Drag or zoom to look around; the arrow button follows the car again.
+The card only shows a map while the car is navigating home; the Vehicles page always shows
+where the car is.
+
+One-time setup (same Google Cloud project and key as the radar):
+1. Cloud Console → APIs & Services → Library → **Routes API** → **Enable**.
+2. Credentials → the Maps key → **API restrictions**: add **Routes API** next to Maps JavaScript
+   API → Save. Keep the website restriction (`http://192.168.86.207:8099/*`): Panel sends that
+   address with its route requests.
+3. Home Assistant → Settings → Devices → WillaWilla → enable the **GPS heading** and
+   **Traffic delay** entities (both are off by default). Without them the arrow follows the
+   drive and the traffic line is hidden.
+
+Panel asks Google for the route at most once a minute, and only while the car is navigating
+home (the free monthly allowance covers this many times over). `/api/setup-check` →
+`tesla.map` says whether the route requests work, and why not if Google refuses. If Panel is
+opened at a different address, set `PANEL_URL` to it.
 
 ## Vacuum card and Map & rooms
 

@@ -262,8 +262,16 @@ export interface Tesla {
   driving: boolean
   speedMph: number | null
   /** Only when the navigation destination is Home — never a guess */
-  enRouteHome: { minutes: number | null; miles: number | null; arriveAt: string | null; near: string | null } | null
+  enRouteHome: { minutes: number | null; miles: number | null; arriveAt: string | null; near: string | null; trafficDelayMin?: number | null } | null
   location: { lat: number; lon: number } | null
+  /** Compass heading of the car (0 = north): reported by the car, or worked out from the drive */
+  heading?: number | null
+  /** Where the car has been on this drive (while driving) */
+  trail?: { lat: number; lon: number }[] | null
+  /** Google's route from the car to home, while navigating home (needs the Routes API on the Maps key) */
+  routeAhead?: { lat: number; lon: number }[] | null
+  /** Home's position (Home Assistant's home zone) */
+  home?: { lat: number; lon: number } | null
   updatedAt: string
 }
 

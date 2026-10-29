@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.0
+- Tesla: **live map while driving home** — the card's "en route home" row becomes a map strip with the car, home and the route, plus the minutes left; the arrival time and distance sit under it
+- Tesla: the Vehicles page gets a **Location** map — the car with an arrow for its heading, home, a dotted trail of this drive, and Google's route home in blue while navigating home, with "18 min · Home at 5:42 PM · 12 mi" and any traffic delay. Drag and zoom to look around; the arrow button follows the car again. Parked, it shows where the car is
+- The route comes from Google's **Routes API** using the same Maps key as the radar, at most once a minute while navigating home. One-time setup: turn on the Routes API and allow it on the key (DOCS → Tesla map). Until then the map shows the trail only
+- Uses Teslemetry's **GPS heading** and **Traffic delay** entities when they're enabled in Home Assistant (both off by default); the Status list moves under the Tesla card on the Vehicles page
+
 ## 1.7.0
 - Calendar: **type the time straight into the start and end boxes** — "1030a", "10:30 am", "2:15p", "14:00", "9" all work (without AM/PM, 1–6 means afternoon). The line above the picker shows what it understood, or "Not a time yet" in amber; leaving the box keeps the last good time
 - Calendar: **new time picker** under the times replaces the sliding chips (which only showed a couple of hours): every hour, every 5 minutes and AM / PM on screen at once. An hour button picks whichever AM/PM is closer (from 11:30 AM, "12" is noon). Changing the start keeps the length; setting the end changes the length (an end before the start = the next day, "+1 day")

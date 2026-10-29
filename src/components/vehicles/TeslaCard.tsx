@@ -6,6 +6,7 @@ import { Card } from '../Card'
 import { ClimateSheet } from './ClimateSheet'
 import { ChargingSheet } from './ChargingSheet'
 import { CarScene, type SceneMode } from './CarScene'
+import { LiveCarMap } from './LiveCarMap'
 import { ACC, AMBER, BLUE, DIM, GREEN, RED, clock, isCharging, tint, useTeslaActions } from './useTesla'
 import type { Tesla } from '../../types'
 
@@ -145,7 +146,7 @@ export function TeslaCard({ className = 'h-full' }: { className?: string }) {
           <CarScene mode={scene} compact={!!e} />
         </Link>
 
-        {e && <EnRouteRow e={e} />}
+        {e && <EnRoute t={t} e={e} mapsKey={data.mapsKey ?? null} />}
 
         <div className="h-px bg-edge" />
 
@@ -183,6 +184,32 @@ export function TeslaCard({ className = 'h-full' }: { className?: string }) {
       {panel === 'climate' && <ClimateSheet t={t} act={act} onClose={() => setPanel(null)} />}
       {panel === 'charging' && <ChargingSheet t={t} act={act} onClose={() => setPanel(null)} />}
     </>
+  )
+}
+
+/**
+ * "En route home": a live map strip (car, home, Google's route) with the
+ * minutes left, then one line with the arrival time and distance. Without a
+ * Maps key — or if Google refuses it — the small drawn icon row instead.
+ */
+function EnRoute({ t, e, mapsKey }: { t: Tesla; e: NonNullable<Tesla['enRouteHome']>; mapsKey: string | null }) {
+  const [failed, setFailed] = useState(false)
+  if (!mapsKey || failed) return <EnRouteRow e={e} />
+  const at = e.arriveAt ? clock(e.arriveAt) : null
+  const rest = [at ? `Home ${at}` : null, e.miles !== null ? `${e.miles} mi` : null].filter(Boolean).join(' · ')
+  return (
+    <div className="mb-3 flex flex-col overflow-hidden rounded-xl border border-edge bg-surface-raised">
+      <div className="relative h-24">
+        <LiveCarMap t={t} mapsKey={mapsKey} mode="card" onError={() => setFailed(true)} className="absolute inset-0" />
+        {e.minutes !== null && (
+          <span className="absolute right-2 top-2 rounded-full bg-bg/85 px-2 py-0.5 font-mono text-xs font-semibold">{e.minutes} min</span>
+        )}
+      </div>
+      <div className="flex items-baseline gap-2 px-3 py-2">
+        <span className="truncate text-sm font-semibold">{HOME.tesla.driver} · en route home</span>
+        {rest && <span className="ml-auto shrink-0 font-mono text-[12.5px] font-medium">{rest}</span>}
+      </div>
+    </div>
   )
 }
 
