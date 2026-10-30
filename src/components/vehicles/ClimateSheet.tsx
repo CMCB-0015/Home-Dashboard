@@ -20,8 +20,40 @@ const Chevron = ({ dir }: { dir: 'l' | 'r' }) => (
 )
 
 const levelName = (v: number) => (v === 0 ? 'off' : `${['low', 'medium', 'high'][Math.abs(v) - 1]} ${v > 0 ? 'heat' : 'cooling'}`)
-/** Front seats: off → heat 1–3 → cool 1–3 → off (cooling only if the car has it) */
-const nextFront = (v: number, cool: boolean) => (v >= 0 && v < 3 ? v + 1 : v === 3 ? (cool ? -1 : 0) : v === -3 ? 0 : v - 1)
+
+/** How far the cabin must be from the set point before it alone decides heat or cool (°F) */
+const CABIN_BAND = 3
+/** Close to the set point, outside at or above this means cool (°F) */
+const OUTSIDE_COOL_AT = 75
+
+/**
+ * Which way a front seat's first tap goes: cool when the cabin is warmer than
+ * the climate set point, heat when it's cooler. Within a few degrees of the set
+ * point the outside temperature decides. Never uses Tesla's Auto seat climate.
+ */
+export function seatStartMode(t: Tesla, target: number): 'heat' | 'cool' {
+  if (!t.coolingSeats) return 'heat'
+  if (t.insideF !== null) {
+    const diff = t.insideF - target
+    if (diff >= CABIN_BAND) return 'cool'
+    if (diff <= -CABIN_BAND) return 'heat'
+  }
+  if (t.outsideF !== null) return t.outsideF >= OUTSIDE_COOL_AT ? 'cool' : 'heat'
+  return t.insideF !== null && t.insideF > target ? 'cool' : 'heat'
+}
+
+/**
+ * Front seats, always at full: off → full in the starting mode → full in the
+ * other mode → off (heat only if the car has no seat cooling).
+ */
+export function nextFront(v: number, start: 'heat' | 'cool', cool: boolean): number {
+  const first = start === 'cool' ? -3 : 3
+  if (v === 0) return first
+  const inFirst = Math.sign(v) === Math.sign(first)
+  if (!inFirst) return 0
+  if (!cool) return 0
+  return -first
+}
 
 /**
  * Climate panel (opens from the fan on the Tesla card while climate is on):
@@ -41,7 +73,7 @@ export function ClimateSheet({ t, act, onClose }: { t: Tesla; act: TeslaAct; onC
   const heating = t.insideF === null || target >= t.insideF
   const status = on ? `${heating ? 'Heating' : 'Cooling'} to ${target}°` : 'Climate off'
 
-  type Control = { key: string; label: string; icon: ReactNode; active: boolean; color: string; bars: number | null; aria: string; available: boolean; tap: () => void }
+  type Control = { key: string; label: string; icon: ReactNode; active: boolean; color: string; bars: number | null; aria: string; available: boolean; tap: () => void; hint?: string }
   const toggle = (key: 'frontDefrost' | 'rearDefrost' | 'wheel', action: string, label: string, icon: ReactNode, color: string): Control => {
     const v = t[key]
     return {
@@ -50,12 +82,18 @@ export function ClimateSheet({ t, act, onClose }: { t: Tesla; act: TeslaAct; onC
       tap: () => void act(action, { value: !v }, { [key]: !v }),
     }
   }
+  const start = seatStartMode(t, target)
   const seat = (key: 'driver' | 'passenger' | 'rear', label: string, icon: ReactNode): Control => {
     const v = t[key]
-    const next = key === 'rear' ? (v + 1) % 4 : nextFront(v, t.coolingSeats)
+    const rear = key === 'rear'
+    // Rear seats: off ↔ full heat. Front seats: see nextFront
+    const next = rear ? (v === 0 ? 3 : 0) : nextFront(v, start, t.coolingSeats)
+    // While off, a faint ring in the color the next tap will start with
+    const hintColor = v === 0 ? (next < 0 ? BLUE : RED) : undefined
+    const nextWord = next === 0 ? 'turns it off' : next < 0 ? 'cools' : 'heats'
     return {
-      key, label, icon, active: v !== 0, color: v < 0 ? BLUE : RED, bars: v, available: true,
-      aria: `${label}: ${levelName(v)}`,
+      key, label, icon, active: v !== 0, color: v < 0 ? BLUE : RED, bars: v, available: true, hint: hintColor,
+      aria: `${label}: ${levelName(v)} · next tap ${nextWord}`,
       tap: () => void act('seat', { seat: key, level: next }, { [key]: next }),
     }
   }
@@ -93,7 +131,12 @@ export function ClimateSheet({ t, act, onClose }: { t: Tesla; act: TeslaAct; onC
           <button key={c.key} onClick={c.tap} disabled={!c.available} aria-label={c.aria}
             className="flex flex-col items-center gap-2.5 py-1 disabled:opacity-35">
             <span className="flex h-[72px] w-[72px] items-center justify-center rounded-full transition-colors"
-              style={{ background: c.active ? tint(c.color, 0.22) : IDLE_BG, color: c.active ? c.color : '#c9d2db' }}>
+              style={{
+                background: c.active ? tint(c.color, 0.22) : IDLE_BG,
+                color: c.active ? c.color : c.hint ? tint(c.hint, 0.55) : '#c9d2db',
+                // Off, but shows which way the next tap goes: a thin faint ring, no fill, bars stay grey
+                boxShadow: !c.active && c.hint ? `inset 0 0 0 1.5px ${tint(c.hint, 0.4)}` : undefined,
+              }}>
               {c.icon}
             </span>
             <span className="text-center text-[15px] leading-tight text-[#c9d2db]">{c.label}</span>
