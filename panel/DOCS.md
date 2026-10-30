@@ -141,7 +141,8 @@ collapsed row warns of rain (40% or more) later today or in the next 6 days.
 
 The card tints with the sky (warm by day, indigo at night, blue in rain), shows sunrise →
 sunset as an arc, a temperature curve over rain-chance bars for the next 12 hours, and the
-next 6 days as low-to-high bars. Tap a day (or today's temperature) for that day: rain total
+next 6 days (today first) as low-to-high bars with the rain chance and inches, and under them an
+hour-by-hour rain plot lined up with the days (1.8.1). Tap a day (or today's temperature) for that day: rain total
 and peak chance, wind and gusts, UV, humidity range, dew point, sunrise/sunset and a 24-hour
 chart with inches of rain per 3 hours. Data: Open-Meteo, every 10 minutes.
 

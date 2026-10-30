@@ -4,7 +4,7 @@ import { useHome } from '../../lib/useHome'
 import { relativeTime } from '../../lib/format'
 import { Card } from '../Card'
 import { WeatherIcon } from '../WeatherIcon'
-import { SkyChart, SunArc } from '../weather/SkyChart'
+import { SkyChart, SunArc, useWidth } from '../weather/SkyChart'
 import { RadarView } from '../weather/RadarView'
 import type { Weather, WeatherHour } from '../../types'
 
@@ -49,16 +49,70 @@ function RangeBars({ days, onPick }: { days: Weather['daily']; onPick: (i: numbe
       {days.map((d, i) => (
         <button key={d.date} onClick={() => onPick(i)} aria-label={`${dayName(d.date, true)}: high ${d.highF}°, low ${d.lowF}°${d.rainChancePct >= 20 ? `, ${d.rainChancePct}% rain` : ''}. Tap for details`}
           className="flex flex-col items-center gap-[3px] rounded-xl pb-1 pt-1.5 transition-colors hover:bg-white/[0.04] active:bg-white/[0.06]">
-          <span className="text-xs font-semibold text-ink-dim">{dayName(d.date)}</span>
+          <span className="text-xs font-semibold" style={{ color: i === 0 ? 'var(--color-ink)' : 'var(--color-ink-dim)' }}>{i === 0 ? 'Today' : dayName(d.date)}</span>
           <WeatherIcon kind={d.icon} size={24} />
           <span className="relative h-[82px] w-full">
             <span className="absolute inset-x-0 text-center font-display text-[13px] font-bold text-temp-high" style={{ top: y(d.highF) - 17 }}>{d.highF}°</span>
             <span className="absolute left-1/2 w-1.5 -translate-x-1/2 rounded-full" style={{ top: y(d.highF), height: Math.max(y(d.lowF) - y(d.highF), 6), background: 'linear-gradient(180deg,#ff6b5e,#f2c14e 50%,#5aa2ff)' }} />
             <span className="absolute inset-x-0 text-center font-display text-[13px] font-bold text-temp-low" style={{ top: y(d.lowF) + 1 }}>{d.lowF}°</span>
           </span>
-          <span className="h-[13px] font-mono text-[10.5px] text-[#7db6ff]">{d.rainChancePct >= 20 ? `${d.rainChancePct}%` : ''}</span>
+          <span className="h-[13px] font-mono text-[10.5px] text-[#7db6ff]" style={{ fontWeight: d.rainChancePct >= 60 ? 600 : 400 }}>{d.rainChancePct >= 20 ? `${d.rainChancePct}%` : ''}</span>
+          <span className="h-[13px] font-mono text-[10px] text-[#a9cdfa]">{(d.rainIn ?? 0) >= 0.01 ? `${d.rainIn!.toFixed(2)} in` : ''}</span>
         </button>
       ))}
+    </div>
+  )
+}
+
+/**
+ * Chance of rain, hour by hour, for the same days as the columns above it and
+ * lined up under them (like a weather app's rain plot). Hours already gone
+ * today are greyed, with an amber line at now.
+ */
+function RainRibbon({ days, hours, now }: { days: Weather['daily']; hours: WeatherHour[]; now: number }) {
+  const [ref, W] = useWidth<HTMLDivElement>()
+  const H = 60, top = 6
+  const cols = days.map((d) => hoursOn(hours, d.date))
+  if (!cols.some((c) => c.length)) return null
+  const colW = W / days.length
+  // Each hour's spot: its day's column, then its share of that day (handles 23/25-hour days)
+  const pts: [number, number][] = []
+  let nowX: number | null = null
+  cols.forEach((list, k) => list.forEach((h, j) => {
+    const x = colW * (k + (j + 0.5) / list.length)
+    pts.push([x, top + (H - top) * (1 - h.rainChancePct / 100)])
+    const t = Date.parse(h.time)
+    if (nowX === null && now >= t && now < t + 3_600_000) nowX = colW * (k + (j + (now - t) / 3_600_000) / list.length)
+  }))
+  const f = (v: number) => v.toFixed(1)
+  const line = pts.length ? `M0 ${f(pts[0][1])} L${pts.map((p) => `${f(p[0])} ${f(p[1])}`).join(' L')} L${f(W)} ${f(pts[pts.length - 1][1])}` : ''
+  const area = `${line} L${f(W)} ${H} L0 ${H} Z`
+  const peak = days.map((d, k) => ({ d, p: Math.max(0, ...cols[k].map((h) => h.rainChancePct)) })).sort((a, b) => b.p - a.p)[0]
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between text-[10.5px] font-semibold uppercase tracking-wider text-ink-dim">
+        <span>Chance of rain · hour by hour</span><span className="font-mono font-normal normal-case tracking-normal text-ink-faint">0–100%</span>
+      </div>
+      <div ref={ref} className="relative h-[60px] w-full" role="img"
+        aria-label={peak && peak.p >= 20 ? `Chance of rain hour by hour; highest ${peak.p}% on ${dayName(peak.d.date, true)}` : 'Chance of rain hour by hour; little or none this week'}>
+        {W > 0 && (
+          <svg width={W} height={H} className="absolute left-0 top-0" aria-hidden>
+            <defs>
+              <linearGradient id="rain-ribbon" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#5aa2ff" stopOpacity={0.8} />
+                <stop offset="1" stopColor="#5aa2ff" stopOpacity={0.2} />
+              </linearGradient>
+            </defs>
+            <rect x={0} y={0} width={W} height={H} rx={8} fill="rgba(255,255,255,.025)" />
+            {nowX !== null && <rect x={0} y={0} width={nowX} height={H} fill="rgba(255,255,255,.04)" />}
+            <line x1={0} y1={top + (H - top) / 2} x2={W} y2={top + (H - top) / 2} stroke="rgba(255,255,255,.08)" strokeDasharray="3 4" />
+            <path d={area} fill="url(#rain-ribbon)" />
+            <path d={line} fill="none" stroke="#7db6ff" strokeWidth={1.5} />
+            {days.slice(1).map((d, k) => <line key={d.date} x1={colW * (k + 1)} y1={0} x2={colW * (k + 1)} y2={H} stroke="rgba(255,255,255,.1)" />)}
+            {nowX !== null && <line x1={nowX} y1={0} x2={nowX} y2={H} stroke="var(--color-weather)" strokeWidth={1.5} />}
+          </svg>
+        )}
+      </div>
     </div>
   )
 }
@@ -227,7 +281,8 @@ export function WeatherCard() {
   const tone = skyTone(c.icon, isDay)
   const startIdx = Math.max(0, hours.findIndex((h) => Date.parse(h.time) + 3_600_000 > now))
   const next12 = hours.slice(startIdx, startIdx + 12)
-  const days = w.daily.slice(1, 7)
+  // Today first, like a weather app; the rain ribbon lines up under these columns
+  const days = w.daily.slice(0, 6)
   const openDay = dayIdx === null ? null : w.daily[dayIdx]
   const radarBtn = (
     <button onClick={() => setRadar(true)} aria-label="Show radar"
@@ -287,7 +342,8 @@ export function WeatherCard() {
           {c.aqi !== null && <span className={chip}>Air <b className={val}>{c.aqi}</b> {aqiLabel(c.aqi)}</span>}
         </div>
         <SkyChart hours={next12} color={tone.color} firstLabel="Now" />
-        {days.length > 0 && <RangeBars days={days} onPick={(i) => setDayIdx(i + 1)} />}
+        {days.length > 0 && <RangeBars days={days} onPick={(i) => setDayIdx(i)} />}
+        {days.length > 0 && <RainRibbon days={days} hours={hours} now={now} />}
         </div>
       </div>
     </Card>

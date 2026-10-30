@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.1
+- Weather: **hour-by-hour rain plot** under the day columns (opened card): chance of rain shaded in blue (0–100%), each day's stretch of hours right under its column, hours already gone today greyed with an amber line at now
+- Weather: the day columns now **start with Today** (like a weather app) and show the expected **inches of rain** under the chance
+- The shopping list keeps at least its title and add box when the weather card is opened; on a short screen the page scrolls a little instead of hiding the list
+
 ## 1.8.0
 - Tesla: **live map while driving home** — the card's "en route home" row becomes a map strip with the car, home and the route, plus the minutes left; the arrival time and distance sit under it
 - Tesla: the Vehicles page gets a **Location** map — the car with an arrow for its heading, home, a dotted trail of this drive, and Google's route home in blue while navigating home, with "18 min · Home at 5:42 PM · 12 mi" and any traffic delay. Drag and zoom to look around; the arrow button follows the car again. Parked, it shows where the car is
