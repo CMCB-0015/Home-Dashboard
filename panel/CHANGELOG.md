@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.2
+- Tesla: seat buttons go straight to full — one tap = full heat or cooling, a second tap = full in the other mode, a third = off (rear seats: on/off at full heat). The three bars still show the level
+- Tesla: the first tap picks cooling when the cabin is warmer than the climate set point and heating when it's cooler (outside temperature decides when it's within 3°); while a seat is off, a faint red or blue ring shows which way the next tap goes. Tesla's Auto seat climate is never used
+
 ## 1.8.1
 - Weather: **hour-by-hour rain plot** under the day columns (opened card): chance of rain shaded in blue (0–100%), each day's stretch of hours right under its column, hours already gone today greyed with an amber line at now
 - Weather: the day columns now **start with Today** (like a weather app) and show the expected **inches of rain** under the chance
