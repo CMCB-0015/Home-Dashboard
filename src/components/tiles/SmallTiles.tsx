@@ -1,44 +1,11 @@
-import { Minus, Plus, Play, Pause, Square, SkipForward, Check } from 'lucide-react'
+import { Play, Pause, Square, SkipForward, Check } from 'lucide-react'
 import { useHome } from '../../lib/useHome'
 import { categories } from '../../lib/categories'
 import { clockTime } from '../../lib/format'
 import { QuickRunButton, ConfirmButton } from '../QuickRunButton'
 import { PAUSE_MINUTES } from '../../config/irrigation'
 import type { QuickRun, IrrigationZone } from '../../types'
-import { Card } from '../Card'
-import { Pill, RoundButton } from '../Buttons'
-import { Dial } from '../Gauges'
-import { actionText, canAdjust, nudge, targetText } from '../../lib/climate'
-
-const tile = 'h-full'
-
-// ── Climate ──────────────────────────────────────────────────────────────
-export function ClimateTile() {
-  const { data, update, send } = useHome()
-  const cfg = categories.climate
-  if (!data) return null
-  const t = data.thermostats[0]
-  if (!t) return null
-  const adjust = (delta: number) => {
-    update((s) => ({ ...s, thermostats: s.thermostats.map((x) => (x.id === t.id ? nudge(x, delta) : x)) }))
-    void send('climate/set', { deviceId: t.id, delta })
-  }
-  const adjustable = canAdjust(t)
-  return (
-    <Card className={tile} accent={cfg.color} title="Climate" category="climate" subtitle={`${t.humidityPct}% humidity`} to={cfg.path}
-      actions={
-        <div className="flex w-full items-center justify-between">
-          <RoundButton color={cfg.color} dim={cfg.dim} onClick={() => adjust(-1)} label="Lower target" disabled={!adjustable}><Minus size={14} /></RoundButton>
-          <span className="font-mono text-xs text-ink-dim">{targetText(t)}</span>
-          <RoundButton color={cfg.color} dim={cfg.dim} onClick={() => adjust(1)} label="Raise target" disabled={!adjustable}><Plus size={14} /></RoundButton>
-        </div>
-      }>
-      <div className="flex justify-center py-2">
-        <Dial value={((t.currentTempF - 55) / 30) * 100} color={cfg.color} label={`${t.currentTempF}°`} sublabel={actionText(t).toLowerCase()} />
-      </div>
-    </Card>
-  )
-}
+import { Pill } from '../Buttons'
 
 // ── Irrigation ───────────────────────────────────────────────────────────
 export function nextRunText(at: string): string {

@@ -6,6 +6,8 @@ import { ha, type HAState } from './ha.ts'
 const KNOWN: ThermostatMode[] = ['heat', 'cool', 'heat_cool', 'off']
 /** Order the mode buttons appear in */
 const ORDER: ThermostatMode[] = ['heat', 'cool', 'heat_cool', 'eco', 'off']
+/** Nest keeps Heat · Cool's low and high at least this far apart (°F) */
+const MIN_GAP = 3
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
 function thermostatStates(): HAState[] {
@@ -39,7 +41,7 @@ export function thermostats(): Thermostat[] {
   })
 }
 
-export async function setClimate(body: { deviceId?: string; delta?: number; targetTempF?: number; mode?: ThermostatMode }) {
+export async function setClimate(body: { deviceId?: string; delta?: number; targetTempF?: number; targetLowF?: number; targetHighF?: number; mode?: ThermostatMode }) {
   const s = body.deviceId ? ha.states.get(body.deviceId) : undefined
   if (!s || !s.entity_id.startsWith('climate.')) throw new Error("That thermostat isn't in Home Assistant")
   const id = [s.entity_id]
@@ -57,7 +59,14 @@ export async function setClimate(body: { deviceId?: string; delta?: number; targ
   const clamp = (t: number) => Math.max(50, Math.min(90, Math.round(t)))
   const delta = Number(body.delta) || 0
   if (s.state === 'heat_cool' && num(a.target_temp_low) !== null && num(a.target_temp_high) !== null) {
-    return ha.callService('climate', 'set_temperature', { target_temp_low: clamp(a.target_temp_low + delta), target_temp_high: clamp(a.target_temp_high + delta) }, id)
+    // The Halo dial sets one end of the range exactly; −/+ move both ends
+    let low = typeof body.targetLowF === 'number' ? clamp(body.targetLowF) : clamp(a.target_temp_low + delta)
+    let high = typeof body.targetHighF === 'number' ? clamp(body.targetHighF) : clamp(a.target_temp_high + delta)
+    if (high - low < MIN_GAP) {
+      if (typeof body.targetLowF === 'number' && typeof body.targetHighF !== 'number') low = high - MIN_GAP
+      else high = low + MIN_GAP
+    }
+    return ha.callService('climate', 'set_temperature', { target_temp_low: clamp(low), target_temp_high: clamp(high) }, id)
   }
   const target = typeof body.targetTempF === 'number' ? body.targetTempF : (num(a.temperature) ?? num(a.current_temperature) ?? 70) + delta
   return ha.callService('climate', 'set_temperature', { temperature: clamp(target) }, id)

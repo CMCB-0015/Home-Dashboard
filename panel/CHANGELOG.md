@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.10.0
+- Climate: **new "Halo" card** — a Nest-style dial: black glass face in a dark metal bezel with a thin ring of light (red heating, blue cooling, climate blue when holding). The big number is the target; "Inside" is the room. While heating or cooling the card takes the color (soft wash and top bar), like the Lights and Sonos cards
+- Climate: **turn the dial like a knob** to change the temperature — grab the bezel anywhere and rotate (clockwise = warmer, about 8° of turn per degree). It moves from where it already is, so touching the dial never jumps the target. The change goes to the Nest **once, when you let go** ("Set to 72° · release to send" while turning)
+- Climate: in Heat · Cool, turning moves whichever end you grabbed nearer (blue low dot, red high dot) and keeps them at least 3° apart
+- Climate: **tap the center of the dial** for the mode menu — Heat, Cool, Off. Heat · Cool and Eco are still on the Climate page. In Eco and Off the dial is locked
+- The −/+ buttons stay for one-degree nudges; arrow keys work on the dial too
+
 ## 1.9.0
 - Tesla: **frunk and trunk dots on the car picture** — a white ring dot that slowly breathes sits on the frunk and the trunk (parked or plugged in). Tap one to open it: it shows "Opening…", then an amber **"Trunk open" / "Frunk open"** pill once the car reports it, and the status line says so too
 - Tesla: **close the trunk** — tap the "Trunk open" pill and it closes and turns back into the dot. The frunk can only be closed by hand, so its pill is just a label ("The frunk closes by hand")
