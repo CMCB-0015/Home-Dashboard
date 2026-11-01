@@ -17,25 +17,63 @@ export const tint = (hex: string, a: number) => {
   return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`
 }
 
-export type TeslaAct = (action: string, extra?: Record<string, unknown>, change?: Partial<Tesla>) => Promise<boolean>
+/** How a command's progress is tracked: which button it belongs to, and how to tell it has happened */
+export interface ActOptions {
+  /** Which control is busy (e.g. 'trunk'), so it can show "Opening…" */
+  key?: string
+  /** True once the car reports the change — the action counts as done right then */
+  done?: (t: Tesla) => boolean
+}
+export type TeslaAct = (action: string, extra?: Record<string, unknown>, change?: Partial<Tesla>, opts?: ActOptions) => Promise<boolean>
+
+interface Pending { id: number; key?: string; done?: (t: Tesla) => boolean; asleep: boolean }
 
 /**
  * Sends Tesla commands. The screen changes right away (`change`), and goes
- * back if the command fails. A sleeping car wakes on the first command, which
- * takes 10–30 seconds — `waking` is true while that happens.
+ * back if the command fails. An action is finished as soon as the car reports
+ * the change (`done`) — over Teslemetry's live stream that's usually well
+ * before Tesla's server confirms the command — or when the command returns,
+ * whichever comes first (if the command returns before the new state, the
+ * button stays busy up to 8 s more, so the old state doesn't flash back). A sleeping car wakes on the first command (10–30 s):
+ * `waking` is true until the car reports it's awake or the action is done.
  */
 export function useTeslaActions() {
   const { data, update, send } = useHome()
-  const [pending, setPending] = useState(0)
-  const online = data?.tesla?.online ?? true
+  const [pending, setPending] = useState<Pending[]>([])
+  const seq = useRef(0)
+  const t = data?.tesla ?? null
+  const online = t?.online ?? true
+  const onlineRef = useRef(online)
+  onlineRef.current = online
+  const tRef = useRef(t)
+  tRef.current = t
 
-  const act: TeslaAct = useCallback(async (action, extra = {}, change) => {
+  // Finish actions the moment the car reports the change
+  useEffect(() => {
+    if (!t) return
+    setPending((ps) => {
+      const left = ps.filter((p) => !(p.done && p.done(t)))
+      return left.length === ps.length ? ps : left
+    })
+  }, [t])
+
+  const act: TeslaAct = useCallback(async (action, extra = {}, change, opts) => {
     if (change) update((s) => (s.tesla ? { ...s, tesla: { ...s.tesla, ...change } } : s))
-    setPending((n) => n + 1)
-    try { return await send('tesla/command', { action, ...extra }) } finally { setPending((n) => n - 1) }
+    const id = ++seq.current
+    setPending((ps) => [...ps, { id, key: opts?.key, done: opts?.done, asleep: !onlineRef.current }])
+    const drop = () => setPending((ps) => ps.filter((p) => p.id !== id))
+    let ok = false
+    try { ok = await send('tesla/command', { action, ...extra }); return ok } finally {
+      // Tesla said yes but the new state hasn't arrived yet: keep "Opening…"
+      // up a little longer rather than flash the old state, then let go.
+      const waitMore = ok && opts?.done && !(tRef.current && opts.done(tRef.current))
+      if (waitMore) setTimeout(drop, 8000)
+      else drop()
+    }
   }, [update, send])
 
-  return { act, waking: pending > 0 && !online }
+  const busy = useCallback((key: string) => pending.some((p) => p.key === key), [pending])
+  return { act, waking: !online && pending.some((p) => p.asleep), busy }
 }
 
 /** Waits until the value stops changing (arrow taps, slider drags), then sends once */

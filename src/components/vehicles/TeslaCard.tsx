@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useHome } from '../../lib/useHome'
 import { HOME } from '../../config/home'
 import { Card } from '../Card'
@@ -30,8 +30,9 @@ const BoltIcon = ({ glow }: { glow?: string }) => (
     <path d="M13.5 2 4 14h6.5L9.5 22 20 9.5h-6.6z" />
   </svg>
 )
-const CarOpenIcon = () => (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" aria-hidden>
+const CarOpenIcon = ({ glow }: { glow?: string }) => (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" aria-hidden
+    style={glow ? { filter: `drop-shadow(0 0 6px ${glow})` } : undefined}>
     <path d="M3.5 18v-4.5L5.8 8c.3-.7 1-1 1.7-1h9c.7 0 1.4.3 1.7 1l2.3 5.5V18a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z" /><path d="M3.5 13.5h17" />
   </svg>
 )
@@ -44,13 +45,15 @@ export function chargeDoneAt(t: Tesla): string | null {
 }
 
 /** What the card says right now */
-export function teslaSummary(t: Tesla, waking: boolean) {
+export function teslaSummary(t: Tesla, waking: boolean, doing: string | null = null) {
   const charging = isCharging(t)
   const plugged = !t.driving && t.plugged && !charging
   const where = t.atHome ? ' · Home' : '' // never names a place away from home
   const header = t.driving ? 'Driving' : charging ? `Charging${where}` : plugged ? `Plugged in${where}` : t.climateOn || waking ? 'Live' : t.atHome ? 'Parked · Home' : 'Parked'
   let status: string, color: string
-  if (waking) { status = 'Waking car…'; color = ACC }
+  const open = [t.trunkOpen ? 'Trunk open' : null, t.frunkOpen ? 'Frunk open' : null].filter(Boolean).join(' · ')
+  if (waking) { status = doing ? `Waking car · ${doing.toLowerCase()}` : 'Waking car…'; color = ACC }
+  else if (doing) { status = doing; color = '#e8edf2' }
   else if (t.enRouteHome) { status = 'En route home'; color = '#6fa8ff' }
   else if (t.driving) { status = t.speedMph ? `Driving · ${t.speedMph} mph` : 'Driving'; color = '#6fa8ff' }
   else if (charging) {
@@ -59,7 +62,9 @@ export function teslaSummary(t: Tesla, waking: boolean) {
       ? `Charging · ${t.chargeLimitPct}% by ~${done}`
       : `Charging · ${t.batteryPct ?? '–'}% → ${t.chargeLimitPct ?? '–'}%`
     color = GREEN
-  } else if (plugged) { status = t.charging === 'no_power' ? 'Plugged in · no power' : 'Plugged in'; color = BLUE }
+  } else if (open && !t.driving) { status = t.windowsVented ? `${open} · Vented` : open; color = AMBER }
+  else if (plugged) { status = t.charging === 'no_power' ? 'Plugged in · no power' : 'Plugged in'; color = BLUE }
+  else if (t.windowsVented && !t.driving && !t.climateOn) { status = 'Windows vented'; color = BLUE }
   else if (t.climateOn) {
     const heating = t.targetF !== null && t.insideF !== null ? t.targetF >= t.insideF : true
     status = `${heating ? 'Heating' : 'Cooling'} to ${t.targetF ?? '–'}°${t.insideF !== null ? ` · ${t.insideF}° inside` : ''}`
@@ -74,21 +79,19 @@ export function teslaSummary(t: Tesla, waking: boolean) {
 }
 
 /**
- * The Tesla card (top-right on Home). Lock, climate, charging, and
- * frunk/trunk — the fan and bolt open the Climate and Charging panels. Glows
+ * The Tesla card (top-right on Home). Lock, climate, charging, and vent
+ * windows — the fan and bolt open the Climate and Charging panels. The frunk
+ * and trunk are ring dots on the car picture (tap to open; tap "Trunk open"
+ * to close). Glows
  * green while charging; the top bar turns blue with climate on. The picture
  * shows the charge cable whenever the car is plugged in (anywhere) and the car
  * on a moving road while driving (CarScene).
  */
 export function TeslaCard({ className = 'h-full' }: { className?: string }) {
   const { data } = useHome()
-  const { act, waking } = useTeslaActions()
-  const [chooser, setChooser] = useState(false)
-  const [opened, setOpened] = useState<string | null>(null)
+  const { act, waking, busy } = useTeslaActions()
+  const navigate = useNavigate()
   const [panel, setPanel] = useState<'climate' | 'charging' | null>(null)
-
-  // "Frunk open" fades after a few seconds
-  useEffect(() => { if (!opened) return; const t = setTimeout(() => setOpened(null), 6000); return () => clearTimeout(t) }, [opened])
 
   const t = data?.tesla
   if (!data) return null
@@ -100,30 +103,54 @@ export function TeslaCard({ className = 'h-full' }: { className?: string }) {
     )
   }
 
-  const { header, status, color, charging, plugged, scene } = teslaSummary(t, waking)
+  // Trunk, frunk and vent windows wait for the car to report the change
+  // instead of changing the picture first, so what's shown is what the car says.
+  const doing = busy('trunk') ? (t.trunkOpen ? 'Closing trunk…' : 'Opening trunk…')
+    : busy('frunk') ? 'Opening frunk…'
+    : busy('vent') ? (t.windowsVented ? 'Closing windows…' : 'Venting windows…')
+    : null
+  const { header, status, color, charging, plugged, scene } = teslaSummary(t, waking, doing)
   const wash = charging ? { backgroundImage: `linear-gradient(180deg, ${tint(GREEN, 0.2)} 0%, ${tint(GREEN, 0.06)} 45%, transparent 80%)` } : undefined
   const accent = charging ? GREEN : t.climateOn ? BLUE : 'var(--color-vehicles)'
   const pct = t.batteryPct ?? 0
   const unlocked = t.locked === false
 
   const tapLock = () => {
-    setChooser(false)
     void act(unlocked ? 'lock' : 'unlock', {}, { locked: !unlocked })
   }
   const tapFan = () => {
-    setChooser(false)
     if (t.climateOn) setPanel('climate')
     else if (!waking) void act('climate_on', {}, t.online ? { climateOn: true } : undefined)
   }
-  const openOne = (what: 'frunk' | 'trunk') => {
-    setChooser(false)
-    void act(what, {}, what === 'frunk' ? { frunkOpen: true } : { trunkOpen: true }).then((ok) => ok && setOpened(what === 'frunk' ? 'Frunk' : 'Trunk'))
+  const tapTrunk = () => {
+    if (busy('trunk')) return
+    const close = t.trunkOpen === true
+    void act(close ? 'trunk_close' : 'trunk', {}, undefined, { key: 'trunk', done: (c) => c.trunkOpen === !close })
+  }
+  const tapFrunk = () => {
+    if (busy('frunk') || t.frunkOpen) return
+    void act('frunk', {}, undefined, { key: 'frunk', done: (c) => c.frunkOpen === true })
+  }
+  const vented = t.windowsVented === true
+  const tapVent = () => {
+    if (busy('vent')) return
+    void act(vented ? 'vent_close' : 'vent', {}, undefined, { key: 'vent', done: (c) => c.windowsVented === !vented })
+  }
+  const spots = scene === 'driving' ? undefined : {
+    frunkOpen: t.frunkOpen === true,
+    trunkOpen: t.trunkOpen === true,
+    busy: {
+      frunk: busy('frunk') ? 'Opening…' as const : undefined,
+      trunk: busy('trunk') ? (t.trunkOpen ? 'Closing…' as const : 'Opening…' as const) : undefined,
+    },
+    onFrunk: tapFrunk,
+    onTrunk: tapTrunk,
   }
 
   let hint = ''
   const hintColor = DIM
-  if (waking) hint = 'Usually 10–30 seconds'
-  else if (opened) hint = `${opened} open`
+  if (waking) hint = doing ? 'Car was asleep — waking it, then it happens' : 'Usually 10–30 seconds'
+  else if (t.frunkOpen && !t.driving) hint = 'The frunk closes by hand'
 
   const iconBtn = 'flex h-14 items-center justify-center rounded-[14px] transition-colors hover:bg-white/5'
   const e = t.enRouteHome
@@ -142,23 +169,16 @@ export function TeslaCard({ className = 'h-full' }: { className?: string }) {
           <span className="ml-auto truncate text-right text-sm" style={{ color }}>{status}</span>
         </div>
 
-        <Link to="/vehicles" aria-label="Vehicle details" className="relative flex min-h-[150px] flex-1 items-center justify-center py-2">
-          <CarScene mode={scene} compact={!!e} />
-        </Link>
+        {/* The picture opens Vehicles; the dots on it open the frunk and trunk */}
+        <div role="link" tabIndex={0} aria-label="Vehicle details" onClick={() => navigate('/vehicles')}
+          onKeyDown={(ev) => { if (ev.key === 'Enter' && ev.target === ev.currentTarget) navigate('/vehicles') }}
+          className="relative flex min-h-[150px] flex-1 cursor-pointer items-center justify-center py-2">
+          <CarScene mode={scene} compact={!!e} spots={spots} />
+        </div>
 
         {e && <EnRoute t={t} e={e} mapsKey={data.mapsKey ?? null} />}
 
         <div className="h-px bg-edge" />
-
-        {chooser && (
-          <div className="grid grid-cols-2 gap-2.5 pt-2.5">
-            {(['frunk', 'trunk'] as const).map((w) => (
-              <button key={w} onClick={() => openOne(w)} className="h-11 rounded-xl border border-edge bg-surface-raised text-sm font-medium hover:bg-[#252e38]">
-                Open {w}
-              </button>
-            ))}
-          </div>
-        )}
 
         <div className="grid grid-cols-4 gap-1.5 pt-1.5">
           <button onClick={tapLock} aria-label={unlocked ? 'Unlocked: tap to lock' : 'Locked: tap to unlock'} disabled={t.locked === null}
@@ -169,13 +189,14 @@ export function TeslaCard({ className = 'h-full' }: { className?: string }) {
             className={iconBtn} style={{ color: t.climateOn ? BLUE : waking ? '#e8edf2' : ACC }}>
             <span className={waking ? 'animate-pulse' : ''}><FanIcon glow={t.climateOn ? tint(BLUE, 0.7) : undefined} /></span>
           </button>
-          <button onClick={() => { setChooser(false); setPanel('charging') }} aria-label="Charging"
+          <button onClick={() => setPanel('charging')} aria-label="Charging"
             className={iconBtn} style={{ color: charging ? GREEN : plugged ? BLUE : ACC }}>
             <BoltIcon glow={charging ? tint(GREEN, 0.8) : undefined} />
           </button>
-          <button onClick={() => setChooser((c) => !c)} aria-label="Frunk and trunk" aria-expanded={chooser}
-            className={iconBtn} style={{ color: chooser || opened ? '#e8edf2' : ACC }}>
-            <CarOpenIcon />
+          <button onClick={tapVent} aria-label={vented ? 'Windows vented: tap to close' : 'Vent windows'} aria-pressed={vented}
+            aria-busy={busy('vent')} disabled={t.windowsVented === null || t.windowsVented === undefined}
+            className={`${iconBtn} disabled:opacity-40`} style={{ color: vented ? BLUE : busy('vent') ? '#e8edf2' : ACC }}>
+            <span className={busy('vent') ? 'animate-pulse' : ''}><CarOpenIcon glow={vented ? tint(BLUE, 0.7) : undefined} /></span>
           </button>
         </div>
         <span className="min-h-[15px] text-center text-xs" style={{ color: hintColor }}>{hint}</span>

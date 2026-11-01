@@ -45,6 +45,7 @@ const FIND = {
   rearDefrost: ['switch', /_rear_defrost(er)?$|_rear_window_heater$/],
   frunk: ['cover', /_frunk$/],
   trunk: ['cover', /_trunk$/],
+  windows: ['cover', /_vent_windows$|_windows$/],
   location: ['device_tracker', /_location$/],
   route: ['device_tracker', /_route$|_destination$/],
   destination: ['sensor', /_destination$/],
@@ -236,6 +237,8 @@ export function teslaState(): Tesla | null {
     rearDefrost: e.rearDefrost ? on(e.rearDefrost) : null,
     frunkOpen: e.frunk ? (ok(e.frunk) ? e.frunk.state === 'open' : null) : null,
     trunkOpen: e.trunk ? (ok(e.trunk) ? e.trunk.state === 'open' : null) : null,
+    // Teslemetry's "Vent windows": open = vented (any window open), closed = all closed
+    windowsVented: e.windows ? (ok(e.windows) ? e.windows.state === 'open' : null) : null,
     atHome,
     driving,
     speedMph: num(e.speed) === null ? null : Math.round(num(e.speed)!),
@@ -255,7 +258,7 @@ export function teslaNotes(): { found: Record<string, string>; missing: string[]
   if (!e) return { found: {}, missing: ['No Teslemetry climate entity found in Home Assistant'] }
   const found: Record<string, string> = {}
   for (const [k, s] of Object.entries(e)) if (s) found[k] = s.entity_id
-  const wanted: Key[] = ['battery', 'range', 'charging', 'chargeLimit', 'chargeAmps', 'chargeSwitch', 'port', 'lock', 'inside', 'outside', 'heatDriver', 'heatPassenger', 'frunk', 'trunk', 'location', 'route']
+  const wanted: Key[] = ['battery', 'range', 'charging', 'chargeLimit', 'chargeAmps', 'chargeSwitch', 'port', 'lock', 'inside', 'outside', 'heatDriver', 'heatPassenger', 'frunk', 'trunk', 'windows', 'location', 'route']
   const missing: string[] = wanted.filter((k) => !e[k])
   if (!e.route && !e.destination) missing.push('The Destination entity is off — enable it in Home Assistant for "en route home"')
   if (!e.heading) missing.push('The GPS heading entity is off — enable it in Home Assistant so the map arrow points the way the car faces (until then it follows the drive)')
@@ -338,6 +341,10 @@ export async function teslaCommand(b: TeslaCommand) {
     case 'rear_defrost': return svc('switch', b.value ? 'turn_on' : 'turn_off', need(e.rearDefrost, 'Rear defrost'))
     case 'frunk': return svc('cover', 'open_cover', need(e.frunk, 'The frunk'))
     case 'trunk': return svc('cover', 'open_cover', need(e.trunk, 'The trunk'))
+    // The power trunk closes from the app too (the frunk can only be opened remotely — a Tesla limit)
+    case 'trunk_close': return svc('cover', 'close_cover', need(e.trunk, 'The trunk'))
+    case 'vent': return svc('cover', 'open_cover', need(e.windows, 'Vent windows'))
+    case 'vent_close': return svc('cover', 'close_cover', need(e.windows, 'Vent windows'))
     case 'charge_start': return svc('switch', 'turn_on', need(e.chargeSwitch, 'Charging'))
     case 'charge_stop': return svc('switch', 'turn_off', need(e.chargeSwitch, 'Charging'))
     case 'charge_limit': {

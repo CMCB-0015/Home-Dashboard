@@ -137,7 +137,7 @@ export function buildMockState(): HomeState {
       portOpen: false, schedule: { enabled: true, time: '23:00' }, locked: true,
       insideF: 58, outsideF: 54, climateOn: false, targetF: 70, minF: 59, maxF: 82,
       driver: 0, passenger: 0, rear: 0, coolingSeats: true, wheel: false, frontDefrost: false, rearDefrost: null,
-      frunkOpen: false, trunkOpen: false, atHome: true, driving: false, speedMph: null,
+      frunkOpen: false, trunkOpen: false, windowsVented: false, atHome: true, driving: false, speedMph: null,
       enRouteHome: null, location: { lat: 33.427, lon: -117.612 }, updatedAt: ago(5),
     },
     vehicles: [

@@ -54,6 +54,12 @@ Teslemetry **Route** or **Destination** entity enabled (Settings → Devices →
 WillaWilla → entities). The dashboard never wakes the car just to refresh; the first
 button press wakes it (10–30 seconds).
 
+Frunk and trunk: tap the ring dot on the car picture to open; it turns into an amber
+"Trunk open" / "Frunk open" pill once the car reports it. Tap "Trunk open" to close
+the power trunk. The frunk can only be closed by hand (Tesla doesn't allow closing it
+remotely). The 4th button vents the windows (blue while vented); tap again to close
+them. Uses Teslemetry's **Trunk**, **Frunk** and **Windows** cover entities.
+
 ### Tesla map
 
 With **google_maps_key** set, the "en route home" row on the card becomes a live map strip

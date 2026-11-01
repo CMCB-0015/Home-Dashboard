@@ -8,10 +8,11 @@
 //    car's real rims spinning around their hubs.
 //
 // All motion is CSS (see "Tesla card motion" in index.css) and stops with the
-// device's reduce-motion setting. Numbers below are in the photos' own pixels
+// device's reduce-motion setting. Parked or plugged in, the frunk and trunk
+// show as tappable ring dots on the picture (Spots). Numbers below are in the photos' own pixels
 // (driving 580×370, charging 670×445); each scene is scaled to the card.
 
-import type { ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 
 export type SceneMode = 'parked' | 'charging' | 'plugged' | 'driving'
 
@@ -80,9 +81,9 @@ const CW = 670, CH = 445
 const CABLE = 'M403 203 C397 262 392 318 372 344 C352 366 300 378 180 398 S20 432 -130 456'
 /** One soft pulse: stacked dashes (length % of the cable, opacity, width), centered together */
 const PULSE: [number, number, number][] = [[75, 0.16, 9], [60, 0.16, 8], [45, 0.2, 7], [30, 0.26, 6], [16, 0.4, 5]]
-const GREEN = '#4fd18b', BLUE = '#5aa2ff'
+const GREEN = '#4fd18b', BLUE = '#5aa2ff', AMBER = '#f2c14e'
 
-function Plugged({ width, charging }: { width: number; charging: boolean }) {
+function Plugged({ width, charging, children }: { width: number; charging: boolean; children?: ReactNode }) {
   const grad = charging ? 'tesla-cable-white' : 'tesla-cable-blue'
   return (
     <div className="relative" style={{ width }}>
@@ -116,16 +117,85 @@ function Plugged({ width, charging }: { width: number; charging: boolean }) {
           </g>
         )}
       </svg>
+      {children}
     </div>
   )
 }
 
+// ── Frunk and trunk spots ─────────────────────────────────────────────────
+/** Where the frunk and trunk sit in each picture, in % of its width and height */
+const SPOT_AT = {
+  parked: { frunk: [22, 50], trunk: [78.5, 20] },
+  plugged: { frunk: [7.5, 21], trunk: [82, 37] },
+} as const
+
+export interface SpotState {
+  frunkOpen: boolean
+  trunkOpen: boolean
+  /** Which one is waiting on the car, and whether it's opening or closing */
+  busy: { frunk?: 'Opening…' | 'Closing…'; trunk?: 'Opening…' | 'Closing…' }
+  onFrunk: () => void
+  onTrunk: () => void
+}
+
+/**
+ * A ring dot that slowly breathes on the frunk and the trunk. Tap one to open
+ * it; it turns into an amber "Trunk open" / "Frunk open" pill. Tap the trunk
+ * pill to close it again — the frunk only closes by hand, so its pill is just
+ * a label.
+ */
+function Spots({ at, s }: { at: (typeof SPOT_AT)[keyof typeof SPOT_AT]; s: SpotState }) {
+  const one = (what: 'frunk' | 'trunk') => {
+    const [x, y] = at[what]
+    const open = what === 'frunk' ? s.frunkOpen : s.trunkOpen
+    const busy = s.busy[what]
+    const name = what === 'frunk' ? 'Frunk' : 'Trunk'
+    const tap = what === 'frunk' ? s.onFrunk : s.onTrunk
+    const pos = { left: `${x}%`, top: `${y}%` }
+    const stop = (ev: MouseEvent) => { ev.preventDefault(); ev.stopPropagation() }
+    if (busy) {
+      return (
+        <span key={what} role="status" style={pos}
+          className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/25 bg-bg/85 px-2.5 py-1 text-[12px] font-medium text-ink"
+          onClick={stop}>
+          {busy}
+        </span>
+      )
+    }
+    if (open) {
+      const pill = 'absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[12px] font-semibold'
+      const look = { ...pos, color: AMBER, background: 'rgba(242,193,78,0.16)', borderColor: 'rgba(242,193,78,0.7)' }
+      const dot = <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: AMBER }} />
+      return what === 'trunk'
+        ? <button key={what} type="button" aria-label="Trunk open: tap to close" className={`${pill} hover:brightness-125`} style={look}
+            onClick={(ev) => { stop(ev); tap() }}>{dot}{name} open</button>
+        : <span key={what} className={pill} style={look} onClick={stop}>{dot}{name} open</span>
+    }
+    return (
+      <button key={what} type="button" aria-label={`Open ${what}`} style={pos}
+        className="absolute flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full"
+        onClick={(ev) => { stop(ev); tap() }}>
+        <span aria-hidden className="tesla-breathe flex h-6 w-6 items-center justify-center rounded-full border-2"
+          style={{ borderColor: 'rgba(255,255,255,0.85)', boxShadow: '0 0 10px rgba(255,255,255,0.45), inset 0 0 6px rgba(255,255,255,0.25)' }}>
+          <span className="h-[9px] w-[9px] rounded-full bg-white" />
+        </span>
+      </button>
+    )
+  }
+  return <>{one('frunk')}{one('trunk')}</>
+}
+
 /** The car picture for the card's current state */
-export function CarScene({ mode, compact }: { mode: SceneMode; compact?: boolean }) {
+export function CarScene({ mode, compact, spots }: { mode: SceneMode; compact?: boolean; spots?: SpotState }) {
   if (mode === 'driving') return <Driving width={compact ? 240 : 300} />
-  if (mode === 'charging' || mode === 'plugged') return <Plugged width={300} charging={mode === 'charging'} />
+  if (mode === 'charging' || mode === 'plugged') {
+    return <Plugged width={300} charging={mode === 'charging'}>{spots && <Spots at={SPOT_AT.plugged} s={spots} />}</Plugged>
+  }
   return (
-    <img src={PARKED_IMG} alt="WillaWilla, black Model 3"
-      className={`h-auto ${compact ? 'w-[230px]' : 'w-[300px]'} max-w-full [mask-image:radial-gradient(ellipse_at_center,#000_55%,transparent_72%)]`} />
+    <div className={`relative ${compact ? 'w-[230px]' : 'w-[300px]'} max-w-full`}>
+      <img src={PARKED_IMG} alt="WillaWilla, black Model 3"
+        className="block h-auto w-full [mask-image:radial-gradient(ellipse_at_center,#000_55%,transparent_72%)]" />
+      {spots && <Spots at={SPOT_AT.parked} s={spots} />}
+    </div>
   )
 }

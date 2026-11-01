@@ -258,6 +258,8 @@ export interface Tesla {
   rearDefrost: boolean | null
   frunkOpen: boolean | null
   trunkOpen: boolean | null
+  /** Windows vented (Teslemetry "Vent windows"); null = not in Home Assistant */
+  windowsVented?: boolean | null
   atHome: boolean
   driving: boolean
   speedMph: number | null

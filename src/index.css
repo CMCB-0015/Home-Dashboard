@@ -118,7 +118,11 @@ input[type="range"] { accent-color: currentColor; }
 .tesla-pulse-2 { animation: tesla-pulse-2 2.4s linear infinite; }
 .tesla-pulse-3 { animation: tesla-pulse-3 2.4s linear infinite; }
 .tesla-pulse-4 { animation: tesla-pulse-4 2.4s linear infinite; }
+/* Frunk and trunk ring dots slowly breathe */
+@keyframes tesla-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+.tesla-breathe { animation: tesla-breathe 2.6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
+  .tesla-breathe,
   .tesla-rim, .tesla-road-dash, .tesla-pulse-0, .tesla-pulse-1, .tesla-pulse-2, .tesla-pulse-3, .tesla-pulse-4 { animation: none !important; }
 }
 

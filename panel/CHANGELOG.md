@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.0
+- Tesla: **frunk and trunk dots on the car picture** — a white ring dot that slowly breathes sits on the frunk and the trunk (parked or plugged in). Tap one to open it: it shows "Opening…", then an amber **"Trunk open" / "Frunk open"** pill once the car reports it, and the status line says so too
+- Tesla: **close the trunk** — tap the "Trunk open" pill and it closes and turns back into the dot. The frunk can only be closed by hand, so its pill is just a label ("The frunk closes by hand")
+- Tesla: the 4th button now **vents the windows** (blue glow while vented, "Windows vented" in the status line); tap again to close them. The old Open frunk / Open trunk buttons are gone
+- Tesla: **less "Waking car…" waiting** — a command now counts as done the moment the car reports the change over Teslemetry's live stream, instead of waiting for Tesla's server to confirm. "Waking car…" only shows while the car really was asleep, and the status line says what's happening ("Opening trunk…")
+
 ## 1.8.2
 - Tesla: seat buttons go straight to full — one tap = full heat or cooling, a second tap = full in the other mode, a third = off (rear seats: on/off at full heat). The three bars still show the level
 - Tesla: the first tap picks cooling when the cabin is warmer than the climate set point and heating when it's cooler (outside temperature decides when it's within 3°); while a seat is off, a faint red or blue ring shows which way the next tap goes. Tesla's Auto seat climate is never used
