@@ -3,7 +3,7 @@
 A two-page dashboard for the house. Swipe between them.
 
 - **Page 1 · Home** — status bar (alerts, today's calendar, games), cameras, Tesla, climate, lights, Sonos, vacuum, irrigation
-- **Page 2 · Today & this week** — Google Calendar, weather, shopping list
+- **Page 2 · Today & this week** — Google Calendar, weather, shopping list (Bring!)
 
 It runs on the Lenovo as a **Home Assistant app** and only works on the home Wi-Fi.
 Open **http://192.168.86.207:8099** and bookmark it.
@@ -18,7 +18,8 @@ Open **http://192.168.86.207:8099** and bookmark it.
 | Tesla (WillaWilla) | Teslemetry in Home Assistant | ✅ |
 | Vacuum (Roborock S8 Pro Ultra) | Roborock in Home Assistant, rooms matched by name | ✅ |
 | Weather | Open-Meteo, no key | ✅ |
-| Cameras (Eufy), Shopping list | — | Placeholder cards until connected |
+| Shopping list | Bring! in Home Assistant, every Bring! list by name | ✅ once Bring! is added in Home Assistant |
+| Cameras (Eufy) | — | Placeholder card until connected |
 
 ## Testing in the Codespace
 

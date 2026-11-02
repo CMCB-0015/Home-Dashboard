@@ -32,7 +32,7 @@ interface CardProps {
   overlay?: ReactNode
 }
 
-const HA_CATEGORIES: Category[] = ['climate', 'lights', 'sonos', 'calendar']
+const HA_CATEGORIES: Category[] = ['climate', 'lights', 'sonos', 'calendar', 'list']
 
 export function Card({ accent, children, to, actions, headerRight, title, subtitle, className = '', padded = true, bodyClassName = '', category, placeholder, style, overlay }: CardProps) {
   const lift = overlay ? 'relative z-[2]' : ''

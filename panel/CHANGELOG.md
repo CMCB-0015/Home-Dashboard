@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.11.0
+- Shopping list: **connected to Bring!** (through Home Assistant's Bring! integration), replacing the Todoist placeholder
+- **Tap an item** to check it off: it's struck through, fades and moves to the **Recent** chips (Bring!'s "Recently" items). Tap it again while it fades to undo. **Tap a Recent chip** to put it back on the list
+- **Press and hold an item** for its panel: **details** shown next to the item and in the Bring! app ("2 lbs", "organic"; quick chips 2 · 3 · 4 · 1 lb · 2 lbs · Organic) and **Remove from list**
+- **List picker** in the header lists every Bring! list in Home Assistant by its Bring! name; lists added, removed or renamed in Bring! follow on their own. The pick is remembered per screen. With one list it's just a label
+- Footer: **Going shopping** and **Done shopping** send Bring!'s own notice to everyone on the list
+- Typing an item that's already on the list does nothing; typing one of the Recent items puts that one back (Bring! keeps one of each)
+- If Bring! stops responding the card says "List unavailable" and nothing else on the page is affected
+- Items update live (Home Assistant sends each list's changes as they happen); changes made in the Bring! app arrive within about 90 seconds (how often Home Assistant checks Bring!)
+
 ## 1.10.0
 - Climate: **new "Halo" card** — a Nest-style dial: black glass face in a dark metal bezel with a thin ring of light (red heating, blue cooling, climate blue when holding). The big number is the target; "Inside" is the room. While heating or cooling the card takes the color (soft wash and top bar), like the Lights and Sonos cards
 - Climate: **turn the dial like a knob** to change the temperature — grab the bezel anywhere and rotate (clockwise = warmer, about 8° of turn per degree). It moves from where it already is, so touching the dial never jumps the target. The change goes to the Nest **once, when you let go** ("Set to 72° · release to send" while turning)

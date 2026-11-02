@@ -415,8 +415,32 @@ export interface CalendarWrite {
   problem: string | null
 }
 
+/** One item on a Bring! list (through Home Assistant's to-do lists) */
 export interface ShoppingItem {
-  id: string; text: string; section: string; done: boolean
+  /** Home Assistant's id for the item */
+  id: string
+  text: string
+  /** Bring!'s "specification": amount or note ("2 lbs", "organic"); empty if none */
+  spec: string
+  /** Checked off — Bring! keeps these as "Recently" items, the card shows them as Recent chips */
+  done: boolean
+}
+
+/** A Bring! list, named as it is in Bring! */
+export interface ShoppingListInfo {
+  /** Home Assistant's to-do entity, e.g. todo.home */
+  id: string
+  name: string
+  /** Items still to buy */
+  open: number
+  /** False while Bring! (or the integration) isn't responding */
+  available: boolean
+}
+
+export interface ShoppingState {
+  lists: ShoppingListInfo[]
+  /** Each list's items, by list id (open ones first, then recently bought) */
+  items: Record<string, ShoppingItem[]>
 }
 
 /** A game or race from The Brief's schedule feed, for the status bar */
@@ -470,7 +494,8 @@ export interface HomeState {
   calendarWrite?: CalendarWrite
   /** Upcoming games and races from The Brief (empty until its schedule feed exists) */
   sports?: SportsEvent[]
-  shoppingList: ShoppingItem[]
+  /** Bring! shopping lists (null = no Bring! list in Home Assistant yet) */
+  shopping?: ShoppingState | null
   alerts: AlertItem[]
   /**
    * Where each section's data comes from:

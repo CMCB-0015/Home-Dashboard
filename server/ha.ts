@@ -56,6 +56,8 @@ class HomeAssistant {
   private ws: WebSocket | null = null
   private nextId = 1
   private pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>()
+  /** Live subscriptions (like a to-do list's items), by the id Home Assistant sends their events under */
+  private subs = new Map<number, (event: any) => void>()
   private listeners = new Set<() => void>()
   private retryMs = 2000
   private pingTimer: NodeJS.Timeout | null = null
@@ -98,6 +100,7 @@ class HomeAssistant {
     this.pingTimer = null
     for (const p of this.pending.values()) p.reject(new Error('Lost the connection to Home Assistant'))
     this.pending.clear()
+    this.subs.clear() // gone with the connection; their owners subscribe again on reconnect
     if (this.status === 'connected') console.warn('[home assistant] connection lost — reconnecting')
     this.status = 'connecting'
     this.ws = null
@@ -137,6 +140,8 @@ class HomeAssistant {
       this.pending.delete(msg.id)
       if (msg.type === 'pong' || msg.success) p.resolve(msg.result)
       else p.reject(new Error(msg.error?.message ?? 'Home Assistant refused the request'))
+    } else if (msg.type === 'event' && this.subs.has(msg.id)) {
+      try { this.subs.get(msg.id)!(msg.event) } catch (e) { console.warn('[home assistant] subscription handler failed:', e) }
     } else if (msg.type === 'event') {
       const e = msg.event
       if (e?.event_type === 'state_changed') {
@@ -185,6 +190,32 @@ class HomeAssistant {
       })
       ws.send(JSON.stringify({ ...msg, id }))
     })
+  }
+
+  /**
+   * Start a live subscription (e.g. `todo/item/subscribe`): `onEvent` gets each
+   * update Home Assistant sends. Returns its id, for `unsubscribe`. Subscriptions
+   * end when the connection drops; subscribe again after reconnecting.
+   */
+  subscribe(msg: Record<string, unknown>, onEvent: (event: any) => void): Promise<number> {
+    const ws = this.ws
+    if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.reject(new Error("The dashboard can't reach Home Assistant right now"))
+    const id = this.nextId++
+    // Registered before sending: the first event can arrive right behind the result
+    this.subs.set(id, onEvent)
+    return new Promise<number>((resolve, reject) => {
+      const timeout = setTimeout(() => { this.pending.delete(id); this.subs.delete(id); reject(new Error('Home Assistant took too long to answer')) }, 15_000)
+      this.pending.set(id, {
+        resolve: () => { clearTimeout(timeout); resolve(id) },
+        reject: (e) => { clearTimeout(timeout); this.subs.delete(id); reject(e) },
+      })
+      ws.send(JSON.stringify({ ...msg, id }))
+    })
+  }
+
+  unsubscribe(id: number) {
+    if (!this.subs.delete(id)) return
+    this.command({ type: 'unsubscribe_events', subscription: id }).catch(() => {})
   }
 
   /** Run a Home Assistant action, e.g. callService('light', 'turn_on', { brightness_pct: 50 }, ['light.lamp']) */

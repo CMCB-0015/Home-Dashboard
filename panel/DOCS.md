@@ -161,6 +161,22 @@ project turn on **Maps JavaScript API** (Google wants a billing account on the p
 free monthly allowance covers a home dashboard), create an **API key**, restrict it to that
 API and to `http://192.168.86.207:8099/*`, paste it in, Save, Restart.
 
+## Shopping list (Bring!)
+
+**One-time setup:** in Home Assistant, Settings → Devices & services → Add integration → **Bring!**, and sign
+in with your Bring! email and password (if you signed up with Google or Apple, set a password in the Bring! app
+first). Each Bring! list then shows under **To-do lists** in Home Assistant's sidebar, and the card finds them on
+its own — no names to set in Panel. Optional: use a second Bring! account invited to your lists, so Panel never
+uses your main login.
+
+- **Tap** an item = checked off (fades into the Recent chips; tap again while fading to undo). **Tap a Recent
+  chip** = back on the list. **Press and hold** an item = details ("2 lbs") and Remove.
+- **List picker** (header): every Bring! list by name; remembered per screen.
+- **Going shopping / Done shopping** send Bring!'s notice to the list's members.
+- Changes from the dashboard reach Bring! at once; changes in the Bring! app show here within about 90 seconds.
+- `/api/setup-check` → `shopping` lists the Bring! lists Panel found. If a renamed list keeps its old name,
+  reload the Bring! integration in Home Assistant (Settings → Devices & services → Bring! → ⋮ → Reload).
+
 ## Irrigation card
 
 Quick-run chips come from `src/config/irrigation.ts`: tap to start, hold to choose the

@@ -21,11 +21,13 @@ import { onTeslaMapChange } from './teslaMap.ts'
 import { gcalStatus } from './gcal.ts'
 import { env } from './env.ts'
 import { vacuumState, vacuumAlerts } from './vacuum.ts'
+import { shoppingState, startShopping } from './shopping.ts'
 
 let weather: Weather | null = null
 
 export function startBackgroundRefresh(changed: () => void) {
   onTeslaMapChange(changed)
+  startShopping(changed)
   const loadWeather = async () => {
     try { weather = await getWeather(); changed() } catch (e) { console.warn('[weather]', e instanceof Error ? e.message : e) }
   }
@@ -106,8 +108,11 @@ export function buildState(): HomeState {
   const vacuum = fromHa('vacuum', vacuumState, demo.vacuum ?? null)
   if (sources.vacuum === 'live' && vacuum) for (const a of vacuumAlerts(vacuum)) alert('vacuum', a.severity, vacuum.name, a.message)
 
+  // The card itself says when Bring! isn't responding; not worth a status-bar chip
+  const shopping = fromHa('list', shoppingState, demo.shopping ?? null)
+
   // Not connected to the dashboard yet. Placeholders on the real system, demo while testing.
-  for (const cat of ['cameras', 'list'] as Category[]) sources[cat] = haConfigured ? 'off' : 'demo'
+  for (const cat of ['cameras'] as Category[]) sources[cat] = haConfigured ? 'off' : 'demo'
 
   if (haConfigured && !haUp) alert('climate', 'critical', 'Home Assistant', "Can't reach Home Assistant — reconnecting")
 
@@ -119,6 +124,7 @@ export function buildState(): HomeState {
     sonos,
     tesla,
     vacuum,
+    shopping,
     calendar,
     calendars: sources.calendar === 'live' ? calendarList() : demo.calendars,
     calendarRange: sources.calendar === 'live' ? calendarRange() ?? undefined : demo.calendarRange,

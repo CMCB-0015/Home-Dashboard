@@ -232,16 +232,22 @@ export function buildMockState(): HomeState {
       { id: 'g1', kind: 'suns', title: 'Suns vs. Portland', start: todayAt(19), end: todayAt(21, 30), channel: 'ESPN' },
       { id: 'g2', kind: 'f1', title: 'F1 · Mexico City GP', start: todayAt(13, 0, 2), end: todayAt(15, 0, 2), big: true },
     ],
-    shoppingList: [
-      { id: 's1', text: 'Milk', section: 'Grocery', done: false },
-      { id: 's2', text: 'Bananas', section: 'Grocery', done: false },
-      { id: 's3', text: 'Chicken thighs', section: 'Grocery', done: false },
-      { id: 's4', text: 'Sourdough', section: 'Grocery', done: false },
-      { id: 's5', text: 'Coffee beans', section: 'Grocery', done: false },
-      { id: 's6', text: 'Dishwasher pods', section: 'Household', done: false },
-      { id: 's7', text: 'Paper towels', section: 'Household', done: false },
-      { id: 's8', text: 'Eggs', section: 'Grocery', done: true },
-    ],
+    shopping: {
+      lists: [
+        { id: 'todo.home', name: 'Home', open: 8, available: true },
+        { id: 'todo.costco', name: 'Costco', open: 3, available: true },
+      ],
+      items: {
+        'todo.home': [
+          ['Milk', '1 gal'], ['Bananas', ''], ['Chicken thighs', '2 lbs'], ['Sourdough', ''], ['Avocados', '4'],
+          ['Greek yogurt', 'plain'], ['Coffee beans', ''], ['Limes', ''],
+        ].map(([text, spec], i) => ({ id: `h${i}`, text, spec, done: false }))
+          .concat(['Eggs', 'Butter', 'Tortillas', 'Spinach', 'Olive oil'].map((text, i) => ({ id: `hr${i}`, text, spec: '', done: true }))),
+        'todo.costco': [['Paper towels', ''], ['Dish soap', ''], ['Sparkling water', '2 cases']]
+          .map(([text, spec], i) => ({ id: `c${i}`, text, spec, done: false }))
+          .concat([{ id: 'cr0', text: 'Trash bags', spec: '', done: true }]),
+      },
+    },
     alerts: [
       { id: 'a2', category: 'cameras', severity: 'warning', message: 'Motion detected', deviceName: 'Front Door', timestamp: ago(14) },
       { id: 'a3', category: 'vehicles', severity: 'info', message: 'Finished charging', deviceName: 'WillaWilla', timestamp: ago(60) },

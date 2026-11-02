@@ -19,6 +19,7 @@
 //   POST /api/calendar/create | update | delete   add, change or delete an event (Panel's Google link)
 //   POST /api/gcal/link-start | link-finish | unlink   link Panel to Google Calendar (one time)
 //   POST /api/vacuum/command                      Vacuum card and Map & rooms page (Roborock)
+//   POST /api/shopping/command                    Shopping list card (Bring!, through Home Assistant)
 //   POST /api/sonos/preset-save | preset-rename | preset-delete   quick-play buttons saved from the Sonos page
 //   POST /api/rachio/command          GET /api/rachio/debug
 
@@ -34,6 +35,7 @@ import { setClimate, thermostats } from './climate.ts'
 import { sportsNotes, sportsEvents } from './sports.ts'
 import { teslaCommand, teslaNotes } from './tesla.ts'
 import { vacuumCommand, vacuumNotes } from './vacuum.ts'
+import { shoppingCommand, shoppingNotes } from './shopping.ts'
 import { calendarRangeEvents, createEvent, updateEvent, removeEvent, onCalendarChange } from './calendar.ts'
 import { linkStart, linkFinish, unlink, gcalStatus, listCalendars, gcalLinked } from './gcal.ts'
 import { sonosCommand, playPreset, playOn, getQueue, jumpToQueue, refreshFavorites, sonosNotes, savePreset, renamePreset, deletePreset } from './sonos.ts'
@@ -136,6 +138,7 @@ const routes: Record<string, Handler> = {
     sonos: { notes: ha.status === 'connected' ? sonosNotes() : [], speakers: ha.all('media_player').filter((p) => ha.platform(p.entity_id) === 'sonos').map((p) => ({ id: p.entity_id, name: ha.name(p), state: p.state })) },
     tesla: ha.status === 'connected' ? teslaNotes() : null,
     vacuum: ha.status === 'connected' ? vacuumNotes() : null,
+    shopping: ha.status === 'connected' ? shoppingNotes() : null,
     sports: { notes: sportsNotes(), games: sportsEvents().length },
     rachio: { configured: rachioConfigured(), working: !!latestRachio(), problem: rachioError() },
   }),
@@ -153,8 +156,7 @@ const routes: Record<string, Handler> = {
   '/api/vacuum/command': act((b) => vacuumCommand(b)),
   '/api/tesla/command': act((b) => teslaCommand(b)),
   '/api/eufy/guard-mode': notConnected('Eufy'),
-  '/api/todoist/add': notConnected('Todoist'),
-  '/api/todoist/toggle': notConnected('Todoist'),
+  '/api/shopping/command': act(async (b) => { await shoppingCommand(b) }),
 }
 
 async function login(req: Request): Promise<Response> {
