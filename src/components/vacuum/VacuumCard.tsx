@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { Panel } from '../irrigation/IrrigationCard'
 import { useHome } from '../../lib/useHome'
 import { VAC_GREY, roomCenter } from '../../lib/vacuum'
 import { Card } from '../Card'
@@ -9,9 +12,8 @@ import type { VacuumState } from '../../types'
 const DOCK_IMG = '/images/vacuum-dock.png'
 
 const Play = ({ size = 16 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M7 4l13 8-13 8z" /></svg>
-const PauseIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
-const HomeIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /></svg>
-const Chevron = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8493a1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 6l6 6-6 6" /></svg>
+const PauseIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+const HomeIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /></svg>
 
 export function Battery({ pct }: { pct: number | null }) {
   return (
@@ -45,6 +47,7 @@ function MiniMap({ v, d }: { v: VacuumState; d: ReturnType<typeof describe> }) {
 export function VacuumCard() {
   const { data } = useHome()
   const a = useVacuumActions()
+  const [presetsOpen, setPresetsOpen] = useState(false)
   if (!data) return null
   const v = data.vacuum
   if (!v) {
@@ -62,28 +65,64 @@ export function VacuumCard() {
   const sub = d.running
     ? (n > 1 && d.prog && d.prog.idx >= 0 ? `${d.run!.name} · room ${d.prog.idx + 1} of ${n}` : n > 1 ? `${d.run!.name} · ${n} rooms` : d.run?.name ?? '')
     : `${d.run?.name ?? 'Clean'}${n ? ` · ${n} room${n > 1 ? 's' : ''} done` : ''}`
-  const btn = 'flex items-center justify-center gap-2.5 rounded-[14px] text-[15px] font-semibold'
+  const strip = 'flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-xs font-medium transition-colors duration-150 active:scale-[0.97] disabled:opacity-60'
+  // Footer strip, like the other cards: Start + Map while docked, Pause + Dock while cleaning
+  const actions = d.running ? (
+    <div className="grid w-full grid-cols-2 gap-2">
+      <button onClick={() => void (v.state === 'paused' ? a.resume() : a.pause())} className={strip}
+        style={{ background: v.state === 'paused' ? tint(d.color, 0.18) : 'var(--color-surface-raised)', color: 'var(--color-ink)' }}>
+        {v.state === 'paused' ? <Play size={12} /> : <PauseIcon />}{v.state === 'paused' ? 'Resume' : 'Pause'}
+      </button>
+      <button onClick={() => void a.dock()} className={strip} style={{ background: 'var(--color-surface-raised)', color: 'var(--color-ink)' }}><HomeIcon /> Dock</button>
+    </div>
+  ) : (
+    <div className="grid w-full grid-cols-2 gap-2">
+      <button onClick={() => void a.full()} disabled={busy} aria-busy={a.starting === 'full'} title="Full clean · vacuum + mop · all rooms"
+        className={strip} style={{ background: 'var(--color-ink)', color: 'var(--color-bg)' }}>
+        <Play size={12} />{a.starting === 'full' ? 'Starting…' : 'Full clean'}
+      </button>
+      <Link to="/vacuum" className={strip} style={{ background: 'var(--color-surface-raised)', color: 'var(--color-ink)' }}>Map &amp; rooms</Link>
+    </div>
+  )
 
   return (
     <Card className="h-full" accent={d.k ? d.color : VAC_GREY} title="Vacuum" category="vacuum" style={wash}
-      headerRight={<span className="text-[13px] text-ink-dim">{d.header}</span>}
-      bodyClassName="@container flex flex-col gap-2.5">
+      headerRight={<span className="flex items-center gap-1 text-[13px] text-ink-dim">{d.header}
+        <Link to="/vacuum" aria-label="Map & rooms" className="-mr-1 flex rounded-full p-1 text-ink-faint hover:text-ink"><ChevronRight size={16} /></Link></span>}
+      bodyClassName="@container flex flex-col gap-2.5"
+      actions={actions}
+      overlay={presetsOpen && !d.running ? (
+        <Panel title="Presets" onClose={() => setPresetsOpen(false)}>
+          {v.presets.map((p) => (
+            <button key={p.id} onClick={() => { setPresetsOpen(false); void a.preset(p.id) }} disabled={!p.available || busy} title={p.reason}
+              className="flex min-h-12 items-center gap-3 rounded-xl border border-edge bg-surface px-3 text-left active:scale-[0.98] disabled:opacity-45">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.color }} />
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-[13px] font-semibold">{p.name}</span>
+                <span className="truncate text-xs text-ink-dim">{p.available ? p.sub : 'Set up rooms'}</span>
+              </span>
+              <span className="ml-auto text-ink-dim"><Play size={14} /></span>
+            </button>
+          ))}
+        </Panel>
+      ) : undefined}>
       <h3 className="font-display text-[22px] font-semibold leading-tight @min-[360px]:text-[26px]">{v.name}</h3>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <Battery pct={v.batteryPct} />
         <span className="text-sm text-[#c9d2db]">{v.batteryPct ?? '–'}%</span>
-        <span className="ml-auto text-right text-sm" style={{ color: d.statusColor }}>{d.status}</span>
+        {/* While cleaning, the room name next to the map says it; a narrow card skips the repeat */}
+        <span className={`ml-auto text-right text-sm ${showMap ? 'hidden @min-[360px]:inline' : ''}`} style={{ color: d.statusColor }}>{d.status}</span>
       </div>
 
       {/* Middle: dock, or the map while it cleans */}
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 @min-[360px]:flex-row @min-[360px]:gap-[18px]">
+      <div className="flex flex-1 flex-row items-center justify-center gap-3 @min-[360px]:gap-[18px]">
         {showMap ? (
           <>
-            <div className="w-full max-w-[220px] shrink-0 @min-[360px]:w-[150px]"><MiniMap v={v} d={d} /></div>
-            <div className="flex w-full min-w-0 flex-1 flex-col gap-1.5">
-              <span className="font-display text-lg font-semibold" style={{ color: d.running && d.color !== VAC_GREY ? d.color : '#e8edf2' }}>{d.running ? d.roomName : 'Heading home'}</span>
-              <span className="text-[13px] text-[#c9d2db]">{sub}</span>
-              {statsText(v) && <span className="font-mono text-[12.5px] font-medium text-[#c9d2db]">{statsText(v)}</span>}
+            <div className="w-[112px] shrink-0 @min-[360px]:w-[150px]"><MiniMap v={v} d={d} /></div>
+            <div className="flex min-w-0 flex-1 flex-col gap-1 @min-[360px]:gap-1.5">
+              <span className="font-display text-[15px] font-semibold leading-tight @min-[360px]:text-lg" style={{ color: d.running && d.color !== VAC_GREY ? d.color : '#e8edf2' }}>{d.running ? d.roomName : 'Heading home'}</span>
+              <span className="text-xs text-[#c9d2db] @min-[360px]:text-[13px]">{sub}</span>
+              {statsText(v) && <span className="font-mono text-[11.5px] font-medium text-[#c9d2db] @min-[360px]:text-[12.5px]">{statsText(v)}</span>}
               {finishText(v) && <span className="text-[13px] font-semibold" style={{ color: d.color !== VAC_GREY ? d.color : '#e8edf2' }}>{finishText(v)}</span>}
               {d.run && n > 1 && (
                 <div className="mt-1 flex gap-[3px]">
@@ -97,12 +136,12 @@ export function VacuumCard() {
           </>
         ) : (
           <>
-            <img src={DOCK_IMG} alt={`Roborock ${v.name} in its dock`} className="h-[96px] w-auto shrink-0 @min-[360px]:ml-[18px] @min-[360px]:h-[118px]" />
-            <div className="flex w-full min-w-0 flex-1 flex-col gap-[9px]">
+            <img src={DOCK_IMG} alt={`Roborock ${v.name} in its dock`} className="h-[76px] w-auto shrink-0 @min-[360px]:ml-[18px] @min-[360px]:h-[118px]" />
+            <div className="flex min-w-0 flex-1 flex-col gap-[7px] @min-[360px]:gap-[9px]">
               {dockRows(v).map((r) => (
-                <div key={r.label} className="flex items-center gap-2 text-[13px]">
+                <div key={r.label} className="flex items-center gap-2 text-[12.5px] @min-[360px]:text-[13px]">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: r.bad ? AMBER : GREEN }} />
-                  <span className="text-[#c9d2db]">{r.label}</span>
+                  <span className="truncate text-[#c9d2db]">{r.label}</span>
                   <span className="ml-auto" style={{ color: r.bad ? AMBER : '#c9d2db' }}>{r.value}</span>
                 </div>
               ))}
@@ -121,45 +160,13 @@ export function VacuumCard() {
         </div>
       )}
 
-      {d.running ? (
-        <div className="grid grid-cols-2 gap-2.5">
-          <button onClick={() => void (v.state === 'paused' ? a.resume() : a.pause())}
-            className={`${btn} h-14 border`} style={v.state === 'paused' ? { borderColor: tint(d.color, 0.6), background: tint(d.color, 0.12) } : { borderColor: '#29333d', background: '#1c242c' }}>
-            {v.state === 'paused' ? <Play /> : <PauseIcon />}<span>{v.state === 'paused' ? 'Resume' : 'Pause'}</span>
-          </button>
-          <button onClick={() => void a.dock()} className={`${btn} h-14 border border-edge bg-surface-raised`}>
-            <HomeIcon /><span className="whitespace-nowrap"><span className="hidden @min-[360px]:inline">Send to </span>Dock</span>
-          </button>
-        </div>
-      ) : (
-        <button onClick={() => void a.full()} disabled={busy} aria-busy={a.starting === 'full'}
-          className="flex min-h-14 items-center gap-3 rounded-[14px] bg-ink px-[18px] py-2 text-left text-bg disabled:opacity-80">
-          <Play size={18} />
-          <span className="flex min-w-0 flex-1 flex-col @min-[360px]:flex-row @min-[360px]:items-center">
-            <span className="text-base font-semibold">{a.starting === 'full' ? 'Starting…' : v.state === 'returning' ? 'Start again' : 'Start'}</span>
-            <span className="text-xs text-[#3a4652] @min-[360px]:ml-auto @min-[360px]:text-[12.5px]">Full clean · vacuum + mop<span className="hidden @min-[360px]:inline"> · all rooms</span></span>
-          </span>
+      {/* Presets: one row that opens a list (the card is narrow on the tablet) */}
+      {!d.running && (
+        <button onClick={() => setPresetsOpen(true)} aria-expanded={presetsOpen}
+          className="flex min-h-11 shrink-0 items-center justify-between rounded-xl border border-edge bg-surface-raised px-3.5 text-[13px] font-medium hover:bg-[#252e38]">
+          <span>Presets <span className="ml-1 text-xs text-ink-faint">{v.presets.length} saved</span></span><ChevronDown size={16} className="text-ink-faint" />
         </button>
       )}
-
-      <div className="grid grid-cols-1 gap-2 @min-[360px]:grid-cols-3">
-        {v.presets.map((p) => {
-          const active = d.running && d.run?.name === p.name
-          return (
-            <button key={p.id} onClick={() => void a.preset(p.id)} disabled={!p.available || busy || d.running} aria-pressed={active}
-              title={p.reason}
-              className="flex min-h-[52px] min-w-0 flex-col items-start justify-center gap-[3px] rounded-xl border px-3 py-1.5 text-left disabled:cursor-default @min-[360px]:h-[62px] @min-[360px]:px-2"
-              style={{ borderColor: active ? p.color : '#29333d', background: active ? tint(p.color, 0.14) : '#1c242c', opacity: p.available ? 1 : 0.45 }}>
-              <span className="max-w-full truncate text-[13px] font-semibold">{p.name}</span>
-              <span className="max-w-full truncate text-xs text-ink-dim">{a.starting === p.id ? 'Starting…' : p.available ? p.sub : 'Set up rooms'}</span>
-            </button>
-          )
-        })}
-      </div>
-
-      <Link to="/vacuum" className="flex min-h-11 items-center justify-between rounded-xl border border-edge bg-surface-raised px-3.5 text-sm font-medium hover:bg-[#252e38]">
-        <span>Map &amp; rooms</span><Chevron />
-      </Link>
     </Card>
   )
 }

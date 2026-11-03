@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.0
+- Page 1 fits the tablet screen: no scrolling to reach the bottom cards' buttons (screens at least 1024 × 680; phones still scroll)
+- Every card's buttons stay at the bottom of the card; if a card ever has more than fits, only its middle scrolls
+- Vacuum card for the narrow slot: dock picture beside the dock status, presets in one "Presets" row that opens a list, Full clean and Map & rooms in the footer (Pause and Dock while cleaning), small map beside the room while cleaning
+- The Tesla picture and camera snapshots size themselves to the space they have
+
 ## 1.11.0
 - Shopping list: **connected to Bring!** (through Home Assistant's Bring! integration), replacing the Todoist placeholder
 - **Tap an item** to check it off: it's struck through, fades and moves to the **Recent** chips (Bring!'s "Recently" items). Tap it again while it fades to undo. **Tap a Recent chip** to put it back on the list

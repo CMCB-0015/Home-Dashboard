@@ -18,7 +18,7 @@ export function openLive(cam: Camera, navigate: (to: string) => void) {
 export function Snapshot({ cam, onOpen }: { cam: Camera; onOpen: () => void }) {
   const offline = cam.status === 'offline'
   return (
-    <button onClick={onOpen} className="group relative block aspect-video w-full overflow-hidden rounded-xl bg-surface-raised text-left" aria-label={`Open live view for ${cam.name}`}>
+    <button onClick={onOpen} className="group relative block aspect-video w-full overflow-hidden fit:aspect-auto fit:h-full rounded-xl bg-surface-raised text-left" aria-label={`Open live view for ${cam.name}`}>
       {cam.snapshotUrl && (
         <img src={cam.snapshotUrl} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
           style={offline ? { filter: 'grayscale(1) brightness(.5)' } : undefined} />
@@ -59,11 +59,12 @@ export function CamerasCard() {
   if (!data) return null
   const online = data.cameras.filter((c) => c.status === 'online').length
   return (
-    <Card accent={cfg.color} title="Cameras" category="cameras" subtitle={`${online} of ${data.cameras.length} online`} headerRight={<GuardToggle />}>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <Card accent={cfg.color} title="Cameras" category="cameras" subtitle={`${online} of ${data.cameras.length} online`} headerRight={<GuardToggle />}
+      bodyClassName="flex flex-col">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 fit:min-h-0 fit:flex-1">
         {data.cameras.map((c) => <Snapshot key={c.id} cam={c} onOpen={() => openLive(c, navigate)} />)}
       </div>
-      <p className="mt-3 text-[11px] text-ink-faint">Latest motion snapshot · tap a camera for the live feed</p>
+      <p className="mt-3 shrink-0 text-[11px] text-ink-faint">Latest motion snapshot · tap a camera for the live feed</p>
     </Card>
   )
 }

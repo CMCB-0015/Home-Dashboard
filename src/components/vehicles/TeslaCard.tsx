@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useFitWidth } from '../../lib/useFit'
 import { useNavigate } from 'react-router-dom'
 import { useHome } from '../../lib/useHome'
 import { HOME } from '../../config/home'
@@ -91,6 +92,8 @@ export function TeslaCard({ className = 'h-full' }: { className?: string }) {
   const { data } = useHome()
   const { act, waking, busy } = useTeslaActions()
   const navigate = useNavigate()
+  // Tablet fit layout: the car shrinks to the height the card has (pictures are about 3:2)
+  const [picRef, picMax] = useFitWidth<HTMLDivElement>(1.6, 0)
   const [panel, setPanel] = useState<'climate' | 'charging' | null>(null)
 
   const t = data?.tesla
@@ -170,10 +173,13 @@ export function TeslaCard({ className = 'h-full' }: { className?: string }) {
         </div>
 
         {/* The picture opens Vehicles; the dots on it open the frunk and trunk */}
-        <div role="link" tabIndex={0} aria-label="Vehicle details" onClick={() => navigate('/vehicles')}
+        <div ref={picRef} role="link" tabIndex={0} aria-label="Vehicle details" onClick={() => navigate('/vehicles')}
           onKeyDown={(ev) => { if (ev.key === 'Enter' && ev.target === ev.currentTarget) navigate('/vehicles') }}
-          className="relative flex min-h-[150px] flex-1 cursor-pointer items-center justify-center py-2">
-          <CarScene mode={scene} compact={!!e} spots={spots} />
+          className="relative flex min-h-[150px] flex-1 cursor-pointer items-center justify-center py-2 fit:min-h-[110px]">
+          {/* On the tablet layout the picture is sized from this box's height, so it never pushes the buttons down */}
+          <div className="flex items-center justify-center fit:absolute fit:inset-0">
+            <CarScene mode={scene} compact={!!e} spots={spots} maxWidth={picMax} />
+          </div>
         </div>
 
         {e && <EnRoute t={t} e={e} mapsKey={data.mapsKey ?? null} />}

@@ -44,7 +44,7 @@ export function Pager() {
 
   return (
     <div ref={ref} className="pager h-full">
-      <section aria-label="Home" inert={page !== 0}>
+      <section aria-label="Home" inert={page !== 0} className="flex flex-col">
         <PageHeader title="Home" subtitle="Everything, at a glance." page={page} onPageChange={goTo} showWeather />
         <HomePage onOpenPlanner={() => goTo(1)} />
       </section>

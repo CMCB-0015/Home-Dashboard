@@ -143,7 +143,7 @@ function ZoneList({ zones, remaining }: { zones: RunZone[]; remaining: number | 
 }
 
 // ── Slide-up panels inside the card ───────────────────────────────────────
-function Panel({ title, right, onClose, children }: { title: ReactNode; right?: ReactNode; onClose: () => void; children: ReactNode }) {
+export function Panel({ title, right, onClose, children }: { title: ReactNode; right?: ReactNode; onClose: () => void; children: ReactNode }) {
   return (
     <div className="sheet-up absolute inset-x-0 bottom-0 z-[3] flex max-h-[92%] flex-col gap-2.5 overflow-y-auto rounded-t-2xl border-t border-edge bg-surface-raised px-4 pb-4 pt-3 shadow-[0_-12px_24px_rgba(0,0,0,0.35)]"
       role="dialog" aria-label={typeof title === 'string' ? title : undefined}>
@@ -319,7 +319,7 @@ export function IrrigationCard() {
 
   return (
     <Card className="h-full" accent={cfg.color} title="Irrigation" category="irrigation" style={wash} headerRight={status}
-      bodyClassName="@container flex flex-col gap-3.5" actions={actions} overlay={overlay}>
+      bodyClassName="@container flex flex-col gap-3.5 fit:gap-2.5" actions={actions} overlay={overlay}>
       {active ? (
         <>
           <div className="flex flex-col items-center gap-3 @min-[300px]:flex-row @min-[300px]:gap-4">

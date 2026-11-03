@@ -186,13 +186,15 @@ function Spots({ at, s }: { at: (typeof SPOT_AT)[keyof typeof SPOT_AT]; s: SpotS
 }
 
 /** The car picture for the card's current state */
-export function CarScene({ mode, compact, spots }: { mode: SceneMode; compact?: boolean; spots?: SpotState }) {
-  if (mode === 'driving') return <Driving width={compact ? 240 : 300} />
+export function CarScene({ mode, compact, spots, maxWidth }: { mode: SceneMode; compact?: boolean; spots?: SpotState; maxWidth?: number }) {
+  // maxWidth: the fit-to-screen tablet layout shrinks the picture to the card's height
+  const w = (full: number) => Math.round(Math.min(full, maxWidth ?? full))
+  if (mode === 'driving') return <Driving width={w(compact ? 240 : 300)} />
   if (mode === 'charging' || mode === 'plugged') {
-    return <Plugged width={300} charging={mode === 'charging'}>{spots && <Spots at={SPOT_AT.plugged} s={spots} />}</Plugged>
+    return <Plugged width={w(300)} charging={mode === 'charging'}>{spots && <Spots at={SPOT_AT.plugged} s={spots} />}</Plugged>
   }
   return (
-    <div className={`relative ${compact ? 'w-[230px]' : 'w-[300px]'} max-w-full`}>
+    <div className="relative max-w-full" style={{ width: w(compact ? 230 : 300) }}>
       <img src={PARKED_IMG} alt="WillaWilla, black Model 3"
         className="block h-auto w-full [mask-image:radial-gradient(ellipse_at_center,#000_55%,transparent_72%)]" />
       {spots && <Spots at={SPOT_AT.parked} s={spots} />}

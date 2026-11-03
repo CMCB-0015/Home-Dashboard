@@ -3,6 +3,10 @@
 /* ── Design tokens ─────────────────────────────────────────────────────────
    Every color in the app comes from here. Change a value once and the whole
    dashboard follows. */
+/* "fit": the tablet layout — page 1 fills the screen with no scrolling.
+   Wide and tall enough screens only; phones and small windows scroll as before. */
+@custom-variant fit (@media (min-width: 1024px) and (min-height: 680px));
+
 @theme static {
   --font-display: "Space Grotesk", sans-serif;
   --font-body: "Inter", sans-serif;
@@ -138,3 +142,7 @@ input[type="range"] { accent-color: currentColor; }
 /* Calendar: the 5-second Undo bar after a delete */
 @keyframes undo-shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .undo-progress { transform-origin: left; animation: undo-shrink 5s linear forwards; }
+
+/* Card bodies on the fit layout: if a card ever has more than fits, only its middle scrolls */
+.fit-scroll { scrollbar-width: none; }
+.fit-scroll::-webkit-scrollbar { display: none; }

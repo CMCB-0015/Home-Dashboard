@@ -10,13 +10,13 @@ import { LightsCard } from '../components/lights/LightsCard'
 // Page 1 — the home dashboard.
 export function HomePage({ onOpenPlanner }: { onOpenPlanner: () => void }) {
   return (
-    <div className="flex flex-col gap-5 px-5 pb-8 md:px-8">
+    <div className="flex flex-col gap-5 px-5 pb-8 md:px-8 fit:min-h-0 fit:flex-1 fit:gap-4 fit:pb-5">
       <StatusBar onOpenPlanner={onOpenPlanner} />
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[2.25fr_1fr]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[2.25fr_1fr] fit:min-h-0 fit:flex-[1_1_0] fit:gap-4">
         <CamerasCard />
         <TeslaCard />
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 fit:min-h-0 fit:flex-[1.12_1_0]">
         <ClimateCard />
         <LightsCard />
         <SonosCard />
