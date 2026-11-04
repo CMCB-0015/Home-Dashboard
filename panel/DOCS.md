@@ -9,6 +9,7 @@ phones or computer (home Wi-Fi only) and bookmark it.
 - **rachio_api_key** — Rachio app → Account → API Access.
 - **weather_lat / weather_lon / weather_location_name** — forecast location.
 - **brief_feed_key** — the same value as `PANEL_FEED_KEY` in The Brief's Netlify settings. Turns on sports chips in the status bar.
+- **twilight_feed_key** — the same value as `PANEL_FEED_KEY` in Twilight's Netlify settings. Turns on Vandenberg launch chips in the status bar.
 - **google_client_id / google_client_secret** — Panel's own Google sign-in key, for adding, editing and deleting calendar events (see Calendar below).
 - **google_maps_key** — a Google Maps key for the weather radar and the Tesla map (see Weather and Tesla map below).
 
@@ -26,6 +27,27 @@ Click **Save**, then **Restart** the app after changing settings.
 Buttons saved with **Save as quick-play button** on the Sonos page are kept in the
 app's own storage, so they survive restarts and updates. Rename or delete them on the
 Sonos page. The buttons in `src/config/home.ts` can only be changed in code.
+
+## Launches in the status bar
+
+Vandenberg launches come from Twilight's feed (`statusBar.launchFeedUrl` in
+`src/config/home.ts`: https://rocket-view-tracker.netlify.app/api/panel). Put the key in
+**twilight_feed_key** on the Configuration tab — never in the code. A launch shows from
+3 days out ("Falcon 9 · Starlink · Thu 6:42 PM", or "Falcon 9 · Fri · time TBD" when only
+the day is set) and drops off an hour after liftoff; Twilight leaves out launched and
+scrubbed ones. Panel checks every 15 minutes, every 5 within 6 hours of a set launch
+time, every minute in the last hour. If chips don't appear, `/api/setup-check` →
+`launches.notes` says why.
+
+## Twilight and The Brief open in a pop-up
+
+Tapping a launch chip opens Twilight over the dashboard, on that launch; tapping a
+sports chip opens The Brief the same way. Close with the X, by swiping the top bar
+down, or by tapping the dimmed edge; the dashboard stays full screen. Both apps allow
+being shown inside Panel only at http://192.168.86.207:8099 (their
+`frame-ancestors` setting). If one comes up blank, open Panel at that address, or add
+the other address to that app's `netlify.toml`. The small arrow button next to the X
+opens the app in the browser instead.
 
 ## Sports in the status bar
 

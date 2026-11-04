@@ -33,6 +33,7 @@ import { buildState, startBackgroundRefresh } from './state.ts'
 import { setLights, allOff, activateScene, bedtimeCommand, lightNames, lightingState, type LightChange } from './lights.ts'
 import { setClimate, thermostats } from './climate.ts'
 import { sportsNotes, sportsEvents } from './sports.ts'
+import { launchNotes, launchEvents } from './launches.ts'
 import { teslaCommand, teslaNotes } from './tesla.ts'
 import { vacuumCommand, vacuumNotes } from './vacuum.ts'
 import { shoppingCommand, shoppingNotes } from './shopping.ts'
@@ -140,6 +141,7 @@ const routes: Record<string, Handler> = {
     vacuum: ha.status === 'connected' ? vacuumNotes() : null,
     shopping: ha.status === 'connected' ? shoppingNotes() : null,
     sports: { notes: sportsNotes(), games: sportsEvents().length },
+    launches: { notes: launchNotes(), upcoming: launchEvents().length },
     rachio: { configured: rachioConfigured(), working: !!latestRachio(), problem: rachioError() },
   }),
 

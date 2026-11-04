@@ -7,11 +7,16 @@
 //   - Calendar and sports chips drop off when the event ends; alert chips drop
 //     off when the alert clears (the server only sends current alerts).
 //   - All Family calendar events (statusBar.calendars in src/config/home.ts). TV channel on games, except F1.
+//   - Vandenberg launches from Twilight (added Nov 3, 2026): today + the next 3 days
+//     (statusBar.launchDays), in time order with everything else.
+//     "Falcon 9 · Starlink · Thu 6:42 PM", or "Falcon 9 · Thu · time TBD" when only the day is known.
+//     A launch drops off an hour after its time (or at the end of its day when the time isn't firm);
+//     Twilight's feed already leaves out launched and scrubbed ones.
 
 import { HOME, matchName } from '../config/home'
-import type { AlertItem, Category, CalendarEvent, HomeState, SportsEvent } from '../types'
+import type { AlertItem, Category, CalendarEvent, HomeState, LaunchEvent, SportsEvent } from '../types'
 
-export type StatusKind = 'alert' | 'calendar' | 'sports'
+export type StatusKind = 'alert' | 'calendar' | 'sports' | 'launch'
 
 export interface StatusItem {
   id: string
@@ -23,7 +28,7 @@ export interface StatusItem {
   detail?: string
   /** Device category of an alert (decides where tapping goes) */
   category?: Category
-  /** Sports: the game's page in The Brief */
+  /** Sports: the game's page in The Brief. Launch: Twilight opened to that launch */
   href?: string | null
 }
 
@@ -51,7 +56,7 @@ const DEFAULT_LENGTH: Record<string, number> = { suns: 2.5 * HOUR, dbacks: 3 * H
 
 interface Timed { item: StatusItem; at: number }
 
-export function statusItems(data: Pick<HomeState, 'alerts' | 'calendar' | 'sports'>, now = new Date()): StatusItem[] {
+export function statusItems(data: Pick<HomeState, 'alerts' | 'calendar' | 'sports' | 'launches'>, now = new Date()): StatusItem[] {
   const nowMs = now.getTime()
   const today = startOfDay(now), tomorrow = startOfDay(now, 1), dayAfter = startOfDay(now, 2), bigLimit = startOfDay(now, 4)
 
@@ -101,6 +106,20 @@ export function statusItems(data: Pick<HomeState, 'alerts' | 'calendar' | 'sport
         detail: [live ? null : time(start), showChannel ? g.channel : null].filter(Boolean).join(' · ') || undefined,
       },
     })
+  }
+
+  // 4. Vandenberg launches from Twilight
+  const launchLimit = startOfDay(now, HOME.statusBar.launchDays + 1)
+  for (const l of (data.launches ?? []) as LaunchEvent[]) {
+    const t0 = Date.parse(l.t0)
+    if (Number.isNaN(t0) || t0 >= launchLimit) continue
+    const gone = l.firm ? t0 + HOUR : startOfDay(new Date(t0), 1)
+    if (gone <= nowMs) continue
+    const day = t0 < tomorrow ? 'Today' : t0 < dayAfter ? 'Tomorrow' : weekday(t0)
+    const text = l.firm
+      ? [l.vehicle, l.mission, `${day} ${time(t0)}`].filter(Boolean).join(' · ')
+      : `${l.vehicle} · ${day} · time TBD`
+    timed.push({ at: t0, item: { id: `launch-${l.id}`, kind: 'launch', text, href: l.url ?? HOME.statusBar.twilightUrl } })
   }
 
   timed.sort((a, b) => a.at - b.at)

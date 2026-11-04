@@ -16,6 +16,7 @@ import { thermostats } from './climate.ts'
 import { refreshFavorites, sonosState } from './sonos.ts'
 import { calendarEvents, calendarError, calendarList, calendarRange, refreshCalendar } from './calendar.ts'
 import { refreshSports, sportsEvents } from './sports.ts'
+import { launchEvents, startLaunches } from './launches.ts'
 import { teslaState } from './tesla.ts'
 import { onTeslaMapChange } from './teslaMap.ts'
 import { gcalStatus } from './gcal.ts'
@@ -37,6 +38,8 @@ export function startBackgroundRefresh(changed: () => void) {
   const loadSports = async () => { if (await refreshSports()) changed() }
   void loadSports()
   setInterval(loadSports, 15 * 60_000)
+
+  startLaunches(changed)
 
   const loadCalendar = async () => { if (await refreshCalendar()) changed() }
   setInterval(loadCalendar, 5 * 60_000)
@@ -131,6 +134,7 @@ export function buildState(): HomeState {
     calendarWrite: gcalStatus(),
     mapsKey: env('GOOGLE_MAPS_KEY') ?? null,
     sports: haConfigured ? sportsEvents() : demo.sports,
+    launches: haConfigured ? launchEvents() : demo.launches,
     irrigationZones,
     irrigation,
     weather: weather ?? demo.weather,

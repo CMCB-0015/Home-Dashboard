@@ -11,6 +11,7 @@ const OPTION_NAMES: Record<string, string> = {
   passcode: 'PANEL_PASSCODE',
   rachio_api_key: 'RACHIO_API_KEY',
   brief_feed_key: 'BRIEF_FEED_KEY',
+  twilight_feed_key: 'TWILIGHT_FEED_KEY',
   weather_lat: 'WEATHER_LAT',
   weather_lon: 'WEATHER_LON',
   weather_location_name: 'WEATHER_LOCATION_NAME',

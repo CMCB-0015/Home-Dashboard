@@ -141,6 +141,15 @@ export const HOME = {
      * in this file, because the repo is public. No key = no sports chips.
      */
     sportsFeedUrl: 'https://rad-peony-6d6054.netlify.app/.netlify/functions/api?action=schedule' as string | null,
+    /** Twilight (Vandenberg launches) — tapping a launch chip opens it in the pop-up, on that launch */
+    twilightUrl: 'https://rocket-view-tracker.netlify.app' as string | null,
+    /**
+     * Twilight's launch feed. The Lenovo reads it with the key from the app's
+     * Configuration tab (twilight_feed_key) — never in this file. No key = no launch chips.
+     */
+    launchFeedUrl: 'https://rocket-view-tracker.netlify.app/api/panel' as string | null,
+    /** Launch chips show this many days ahead */
+    launchDays: 3,
   },
 } as const
 

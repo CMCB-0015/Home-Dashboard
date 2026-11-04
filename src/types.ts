@@ -460,6 +460,23 @@ export interface SportsEvent {
   link?: string | null
 }
 
+/** A Vandenberg launch from Twilight's feed, for the status bar */
+export interface LaunchEvent {
+  id: string
+  /** "Falcon 9" */
+  vehicle: string
+  /** "Starlink 17-4" (null when the feed has none) */
+  mission: string | null
+  /** Launch time (or the day, when not firm) */
+  t0: string
+  /** false = only the day is known ("time TBD") */
+  firm: boolean
+  /** Go · Hold · TBD */
+  status: string
+  /** Twilight opened to this launch */
+  url: string | null
+}
+
 export type Severity = 'info' | 'warning' | 'critical'
 
 export interface AlertItem {
@@ -494,6 +511,8 @@ export interface HomeState {
   calendarWrite?: CalendarWrite
   /** Upcoming games and races from The Brief (empty until its schedule feed exists) */
   sports?: SportsEvent[]
+  /** Upcoming Vandenberg launches from Twilight */
+  launches?: LaunchEvent[]
   /** Bring! shopping lists (null = no Bring! list in Home Assistant yet) */
   shopping?: ShoppingState | null
   alerts: AlertItem[]

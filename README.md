@@ -15,6 +15,7 @@ Open **http://192.168.86.207:8099** and bookmark it.
 | Lights (Hue), Climate (Nest), Sonos, Calendar | Home Assistant, live updates | ✅ |
 | Rachio | Its own code, checked around the clock | ✅ once the API key is set |
 | Sports in the status bar | The Brief's schedule feed, key in the app's `brief_feed_key` setting | ✅ once the key is set |
+| Launches in the status bar | Twilight's launch feed, key in the app's `twilight_feed_key` setting | ✅ once the key is set |
 | Tesla (WillaWilla) | Teslemetry in Home Assistant | ✅ |
 | Vacuum (Roborock S8 Pro Ultra) | Roborock in Home Assistant, rooms matched by name | ✅ |
 | Weather | Open-Meteo, no key | ✅ |

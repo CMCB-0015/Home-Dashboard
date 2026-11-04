@@ -5,9 +5,26 @@ import { useHome } from '../lib/useHome'
 import { categories } from '../lib/categories'
 import { statusItems, type StatusItem } from '../lib/statusItems'
 import { HOME } from '../config/home'
+import { AppSheet } from './AppSheet'
 
 const AMBER = 'var(--color-weather)'
-const DOT: Record<StatusItem['kind'], string> = { alert: AMBER, calendar: 'var(--color-calendar)', sports: 'var(--color-ink)' }
+const DOT: Record<StatusItem['kind'], string> = { alert: AMBER, calendar: 'var(--color-calendar)', sports: 'var(--color-ink)', launch: '#cfdaff' }
+
+/** Launch chips (Option A, Nov 3, 2026): filled with Twilight's night-sky navy, pale star */
+const NAVY = '#070a1c'
+const NAVY_EDGE = '#2a3a68'
+const STAR = '#cfdaff'
+
+function Star({ size = 10 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 10 10" aria-hidden className="shrink-0">
+      <path d="M5 0 L6.1 3.9 L10 5 L6.1 6.1 L5 10 L3.9 6.1 L0 5 L3.9 3.9 Z" fill={STAR} />
+    </svg>
+  )
+}
+
+/** Which app a chip opens in the pop-up */
+type Open = { url: string; app: 'twilight' | 'brief'; subtitle: string }
 
 // Device pages that exist; other alert categories open the full alert list
 const PAGES = new Set(['climate', 'lights', 'cameras', 'vacuum', 'irrigation', 'vehicles', 'sonos'])
@@ -31,27 +48,41 @@ export function StatusBar({ onOpenPlanner }: { onOpenPlanner: () => void }) {
   const { data } = useHome()
   const now = useNow()
   const items = useMemo(() => (data ? statusItems(data, now) : []), [data, now])
+  const [open, setOpen] = useState<Open | null>(null)
   if (!data) return null
 
   return (
+    <>
     <div className="status-bar -mx-5 flex scroll-px-5 gap-2 overflow-x-auto px-5 pb-1 md:-mx-8 md:scroll-px-8 md:px-8" role="list" aria-label="Today and upcoming">
-      {items.map((it) => <Chip key={it.id} item={it} onOpenPlanner={onOpenPlanner} />)}
+      {items.map((it) => <Chip key={it.id} item={it} onOpenPlanner={onOpenPlanner} onOpenApp={setOpen} />)}
       {!items.length && (
         <span role="listitem" className="flex h-10 shrink-0 items-center gap-2 rounded-full border border-edge bg-surface px-4 text-xs text-ink-faint">
           Nothing else on today
         </span>
       )}
     </div>
+    {open && (
+      <AppSheet url={open.url} title={open.app === 'twilight' ? 'Twilight' : 'The Brief'} subtitle={open.subtitle}
+        icon={open.app === 'twilight' ? <Star size={12} /> : undefined}
+        background={open.app === 'twilight' ? NAVY : undefined}
+        onClose={() => setOpen(null)} />
+    )}
+    </>
   )
 }
 
-function Chip({ item, onOpenPlanner }: { item: StatusItem; onOpenPlanner: () => void }) {
+function Chip({ item, onOpenPlanner, onOpenApp }: { item: StatusItem; onOpenPlanner: () => void; onOpenApp: (o: Open) => void }) {
   const alert = item.kind === 'alert'
-  const cls = 'flex h-10 max-w-[80vw] shrink-0 snap-start items-center gap-2 rounded-full border bg-surface px-4 text-xs transition-colors hover:bg-surface-raised'
-  const style: React.CSSProperties = { borderColor: alert ? AMBER : 'var(--color-edge)' }
+  const launch = item.kind === 'launch'
+  const cls = `flex h-10 max-w-[80vw] shrink-0 snap-start items-center gap-2 rounded-full border px-4 text-xs transition-colors ${launch ? 'hover:brightness-125' : 'bg-surface hover:bg-surface-raised'}`
+  const style: React.CSSProperties = launch
+    ? { background: NAVY, borderColor: NAVY_EDGE, boxShadow: '0 0 14px -4px rgba(120,150,230,0.35)' }
+    : { borderColor: alert ? AMBER : 'var(--color-edge)' }
   const body = (
     <>
-      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: DOT[item.kind], boxShadow: alert ? `0 0 6px ${AMBER}` : undefined }} />
+      {launch
+        ? <Star />
+        : <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: DOT[item.kind], boxShadow: alert ? `0 0 6px ${AMBER}` : undefined }} />}
       {item.label && <span className="shrink-0 font-semibold text-ink">{item.label}</span>}
       <span className="truncate font-medium text-ink">{item.text}</span>
       {item.detail && <span className="shrink-0 text-ink-faint">{item.detail}</span>}
@@ -61,10 +92,11 @@ function Chip({ item, onOpenPlanner }: { item: StatusItem; onOpenPlanner: () => 
   if (item.kind === 'calendar') {
     return <button role="listitem" onClick={onOpenPlanner} className={cls} style={style}>{body}</button>
   }
-  if (item.kind === 'sports') {
-    const href = item.href ?? HOME.statusBar.briefUrl
+  if (item.kind === 'sports' || launch) {
+    const href = item.href ?? (launch ? HOME.statusBar.twilightUrl : HOME.statusBar.briefUrl)
+    const subtitle = [item.label, item.text].filter(Boolean).join(' · ')
     return href
-      ? <a role="listitem" href={href} target="_blank" rel="noreferrer" className={cls} style={style}>{body}</a>
+      ? <button role="listitem" onClick={() => onOpenApp({ url: href, app: launch ? 'twilight' : 'brief', subtitle })} className={cls} style={style}>{body}</button>
       : <span role="listitem" className={cls} style={style}>{body}</span>
   }
   const to = item.category && PAGES.has(item.category) ? categories[item.category].path : '/alerts'

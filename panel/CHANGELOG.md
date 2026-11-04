@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.13.0
+- Status bar: **Vandenberg launches from Twilight** — a launch shows from 3 days out as a night-sky navy chip with a small star: "Falcon 9 · Starlink · Thu 6:42 PM", or "Falcon 9 · Fri · time TBD" when only the day is set (never hidden). Drops off an hour after liftoff; launched and scrubbed ones aren't shown
+- New setting **twilight_feed_key** (Configuration tab): the same value as `PANEL_FEED_KEY` in Twilight's Netlify settings. No key = no launch chips; `/api/setup-check` → `launches` says why
+- Panel checks Twilight every 15 minutes, every 5 within 6 hours of a set launch time and every minute in the last hour
+- **Twilight and The Brief open in a pop-up** over the dashboard instead of a new tab, so the tablet stays full screen. A launch chip opens Twilight on that launch (the rest of Twilight is there to scroll); a sports chip opens The Brief. Close with the X, a swipe down on the top bar, or a tap on the dimmed edge
+
 ## 1.12.0
 - Page 1 fits the tablet screen: no scrolling to reach the bottom cards' buttons (screens at least 1024 × 680; phones still scroll)
 - Every card's buttons stay at the bottom of the card; if a card ever has more than fits, only its middle scrolls

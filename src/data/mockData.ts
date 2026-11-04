@@ -232,6 +232,11 @@ export function buildMockState(): HomeState {
       { id: 'g1', kind: 'suns', title: 'Suns vs. Portland', start: todayAt(19), end: todayAt(21, 30), channel: 'ESPN' },
       { id: 'g2', kind: 'f1', title: 'F1 · Mexico City GP', start: todayAt(13, 0, 2), end: todayAt(15, 0, 2), big: true },
     ],
+    launches: [
+      { id: 'l1', vehicle: 'Falcon 9', mission: 'Starlink 17-4', t0: todayAt(18, 42, 2), firm: true, status: 'Go', url: 'https://rocket-view-tracker.netlify.app/?launch=l1' },
+      { id: 'l2', vehicle: 'Falcon 9', mission: 'Transporter-16', t0: todayAt(12, 0, 3), firm: false, status: 'TBD', url: 'https://rocket-view-tracker.netlify.app/?launch=l2' },
+      { id: 'l3', vehicle: 'Minotaur IV', mission: 'NROL-174', t0: todayAt(20, 0, 6), firm: true, status: 'Go', url: null },
+    ],
     shopping: {
       lists: [
         { id: 'todo.home', name: 'Home', open: 8, available: true },
