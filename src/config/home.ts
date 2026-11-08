@@ -79,6 +79,9 @@ export const HOME = {
     /** Charge-limit buttons on the Charging panel; defaultLimit gets the "default" label */
     chargePresets: [60, 80],
     defaultLimit: 80,
+    /** Recommended cold tire pressure (Tesla app → Controls). A tire this many psi under turns amber */
+    tirePsi: 42,
+    tireLowBy: 5,
   },
 
   /**

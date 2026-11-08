@@ -18,7 +18,7 @@ const yesNo = (v: boolean | null, yes: string, no: string) => (v === null ? '—
 function details(t: Tesla): [string, string][] {
   const sched = t.schedule ? (t.schedule.enabled ? `On · starts ${t.schedule.time ?? '—'}` : 'Off') : '—'
   return [
-    ['Where', t.driving ? (t.enRouteHome ? 'Driving home' : 'Driving') : t.atHome ? 'Home' : 'Away from home'],
+    ['Where', t.driving ? (t.enRouteHome ? 'Driving home' : 'Driving') : t.atHome ? 'Home' : t.zone ? `At ${t.zone}` : 'Away from home'],
     ['Locks', yesNo(t.locked, 'Locked', 'Unlocked')],
     ['Inside', t.insideF !== null ? `${t.insideF}°` : '—'],
     ['Outside', t.outsideF !== null ? `${t.outsideF}°` : '—'],
@@ -28,8 +28,16 @@ function details(t: Tesla): [string, string][] {
     ['Charge done', clock(t.doneAt) ?? '—'],
     ['Frunk', yesNo(t.frunkOpen, 'Open', 'Closed')],
     ['Trunk', yesNo(t.trunkOpen, 'Open', 'Closed')],
+    ['Tires', tiresLine(t)],
     ['Connection', t.online ? 'Awake' : 'Asleep — wakes on the first command'],
   ]
+}
+
+/** "43 · 43 · 43 · 44 psi" (front left, front right, rear left, rear right) */
+function tiresLine(t: Tesla): string {
+  if (!t.tires) return '—'
+  const v = (['fl', 'fr', 'rl', 'rr'] as const).map((k) => t.tires![k]?.psi ?? '–')
+  return `${v.join(' · ')} psi`
 }
 
 const mapsLink = (l: { lat: number; lon: number }) => `https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lon}`
@@ -40,12 +48,12 @@ function LocationCard({ t, mapsKey }: { t: Tesla; mapsKey: string | null }) {
   const [failed, setFailed] = useState<string | null>(null)
   const ctl = useRef<LiveCarMapHandle | null>(null)
   const e = t.enRouteHome
-  const where = t.driving ? (e ? 'Driving home' : 'Driving') : t.atHome ? 'Parked · Home' : 'Parked'
-  const speed = t.driving && t.speedMph ? ` · ${t.speedMph} mph` : ''
+  const where = e ? 'En route home' : t.driving ? 'Driving' : t.atHome ? 'Parked · Home' : t.zone ? `At ${t.zone}` : 'Parked'
+  const speed = t.driving && t.speedMph !== null ? ` · ${t.speedMph} mph` : ''
   const round = 'flex h-11 w-11 items-center justify-center rounded-full border border-edge bg-bg/85 text-ink hover:bg-surface-raised'
   return (
     <Card accent={cfg.color} title="Location" className="flex h-[460px] flex-col md:sticky md:top-4 md:h-[min(680px,calc(100vh-150px))] md:min-h-[440px]" bodyClassName="flex flex-col !px-3 !pb-3"
-      headerRight={<span className="text-[13px]" style={{ color: t.driving ? '#6fa8ff' : 'var(--color-ink-dim)' }}>{where}{speed}</span>}>
+      headerRight={<span className="text-[13px]" style={{ color: t.driving || e ? '#6fa8ff' : 'var(--color-ink-dim)' }}>{where}{speed}</span>}>
       <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-xl border border-edge bg-[#18212a]">
         {mapsKey && !failed ? (
           <>
@@ -95,7 +103,7 @@ export function VehiclesPage() {
       subtitle={t ? `${HOME.tesla.name} · updated ${relativeTime(t.updatedAt)} · the dashboard never wakes the car just to refresh` : 'Teslemetry isn’t in Home Assistant yet'}>
       <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-[minmax(0,420px)_1fr]">
         <div className="flex flex-col gap-5">
-          <TeslaCard className="min-h-[500px]" />
+          <TeslaCard className="min-h-[500px]" onPage />
           {t && (
             <Card accent={cfg.color} title="Status">
               <dl className="divide-y divide-edge-soft">

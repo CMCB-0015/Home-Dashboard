@@ -82,10 +82,29 @@ the power trunk. The frunk can only be closed by hand (Tesla doesn't allow closi
 remotely). The 4th button vents the windows (blue while vented); tap again to close
 them. Uses Teslemetry's **Trunk**, **Frunk** and **Windows** cover entities.
 
+Driving: the card shows the car on a moving road with the speed ("Driving · 42 mph",
+"Driving · 0 mph" at a light) and the road it's on, plus a line with this drive's time
+and miles so far. Driving home, the live map takes the picture's place and the line
+shows when the car will be home. Turn on Teslemetry's **Shift state** and **Speed**
+entities (Home Assistant → Settings → Devices → WillaWilla; both are off by default):
+without them Panel can only tell the car is driving from its GPS position moving.
+
+Zones: parked in a Home Assistant zone other than home, the card says so — a zone
+named **Work** shows "At Work" ("Charging · Work" while charging). Make the zone in
+Home Assistant → Settings → Areas, labels & zones → Zones. Addresses stay in Home
+Assistant, not in Panel.
+
+Tire pressure: on the Vehicles page, the psi button in the card's top corner switches
+to a top-down view of the car with each tire's pressure and when it last reported (tires
+only report while the car is awake). A tire 5 psi or more under the recommended 42 psi
+turns amber, and the Home card says which one. Needs Teslemetry's four **Tire pressure**
+entities turned on. The 42 and the 5 are `tirePsi` and `tireLowBy` in
+`src/config/home.ts`.
+
 ### Tesla map
 
-With **google_maps_key** set, the "en route home" row on the card becomes a live map strip
-(the car, home and the way home, with the minutes left), and the Vehicles page gets a
+With **google_maps_key** set, the card shows a live map while the car is driving home
+(the car, home and the way home, with the minutes left — "Arriving" at the end), and the Vehicles page gets a
 **Location** map: the car with an arrow for the way it's heading, home, a dotted trail of
 this drive, and — while navigating home — Google's route home in blue, with the arrival time
 and any traffic delay. Drag or zoom to look around; the arrow button follows the car again.
@@ -97,7 +116,11 @@ One-time setup (same Google Cloud project and key as the radar):
 2. Credentials → the Maps key → **API restrictions**: add **Routes API** next to Maps JavaScript
    API → Save. Keep the website restriction (`http://192.168.86.207:8099/*`): Panel sends that
    address with its route requests.
-3. Home Assistant → Settings → Devices → WillaWilla → enable the **GPS heading** and
+3. For the road name while driving ("I-5 S · San Juan Capistrano"): Library → **Geocoding
+   API** → **Enable**, and add **Geocoding API** to the key's API restrictions. The browser
+   asks Google at most once a minute while the car drives (never while parked). Without it the
+   road name is simply left out.
+4. Home Assistant → Settings → Devices → WillaWilla → enable the **GPS heading** and
    **Traffic delay** entities (both are off by default). Without them the arrow follows the
    drive and the traffic line is hidden.
 

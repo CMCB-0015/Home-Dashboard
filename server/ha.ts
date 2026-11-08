@@ -17,6 +17,8 @@ export interface HAState {
   attributes: Record<string, any>
   last_changed: string
   last_updated: string
+  /** Newer Home Assistant: when the entity last reported, even if nothing changed */
+  last_reported?: string
 }
 
 export interface BrowseItem {

@@ -4,6 +4,8 @@
 // Trail: while the car drives, its positions are kept here (one every ~25 m)
 // and cleared once it has been parked for 10 minutes. Nothing is saved to disk.
 //
+// Drive stats: when this drive started and how far it's gone, from the trail.
+//
 // Route: while the car is navigating home, Panel asks Google's Routes API for
 // the driving route from the car to home — at most once a minute, plus right
 // away when the destination changes. It uses Panel's google_maps_key; the key
@@ -42,19 +44,31 @@ const TRAIL_MAX = 1500
 const PARKED_RESET_MS = 10 * 60_000
 let trail: LatLon[] = []
 let lastDriving = 0
+let driveStart = 0
+let driveMeters = 0
 
 /** Record the car's position (call on every update) */
 export function recordTrail(loc: LatLon | null, driving: boolean) {
   const now = Date.now()
   if (driving) {
     lastDriving = now
+    if (!trail.length) { driveStart = now; driveMeters = 0 }
     if (loc && (!trail.length || meters(trail[trail.length - 1], loc) >= TRAIL_STEP_M)) {
+      if (trail.length) driveMeters += meters(trail[trail.length - 1], loc)
       trail.push(loc)
       if (trail.length > TRAIL_MAX) trail = trail.filter((_, i) => i % 2 === 0) // thin out very long drives
     }
   } else if (trail.length && now - lastDriving > PARKED_RESET_MS) {
     trail = []
+    driveStart = 0
+    driveMeters = 0
   }
+}
+
+/** This drive so far: when it started and how far (stops shorter than 10 minutes don't end it) */
+export function driveStats(): { startedAt: string | null; miles: number | null } {
+  if (!driveStart) return { startedAt: null, miles: null }
+  return { startedAt: new Date(driveStart).toISOString(), miles: Math.round((driveMeters / 1609.344) * 10) / 10 }
 }
 
 /** This drive's trail, ending at the car (null when there isn't one) */
@@ -116,13 +130,13 @@ function post(url: string, body: unknown, headers: Record<string, string>): Prom
 }
 
 /** Plain-language reason for a refused request */
-export function explain(status: number, text: string): string {
+export function explain(status: number, text: string, api = 'Routes API'): string {
   let msg = ''
   try { msg = JSON.parse(text)?.error?.message ?? '' } catch { /* not JSON */ }
-  if (/has not been used|is disabled|SERVICE_DISABLED/i.test(msg + text)) return 'The Routes API isn’t turned on for the Google Cloud project — turn it on in Cloud Console (APIs & Services → Library → Routes API)'
+  if (/has not been used|is disabled|SERVICE_DISABLED/i.test(msg + text)) return `The ${api} isn’t turned on for the Google Cloud project — turn it on in Cloud Console (APIs & Services → Library → ${api})`
   if (/referer|referrer/i.test(msg + text)) return `Google refused the request because of the key’s website restriction — it needs to allow ${panelUrl()}*`
-  if (/not authorized to use this (service or )?API|API_KEY_SERVICE_BLOCKED|blocked/i.test(msg + text)) return 'The Maps key isn’t allowed to use the Routes API — add “Routes API” to the key’s API restrictions in Cloud Console'
-  if (/billing/i.test(msg + text)) return 'Google wants billing turned on for the Cloud project to use the Routes API'
+  if (/not authorized to use this (service or )?API|API_KEY_SERVICE_BLOCKED|blocked/i.test(msg + text)) return `The Maps key isn’t allowed to use the ${api} — add “${api}” to the key’s API restrictions in Cloud Console`
+  if (/billing/i.test(msg + text)) return `Google wants billing turned on for the Cloud project to use the ${api}`
   if (status === 400 || status === 403) return `Google refused the route request (${status})${msg ? `: ${msg}` : ''}`
   return `Google route request failed (${status || 'no answer'})`
 }

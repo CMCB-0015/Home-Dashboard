@@ -11,7 +11,7 @@
 import type { Tesla } from '../src/types.ts'
 import { HOME } from '../src/config/home.ts'
 import { ha, type HAState } from './ha.ts'
-import { currentTrail, recordTrail, routeHome, routeNotes, trailHeading } from './teslaMap.ts'
+import { currentTrail, driveStats, meters, recordTrail, routeHome, routeNotes, trailHeading } from './teslaMap.ts'
 
 const PLATFORMS = ['teslemetry', 'tesla_fleet', 'tessie']
 
@@ -55,6 +55,10 @@ const FIND = {
   heading: ['sensor', /_gps_heading$|_heading$/],
   shift: ['sensor', /_shift_state$/],
   speed: ['sensor', /_speed$/],
+  tireFL: ['sensor', /_tire_pressure_front_left$|_tpms_pressure_fl$/],
+  tireFR: ['sensor', /_tire_pressure_front_right$|_tpms_pressure_fr$/],
+  tireRL: ['sensor', /_tire_pressure_rear_left$|_tpms_pressure_rl$/],
+  tireRR: ['sensor', /_tire_pressure_rear_right$|_tpms_pressure_rr$/],
   status: ['binary_sensor', /_status$|_online$/],
   scheduleTime: ['sensor', /_scheduled_charging_start_time$/],
   schedulePending: ['binary_sensor', /_scheduled_charging_pending$/],
@@ -115,6 +119,30 @@ function distanceMi(a: { lat: number; lon: number }, b: { lat: number; lon: numb
   return 2 * R * Math.asin(Math.sqrt(h))
 }
 
+/** psi from a tire sensor that may report bar or kPa, and when it last reported */
+function tire(s?: HAState): { psi: number; at: string } | null {
+  const v = num(s)
+  if (v === null || v <= 0) return null
+  const unit = String(s!.attributes.unit_of_measurement ?? 'psi').toLowerCase()
+  const psi = unit === 'bar' ? v * 14.5038 : unit === 'kpa' ? v * 0.145038 : v
+  // last_reported (newer Home Assistant) changes even when the value doesn't
+  return { psi: Math.round(psi), at: s!.last_reported ?? s!.last_updated }
+}
+
+// The car counts as driving if it moved recently, even when the Shift state
+// and Speed entities are off (they are, by default, in Teslemetry)
+const MOVED_M = 40
+const MOVING_FOR_MS = 3 * 60_000
+let lastSpot: { lat: number; lon: number } | null = null
+let movedAt = 0
+function movingOnGps(loc: { lat: number; lon: number } | null): boolean {
+  if (loc) {
+    if (lastSpot && meters(lastSpot, loc) >= MOVED_M) { movedAt = Date.now(); lastSpot = loc }
+    else if (!lastSpot) lastSpot = loc
+  }
+  return Date.now() - movedAt < MOVING_FOR_MS
+}
+
 function coords(s?: HAState) {
   const lat = Number(s?.attributes.latitude), lon = Number(s?.attributes.longitude)
   return Number.isFinite(lat) && Number.isFinite(lon) && (lat !== 0 || lon !== 0) ? { lat, lon } : null
@@ -150,7 +178,15 @@ export function teslaState(): Tesla | null {
   const h = home()
   const atHome = e.location?.state === 'home' || (!!loc && !!h && distanceMi(loc, h) < 0.15)
   const shift = String(e.shift?.state ?? '').toUpperCase()
-  const driving = ['D', 'R', 'N'].includes(shift) || (num(e.speed) ?? 0) > 0
+  // Shift state, when it's on, is the truth (P = parked, even right after moving).
+  // Without it, fall back to speed, then to the car moving on GPS.
+  const moving = movingOnGps(loc)
+  const driving = ok(e.shift)
+    ? ['D', 'R', 'N'].includes(shift)
+    : (num(e.speed) ?? 0) > 0 || (!atHome && moving)
+  // Any Home Assistant zone the car is in, other than home ("Work")
+  const zoneRaw = String(e.location?.state ?? '')
+  const zone = zoneRaw && !['not_home', 'home', 'unknown', 'unavailable'].includes(zoneRaw) ? zoneRaw : null
 
   let enRouteHome: Tesla['enRouteHome'] = null
   if (!atHome && headingHome(e)) {
@@ -242,6 +278,12 @@ export function teslaState(): Tesla | null {
     atHome,
     driving,
     speedMph: num(e.speed) === null ? null : Math.round(num(e.speed)!),
+    zone,
+    drive: driving ? driveStats() : null,
+    tires: e.tireFL || e.tireFR || e.tireRL || e.tireRR
+      ? { fl: tire(e.tireFL), fr: tire(e.tireFR), rl: tire(e.tireRL), rr: tire(e.tireRR) }
+      : null,
+    tirePsi: HOME.tesla.tirePsi,
     enRouteHome,
     location: loc,
     heading: heading === null ? null : Math.round(heading),
@@ -262,6 +304,9 @@ export function teslaNotes(): { found: Record<string, string>; missing: string[]
   const missing: string[] = wanted.filter((k) => !e[k])
   if (!e.route && !e.destination) missing.push('The Destination entity is off — enable it in Home Assistant for "en route home"')
   if (!e.heading) missing.push('The GPS heading entity is off — enable it in Home Assistant so the map arrow points the way the car faces (until then it follows the drive)')
+  if (!e.shift) missing.push('The Shift state entity is off — enable it in Home Assistant so the card knows the car is driving (until then it goes by speed and GPS)')
+  if (!e.speed) missing.push('The Speed entity is off — enable it in Home Assistant for "Driving · 42 mph"')
+  if (!e.tireFL) missing.push('The Tire pressure entities are off — enable all four in Home Assistant for the tire view on the Vehicles page')
   if (!e.trafficDelay) missing.push('The Traffic delay entity is off — enable it in Home Assistant for "+4 min traffic" on the map')
   return { found, missing, map: routeNotes() }
 }

@@ -218,6 +218,8 @@ export interface IrrigationSummary {
 }
 
 /** The Tesla (WillaWilla), from Teslemetry through Home Assistant */
+export interface TirePsi { psi: number; at: string }
+
 export interface Tesla {
   name: string
   /** Awake and talking to Teslemetry (asleep cars wake on the first command) */
@@ -264,6 +266,14 @@ export interface Tesla {
   driving: boolean
   speedMph: number | null
   /** Only when the navigation destination is Home — never a guess */
+  /** The Home Assistant zone the car is in, other than home (e.g. "Work") */
+  zone?: string | null
+  /** This drive so far (while driving) */
+  drive?: { startedAt: string | null; miles: number | null } | null
+  /** Tire pressures in psi, each with when it last reported (Teslemetry tire pressure entities) */
+  tires?: { fl: TirePsi | null; fr: TirePsi | null; rl: TirePsi | null; rr: TirePsi | null } | null
+  /** Recommended cold tire pressure */
+  tirePsi?: number
   enRouteHome: { minutes: number | null; miles: number | null; arriveAt: string | null; near: string | null; trafficDelayMin?: number | null } | null
   location: { lat: number; lon: number } | null
   /** Compass heading of the car (0 = north): reported by the car, or worked out from the drive */

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.14.0
+- Tesla: **driving home on the tablet** — the live map now takes the car picture's place, so the line with the arrival time and miles is never cut off. "Arriving" (green) at the end
+- Tesla: **speed and road while driving** — "Driving · 42 mph" (and "Driving · 0 mph" at a light). Driving anywhere else: the car on the road with the speed big and the road it's on ("I-5 S · San Juan Capistrano") under it, plus this drive's time and miles so far
+- Tesla: the road name comes from Google's **Geocoding API** on the same Maps key — turn it on once (DOCS → Tesla map). Asked at most once a minute, only while driving
+- Tesla: **knows it's driving** even with Teslemetry's Shift state / Speed entities off (by the car moving on GPS) — the card had shown the parked picture with the trunk dots while driving. Turning those two entities on is still best; `/api/setup-check` lists them
+- Tesla: **"At Work"** — parked in a Home Assistant zone named Work, the card says "At Work" ("Charging · Work"); the Vehicles page too. Any other zone works the same way
+- Vehicles page: **tire pressure view** — the psi button in the card's top corner shows the car from above with each tire's pressure and when it reported, like the Tesla app. A tire 5 psi or more under the recommended 42 turns amber, and the Home card says which ("Rear left tire low · 36 psi"). Status list gains a Tires row
+- Vehicles page: the card keeps the car on the road while driving home (the big map is right beside it), and the Location header says "En route home" instead of "Parked"
+
 ## 1.13.0
 - Status bar: **Vandenberg launches from Twilight** — a launch shows from 3 days out as a night-sky navy chip with a small star: "Falcon 9 · Starlink · Thu 6:42 PM", or "Falcon 9 · Fri · time TBD" when only the day is set (never hidden). Drops off an hour after liftoff; launched and scrubbed ones aren't shown
 - New setting **twilight_feed_key** (Configuration tab): the same value as `PANEL_FEED_KEY` in Twilight's Netlify settings. No key = no launch chips; `/api/setup-check` → `launches` says why

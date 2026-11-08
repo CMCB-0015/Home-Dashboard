@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useHome } from '../../lib/useHome'
+import { HOME } from '../../config/home'
 import type { Tesla } from '../../types'
 
 export const GREEN = '#4fd18b'
@@ -96,3 +97,37 @@ export const clock = (iso: string | null) => {
 }
 
 export const isCharging = (t: Tesla) => t.charging === 'charging' || t.charging === 'starting'
+
+// ── Tires ────────────────────────────────────────────────────────────────
+export const TIRE_NAMES = { fl: 'Front left', fr: 'Front right', rl: 'Rear left', rr: 'Rear right' } as const
+export type TireKey = keyof typeof TIRE_NAMES
+
+/** Recommended cold pressure, and the psi at or below which a tire counts as low */
+export function tireLimits(t: Tesla) {
+  const rec = t.tirePsi ?? HOME.tesla.tirePsi
+  return { rec, lowAt: rec - HOME.tesla.tireLowBy }
+}
+
+/** Tires running low (≥ tireLowBy psi under recommended), lowest first */
+export function lowTires(t: Tesla): { key: TireKey; name: string; psi: number; under: number }[] {
+  if (!t.tires) return []
+  const { rec, lowAt } = tireLimits(t)
+  return (Object.keys(TIRE_NAMES) as TireKey[])
+    .map((key) => ({ key, r: t.tires![key] }))
+    .filter((x) => x.r && x.r.psi <= lowAt)
+    .map(({ key, r }) => ({ key, name: TIRE_NAMES[key], psi: r!.psi, under: rec - r!.psi }))
+    .sort((a, b) => a.psi - b.psi)
+}
+
+/** "18 minutes ago", like the Tesla app */
+export function agoLong(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const min = Math.round((Date.now() - Date.parse(iso)) / 60_000)
+  if (!Number.isFinite(min)) return ''
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`
+  const hr = Math.round(min / 60)
+  if (hr < 24) return `${hr} hour${hr === 1 ? '' : 's'} ago`
+  const d = Math.round(hr / 24)
+  return `${d} day${d === 1 ? '' : 's'} ago`
+}
