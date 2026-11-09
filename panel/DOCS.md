@@ -23,7 +23,7 @@ After **idle_minutes** (default 2) with no touch, Panel fades to a near-black sc
 - **idle_brightness** (10–60, default 32): how bright the clock and text are, in %. The background stays near-black.
 - The tablet's backlight stays on; a web page can't turn it down. ChromeOS: Settings → Power → When idle → Keep display on.
 - **To turn it off:** set **idle_dim** off, Save, Restart Panel. Panel then works exactly as 1.15.0 did.
-- **To remove it for good:** the baseline is **1.15.0, commit 37bbb8c** (GitHub tag `baseline-pre-idle-dim`). Revert the 1.16.0 idle commit, or restore 37bbb8c's code under a *higher* version number (Home Assistant only offers higher versions).
+- **To remove it for good:** the baseline is **1.15.0, commit 37bbb8c** (GitHub branch `baseline-pre-idle-dim`). Revert the 1.16.0 idle commit, or restore 37bbb8c's code under a *higher* version number (Home Assistant only offers higher versions).
 
 ## If something looks wrong
 
