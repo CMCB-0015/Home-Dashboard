@@ -16,7 +16,7 @@
 
 import type { AlertItem, Camera, GuardMode } from '../src/types.ts'
 import { ha, type HAState } from './ha.ts'
-import { cacheGet, cacheSet } from './cache.ts'
+import { cacheDelete, cacheGet, cacheSet } from './cache.ts'
 import { env } from './env.ts'
 
 const PLATFORM = 'eufy_sdk'
@@ -71,15 +71,22 @@ const EVENT_LABEL: Record<string, Camera['lastEvent']> = {
   package_delivered: 'Package', package_taken: 'Package', package_stranded: 'Package', sound: 'Sound', crying: 'Sound',
 }
 
+/**
+ * Only a real Detection event counts as motion. (1.15.0 fell back to the picture's
+ * last_updated, which changes whenever Home Assistant renews the picture's access
+ * token, every few minutes, so it showed "Motion · just now" all the time.)
+ */
 function lastDetection(f: Found): { at: string; label: NonNullable<Camera['lastEvent']> } | null {
   const ev = f.parts.detection
   if (ev && usable(ev) && !Number.isNaN(Date.parse(ev.state))) {
     return { at: new Date(ev.state).toISOString(), label: EVENT_LABEL[String(ev.attributes.event_type)] ?? 'Motion' }
   }
-  // No detection entity: the picture changing is the next best sign of motion
-  const img = f.parts.image
-  if (img && usable(img)) return { at: img.last_updated, label: 'Motion' }
   return null
+}
+
+/** When the picture itself last changed (the image entity's state), not when its token was renewed */
+function pictureVersion(img: HAState): string {
+  return !Number.isNaN(Date.parse(img.state)) ? img.state : img.last_changed
 }
 
 // ── Local time (overnight motion) ─────────────────────────────────────────
@@ -118,7 +125,10 @@ export { overnightUntil }
 type Night = { at: string; label: string; until: number }
 let night: Record<string, Night> = {}
 let nightLoaded = false
-void cacheGet<Record<string, Night>>('camera-night').then((v) => { if (v) night = { ...v, ...night }; nightLoaded = true })
+// 'camera-night-v2': the 1.15.0 list held fake events (see lastDetection), so it's dropped
+const NIGHT_KEY = 'camera-night-v2'
+void cacheDelete('camera-night')
+void cacheGet<Record<string, Night>>(NIGHT_KEY).then((v) => { if (v) night = { ...v, ...night }; nightLoaded = true })
 
 function rememberNight(name: string, d: { at: string; label: string }) {
   const at = Date.parse(d.at)
@@ -127,7 +137,7 @@ function rememberNight(name: string, d: { at: string; label: string }) {
   const prev = night[name]
   if (prev && Date.parse(prev.at) >= at) return
   night[name] = { at: d.at, label: d.label, until }
-  if (nightLoaded) void cacheSet('camera-night', night)
+  if (nightLoaded) void cacheSet(NIGHT_KEY, night)
 }
 
 // ── State for the dashboard ───────────────────────────────────────────────
@@ -147,7 +157,7 @@ export function camerasState(): Camera[] | null {
       lastMotionAt: det?.at ?? null,
       lastEvent: det?.label ?? null,
       // Through Panel's /api/ha-image (Home Assistant needs a login); ?v= changes with each new picture
-      snapshotUrl: pic ? `/api/ha-image?p=${encodeURIComponent(pic)}&v=${encodeURIComponent(img!.last_updated)}` : null,
+      snapshotUrl: pic ? `/api/ha-image?p=${encodeURIComponent(pic)}&v=${encodeURIComponent(pictureVersion(img!))}` : null,
       liveUrl: null,
       battery: num(f.parts.battery),
       solar: num(f.parts.solar),
@@ -179,7 +189,7 @@ export function cameraAlerts(cams: Camera[]): AlertItem[] {
   // Clean up expired overnight events
   let dropped = false
   for (const [k, v] of Object.entries(night)) if (now >= v.until) { delete night[k]; dropped = true }
-  if (dropped) void cacheSet('camera-night', night)
+  if (dropped) void cacheSet(NIGHT_KEY, night)
   return out
 }
 

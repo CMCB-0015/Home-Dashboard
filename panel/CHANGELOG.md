@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.16.1
+- Cameras: **fixed "Motion · just now" showing all the time**. Motion now comes only from each camera's real Detection event (person, pet, vehicle, motion). 1.15.0 also used the picture's update time, which changes whenever Home Assistant renews the picture's access token (every few minutes). Until a camera reports its first detection, its picture says "No motion yet" and no chip shows
+- Cameras: the overnight-motion list from 1.15.0 held those false events and is cleared on update
+- Cameras: a picture only re-downloads when it actually changes
+- **Open screens reload themselves after a Panel update** (the tablet and phone no longer keep the old screens on new data)
+
 ## 1.16.0
 - **Idle screensaver (experimental)**: after 2 minutes with no touch, Panel fades to a near-black screen with a faint clock, the date, the current weather and alert / camera / launch chips. The first tap only wakes it — it never presses what's underneath. An open camera live view closes when it dims
 - New settings **idle_dim** (on/off), **idle_minutes** (default 2), **idle_brightness** (10–60%, default 32). idle_dim off = no screensaver at all, exactly as 1.15.0

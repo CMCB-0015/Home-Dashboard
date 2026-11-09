@@ -46,12 +46,24 @@ export function HomeProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     let stream: EventSource | null = null
     let timer: ReturnType<typeof setTimeout> | null = null
+    // The first build this page saw; a different one later means Panel was updated
+    let build: string | undefined
+    const takeState = (state: HomeState) => {
+      if (state.build && state.build !== 'dev') {
+        if (build && state.build !== build) { window.location.reload(); return false }
+        build = state.build
+      }
+      return true
+    }
     const retry = (ms: number) => { if (!cancelled) timer = setTimeout(load, ms) }
 
     function openStream() {
       stream = new EventSource('/api/stream')
       stream.onmessage = (ev) => {
-        try { if (!cancelled) setData(JSON.parse(ev.data) as HomeState) } catch { /* ignore a bad message */ }
+        try {
+          const state = JSON.parse(ev.data) as HomeState
+          if (!cancelled && takeState(state)) setData(state)
+        } catch { /* ignore a bad message */ }
       }
       stream.onerror = () => {
         // Server restarted, Wi-Fi blip, or signed out — check and reconnect
@@ -71,7 +83,7 @@ export function HomeProvider({ children }: { children: ReactNode }) {
         }
         if (!res.ok) throw new Error(String(res.status))
         const state = (await res.json()) as HomeState
-        if (cancelled) return
+        if (cancelled || !takeState(state)) return
         setData(state); setLive(true); liveRef.current = true; setLock('open')
         openStream()
       } catch {

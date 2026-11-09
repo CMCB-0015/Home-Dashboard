@@ -504,6 +504,8 @@ export interface AlertItem {
 }
 
 export interface HomeState {
+  /** Build of the screens the server serves; screens reload when it changes */
+  build?: string
   thermostats: Thermostat[]
   lights: Light[]
   /** Lights card setup: quick buttons, scenes, bedroom cans, bedtime lamp */

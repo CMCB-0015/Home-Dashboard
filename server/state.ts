@@ -21,6 +21,19 @@ import { teslaState } from './tesla.ts'
 import { onTeslaMapChange } from './teslaMap.ts'
 import { gcalStatus } from './gcal.ts'
 import { env } from './env.ts'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+
+/**
+ * Which build of the screens this server serves (a hash of dist/index.html, which
+ * names every script file). Open screens compare it and reload themselves after an
+ * update, so a tablet never keeps showing the old screens on new data.
+ */
+const BUILD = (() => {
+  try { return createHash('sha1').update(readFileSync(join(resolve(env('PANEL_DIST') ?? 'dist'), 'index.html'))).digest('hex').slice(0, 12) }
+  catch { return 'dev' }
+})()
 import { vacuumState, vacuumAlerts } from './vacuum.ts'
 import { shoppingState, startShopping } from './shopping.ts'
 import { camerasState, cameraAlerts, guardMode, stargazingUntil, startCameras } from './cameras.ts'
@@ -149,6 +162,7 @@ export function buildState(): HomeState {
     alerts: haConfigured ? alerts : demo.alerts,
     sources,
     homeAssistant: haConfigured ? (haUp ? 'connected' : 'connecting') : 'not-configured',
+    build: BUILD,
   }
 }
 
