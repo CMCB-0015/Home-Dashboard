@@ -146,3 +146,7 @@ input[type="range"] { accent-color: currentColor; }
 /* Card bodies on the fit layout: if a card ever has more than fits, only its middle scrolls */
 .fit-scroll { scrollbar-width: none; }
 .fit-scroll::-webkit-scrollbar { display: none; }
+
+/* Hide a scroller's bar (the minute wheel) */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

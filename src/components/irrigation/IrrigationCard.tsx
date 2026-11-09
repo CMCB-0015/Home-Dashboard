@@ -1,12 +1,13 @@
 import type React from 'react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, Minus, Plus, SkipForward, X } from 'lucide-react'
+import { Check, SkipForward, X } from 'lucide-react'
 import { useHome } from '../../lib/useHome'
 import { categories } from '../../lib/categories'
 import { clockTime } from '../../lib/format'
 import { useLongPress } from '../../lib/useLongPress'
-import { PAUSE_MINUTES, QUICK_MINUTES, RAIN_EFFECT } from '../../config/irrigation'
+import { PAUSE_MINUTES, RAIN_EFFECT } from '../../config/irrigation'
+import { QuickRunPicker, QuickRunSheet, DEFAULT_MINUTES, type PickZone, type RunRow } from './QuickRunPicker'
 import { Card } from '../Card'
 import { RainLayer } from './RainLayer'
 import { useIrrigationActions } from '../tiles/SmallTiles'
@@ -85,20 +86,21 @@ function WeekStrip({ data, selected, onPick, faded }: { data: HomeState; selecte
 }
 
 // ── Countdown ring ───────────────────────────────────────────────────────
-function Ring({ remaining, total, paused, label }: { remaining: number | null; total: number | null; paused: boolean; label: string }) {
-  const R = 52, C = 2 * Math.PI * R
+function Ring({ remaining, total, paused, label, size = 124 }: { remaining: number | null; total: number | null; paused: boolean; label: string; size?: number }) {
+  const sw = size >= 110 ? 9 : 7
+  const c = size / 2, R = c - sw / 2 - 1, C = 2 * Math.PI * R
   const frac = remaining !== null && total ? Math.max(0, Math.min(1, remaining / total)) : 1
   const text = remaining === null ? '—' : `${Math.floor(remaining / 60)}:${String(Math.floor(remaining % 60)).padStart(2, '0')}`
   return (
-    <div className="relative h-[124px] w-[124px] shrink-0">
-      <svg width="124" height="124" viewBox="0 0 124 124" role="img" aria-label={label}>
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={label}>
         {/* Center filled with the card color so the rain never passes behind the numbers */}
-        <circle cx="62" cy="62" r={R} fill="var(--color-surface)" stroke="var(--color-surface-raised)" strokeWidth="9" />
-        <circle cx="62" cy="62" r={R} fill="none" stroke={CYAN} strokeOpacity={paused ? 0.5 : 1} strokeWidth="9" strokeLinecap="round"
-          strokeDasharray={C} strokeDashoffset={C * (1 - frac)} transform="rotate(-90 62 62)" className="transition-[stroke-dashoffset] duration-1000 ease-linear" />
+        <circle cx={c} cy={c} r={R} fill="var(--color-surface)" stroke="var(--color-surface-raised)" strokeWidth={sw} />
+        <circle cx={c} cy={c} r={R} fill="none" stroke={CYAN} strokeOpacity={paused ? 0.5 : 1} strokeWidth={sw} strokeLinecap="round"
+          strokeDasharray={C} strokeDashoffset={C * (1 - frac)} transform={`rotate(-90 ${c} ${c})`} className="transition-[stroke-dashoffset] duration-1000 ease-linear" />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-mono text-[26px] leading-none">{text}</span>
+        <span className="font-mono leading-none" style={{ fontSize: size >= 110 ? 26 : 20 }}>{text}</span>
         <span className="mt-1 text-[11px] text-ink-dim">{paused ? 'paused' : 'left'}</span>
       </div>
     </div>
@@ -121,23 +123,38 @@ const mins = (sec: number | null) => (sec ? `${Math.max(1, Math.round(sec / 60))
 const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 
 function ZoneList({ zones, remaining }: { zones: RunZone[]; remaining: number | null }) {
+  const ref = useRef<HTMLUListElement>(null)
+  const nowIndex = zones.findIndex((z) => z.state === 'now')
+  // Keep the zone watering now in view as the run moves down the list
+  useEffect(() => {
+    const el = ref.current, row = el?.children[nowIndex] as HTMLElement | undefined
+    if (!el || !row) return
+    if (row.offsetTop < el.scrollTop || row.offsetTop + row.offsetHeight > el.scrollTop + el.clientHeight)
+      el.scrollTo({ top: Math.max(0, row.offsetTop - 4), behavior: 'smooth' })
+  }, [nowIndex])
   return (
-    <ul aria-label="Zones in this run" className="flex max-h-[124px] flex-col gap-0.5 overflow-y-auto border-t border-edge pt-2">
+    <ul ref={ref} aria-label="Zones in this run"
+      className="no-scrollbar relative flex max-h-[208px] min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain fit:max-h-full"
+      style={{ maskImage: 'linear-gradient(180deg, #000 calc(100% - 22px), transparent)', WebkitMaskImage: 'linear-gradient(180deg, #000 calc(100% - 22px), transparent)' }}>
       {zones.map((z, k) => {
         const now = z.state === 'now'
         return (
-          <li key={`${z.zoneId}-${k}`} className={`grid h-6 shrink-0 grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-2 text-[13px] ${now ? 'font-semibold text-ink' : z.state === 'next' ? 'text-ink-dim' : 'text-ink-faint'}`}>
-            {z.state === 'done' ? <Check size={14} strokeWidth={2.5} aria-label="done" />
-              : z.state === 'skipped' ? <SkipForward size={13} aria-label="skipped" />
+          <li key={`${z.zoneId}-${k}`}
+            className={`grid min-h-9 shrink-0 grid-cols-[10px_minmax(0,1fr)_auto] items-center gap-x-2 rounded-lg px-1.5 py-1 text-[12.5px] leading-tight ${now ? 'font-semibold text-ink' : z.state === 'next' ? 'text-ink-dim' : 'text-ink-faint'}`}
+            style={now ? { background: cyan(0.12) } : undefined}>
+            {z.state === 'done' ? <Check size={11} strokeWidth={3} aria-label="done" />
+              : z.state === 'skipped' ? <SkipForward size={11} aria-label="skipped" />
               : now ? <span aria-label="watering now" className="h-2 w-2 justify-self-center rounded-full" style={{ background: CYAN, boxShadow: `0 0 0 3px ${cyan(0.25)}` }} />
               : <span aria-label="up next" className="h-2 w-2 justify-self-center rounded-full border-[1.5px] border-ink-faint" />}
-            <span className={`truncate ${z.state === 'skipped' ? 'line-through' : ''}`}>{z.name}</span>
-            <span className="text-right font-mono text-xs" style={now ? { color: CYAN } : undefined}>
-              {z.state === 'skipped' ? 'skipped' : now && remaining !== null ? `${clock(remaining)} / ${mins(z.seconds)}` : mins(z.seconds)}
+            <span className={`line-clamp-2 break-words ${z.state === 'skipped' ? 'line-through' : ''}`}>{z.name.trim()}</span>
+            <span className="text-right font-mono text-[11.5px]" style={now ? { color: CYAN } : undefined}
+              aria-label={now && remaining !== null ? `${clock(remaining)} left of ${mins(z.seconds)}` : undefined}>
+              {z.state === 'skipped' ? 'skip' : mins(z.seconds)}
             </span>
           </li>
         )
       })}
+      <li aria-hidden className="h-3 shrink-0" />
     </ul>
   )
 }
@@ -160,32 +177,26 @@ export function Panel({ title, right, onClose, children }: { title: ReactNode; r
 
 const sbtn = 'flex min-h-11 items-center justify-center rounded-[10px] border border-edge bg-surface text-[13px] font-medium transition-colors active:scale-[0.97]'
 
-function HoldPanel({ q, onStart, onClose }: { q: QuickRun; onStart: (minutes?: number) => void; onClose: () => void }) {
-  const [min, setMin] = useState(q.minutes ?? 5)
-  const isZone = q.kind !== 'schedule'
+/**
+ * Hold a quick-run chip. A zone opens the Quick run pop-up (minute wheel starting
+ * on the chip's time, Add another zone) — the same one as the Irrigation page; it
+ * needs more room than the card has. A schedule shows its zones and Start in the card.
+ */
+function HoldPanel({ q, zones, onStartSchedule, onStartZones, onClose }: {
+  q: QuickRun; zones: PickZone[]; onStartSchedule: () => void; onStartZones: (rows: RunRow[]) => void; onClose: () => void
+}) {
+  if (q.kind !== 'schedule' && q.zoneIds?.[0]) {
+    return (
+      <QuickRunSheet title={q.label} subtitle={lastRanText(q.lastRunAt) ?? undefined} onClose={onClose}>
+        <QuickRunPicker zones={zones} first={{ zoneId: q.zoneIds[0], minutes: q.minutes ?? DEFAULT_MINUTES }} onStart={onStartZones} />
+      </QuickRunSheet>
+    )
+  }
   return (
     <Panel title={q.label} onClose={onClose}>
       {lastRanText(q.lastRunAt) && <p className="-mt-2 text-xs text-ink-dim">{lastRanText(q.lastRunAt)}</p>}
-      {isZone ? (
-        <>
-          <div className="flex items-center justify-between">
-            <button onClick={() => setMin((m) => Math.max(1, m - 1))} aria-label="Less time" className={`${sbtn} w-12`}><Minus size={18} /></button>
-            <span className="font-mono text-[30px]">{min} min</span>
-            <button onClick={() => setMin((m) => Math.min(60, m + 1))} aria-label="More time" className={`${sbtn} w-12`}><Plus size={18} /></button>
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            {QUICK_MINUTES.map((m) => (
-              <button key={m} onClick={() => setMin(m)} aria-pressed={m === min} className={sbtn}
-                style={m === min ? { background: cyan(0.18), borderColor: CYAN } : undefined}>{m}</button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <p className="text-[13px] text-ink-dim">{q.zoneNames?.length ? q.zoneNames.join(', ') : 'The whole schedule'}{q.minutes ? ` · ~${q.minutes} min` : ''}</p>
-      )}
-      <button onClick={() => onStart(isZone ? min : undefined)} className="min-h-12 rounded-xl text-sm font-semibold text-bg active:scale-[0.98]" style={{ background: CYAN }}>
-        {isZone ? `Start · ${min} min` : 'Start'}
-      </button>
+      <p className="text-[13px] text-ink-dim">{q.zoneNames?.length ? q.zoneNames.join(', ') : 'The whole schedule'}{q.minutes ? ` · ~${q.minutes} min` : ''}</p>
+      <button onClick={onStartSchedule} className="min-h-12 rounded-xl text-sm font-semibold text-bg active:scale-[0.98]" style={{ background: CYAN }}>Start</button>
     </Panel>
   )
 }
@@ -307,10 +318,11 @@ export function IrrigationCard() {
   )
 
   const week = s.week ?? []
+  const pickZones: PickZone[] = zones.map((z) => ({ id: z.id, name: z.name.trim() }))
   const overlay = (
     <>
       {RAIN_EFFECT && <RainLayer active={!!active && !paused} />}
-      {hold && <HoldPanel q={hold} onStart={(m) => startQuick(hold, m)} onClose={() => setHold(null)} />}
+      {hold && <HoldPanel q={hold} zones={pickZones} onStartSchedule={() => startQuick(hold)} onStartZones={(rows) => { setHold(null); a.startZones(rows) }} onClose={() => setHold(null)} />}
       {day !== null && week[day] && !active && (
         <DayPanel date={week[day].date} runs={week[day].runs} onSkip={(r) => skipRun(week[day].date, r)} onClose={() => setDay(null)} />
       )}
@@ -320,22 +332,36 @@ export function IrrigationCard() {
   return (
     <Card className="h-full" accent={cfg.color} title="Irrigation" category="irrigation" style={wash} headerRight={status}
       bodyClassName="@container flex flex-col gap-3.5 fit:gap-2.5" actions={actions} overlay={overlay}>
-      {active ? (
+      {active ? (runZones && watering!.index !== undefined ? (
+        // A run with several zones: one line of context, then the ring on the left
+        // and every zone on the right (the list fills the height and scrolls)
+        <>
+          <p className="truncate text-xs text-ink-dim">
+            {watering!.schedule ?? 'Run'} · zone {watering!.index + 1} of {runZones.length}
+            {paused && active.resumesAt ? <> · resumes <span className="font-mono text-ink">{clockTime(active.resumesAt)}</span></>
+              : watering!.doneAt ? <> · done ~<span className="font-mono text-ink">{clockTime(watering!.doneAt)}</span></> : null}
+          </p>
+          <div className="flex min-h-0 flex-1 items-start gap-2.5">
+            <Ring size={84} remaining={remaining} total={watering?.zoneSeconds ?? (active.minutesLeft ? active.minutesLeft * 60 : null)} paused={paused}
+              label={`${active.name}, ${remaining !== null ? `${Math.round(remaining / 60)} minutes left` : 'watering'}`} />
+            <ZoneList zones={runZones} remaining={remaining} />
+          </div>
+        </>
+      ) : (
         <>
           <div className="flex flex-col items-center gap-3 @min-[300px]:flex-row @min-[300px]:gap-4">
             <Ring remaining={remaining} total={watering?.zoneSeconds ?? (active.minutesLeft ? active.minutesLeft * 60 : null)} paused={paused}
               label={`${active.name}, ${remaining !== null ? `${Math.round(remaining / 60)} minutes left` : 'watering'}`} />
             <div className="flex min-w-0 flex-col items-center gap-1 text-center @min-[300px]:items-start @min-[300px]:text-left">
               <p className="font-display text-xl font-semibold leading-tight">{active.name}</p>
-              {runZones && watering!.index !== undefined
-                ? <p className="text-[13px] text-ink-dim">{watering!.schedule ?? 'Run'} · zone {watering!.index + 1} of {runZones.length}</p>
-                : watering?.nextZone && <p className="text-[13px] text-ink-dim">Then {watering.nextZone}</p>}
+              {watering?.nextZone && <p className="text-[13px] text-ink-dim">Then {watering.nextZone}</p>}
               {watering?.doneAt && <p className="text-[13px] text-ink-dim">Done ~<span className="font-mono text-ink">{clockTime(watering.doneAt)}</span></p>}
               {paused && active.resumesAt && <p className="text-[13px] text-ink-dim">Resumes {clockTime(active.resumesAt)}</p>}
             </div>
           </div>
-          {runZones ? <ZoneList zones={runZones} remaining={remaining} /> : <WeekStrip data={data} selected={null} faded />}
+          <WeekStrip data={data} selected={null} faded />
         </>
+      )
       ) : (
         <>
           <div className={`transition-opacity ${day !== null ? 'opacity-35' : ''}`}>

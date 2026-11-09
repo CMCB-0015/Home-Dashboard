@@ -479,7 +479,7 @@ async function expectStart(state: RachioState, label: string, zoneRuns: { zoneId
 }
 
 /** Rachio's state with any not-yet-confirmed button press laid over it */
-function withPending(s: { zones: IrrigationZone[]; summary: IrrigationSummary }): { zones: IrrigationZone[]; summary: IrrigationSummary } {
+function withPending(s: { zones: IrrigationZone[]; summary: IrrigationSummary }, readAt = 0): { zones: IrrigationZone[]; summary: IrrigationSummary } {
   if (!pending) return s
   const p = pending
   const now = Date.now()
@@ -489,7 +489,8 @@ function withPending(s: { zones: IrrigationZone[]; summary: IrrigationSummary })
   if (p.kind === 'start') {
     // Confirmed only when Rachio reports one of *this run's* zones
     const ours = new Set(p.plan.zones.filter((z) => !z.state).map((z) => z.zoneId))
-    if (s.zones.some((z) => (z.isWatering || z.isPaused) && ours.has(z.id))) { pending = null; return s }
+    // (and only by a reading taken after the press — an older one may show the run just stopped)
+    if (readAt > p.since && s.zones.some((z) => (z.isWatering || z.isPaused) && ours.has(z.id))) { pending = null; return s }
     if (now - p.since > CONFIRM_FOR) {
       pending = null
       notice = { text: `Rachio didn’t confirm ${p.plan.label} started — check the Rachio app`, until: now + 10 * MIN_MS }
@@ -528,7 +529,8 @@ function withPending(s: { zones: IrrigationZone[]; summary: IrrigationSummary })
   }
 
   // Stop: show it stopped until Rachio agrees
-  if (!anyWatering && !anyPaused) { pending = null; return s }
+  // Only a reading taken after Stop can confirm it (an older one may just predate the run)
+  if (!anyWatering && !anyPaused) { if (readAt > p.since) pending = null; return s }
   if (now - p.since > CONFIRM_FOR) {
     pending = null
     notice = { text: 'Rachio still shows watering after Stop — check the Rachio app', until: now + 10 * MIN_MS }
@@ -569,19 +571,22 @@ function skippedToShow() {
 }
 
 /** The most recent Rachio status the watcher has (null until the first check). */
-export function latestRachio() { return latest ? withPending(latest) : null }
+/** When `latest` was read from Rachio */
+let latestAt = 0
+export function latestRachio() { return latest ? withPending(latest, latestAt) : null }
 export function rachioError() { return lastError }
 
 async function tick() {
   timer = null
   let next = IDLE
   try {
+    const readStart = Date.now() // a reading counts from when it was asked for
     const raw = await refreshRachio()
     lastError = null
     const now = Date.now()
     const waiting = !!pending
     // What the dashboard shows, including a button press Rachio hasn't confirmed yet
-    const state = withPending(raw)
+    const state = withPending(raw, readStart)
     const active = state.zones.find((z) => z.isWatering || z.isPaused)
 
     // Is the run we were waiting for underway, or did it not happen?
@@ -616,6 +621,7 @@ async function tick() {
     // Waiting on Rachio to confirm a button press: look again soon
     if (waiting && pending) next = Math.min(next, CONFIRM_EVERY)
     latest = { zones: raw.zones, summary: { ...raw.summary, lastSkipped: skippedToShow() } }
+    latestAt = readStart
   } catch (e) {
     lastError = e instanceof Error ? e.message : String(e)
     console.warn('[rachio] check failed:', lastError)
@@ -641,7 +647,33 @@ export function pokeRachio(delayMs = 2000) {
 
 const MAX_SECONDS = 3 * 3600
 
-export async function rachioCommand(action: string, zoneId: string, durationSeconds = 600, quickId?: string, extra: { minutes?: number; scheduleId?: string; date?: string } = {}): Promise<void> {
+/** Longest quick run from the dashboard, per zone (Connor: never more than an hour) */
+const MAX_QUICK_MINUTES = 60
+
+export async function rachioCommand(action: string, zoneId: string, durationSeconds = 600, quickId?: string, extra: { minutes?: number; scheduleId?: string; date?: string; zones?: unknown } = {}): Promise<void> {
+  if (action === 'start-zones') {
+    // Quick run: one or more zones, each for its own minutes, in the order given
+    const state = await cached(stateKey(), STATE_MAX_AGE, loadState)
+    const list = Array.isArray(extra.zones) ? extra.zones : []
+    const zones = list.map((z: any) => ({ zoneId: String(z?.zoneId ?? ''), minutes: Math.round(Number(z?.minutes)) }))
+    if (!zones.length) throw new Error('Pick a zone to run')
+    if (zones.length > 16) throw new Error('Too many zones')
+    for (const z of zones) {
+      if (!state.zoneDevice[z.zoneId]) throw new Error('Unknown zone')
+      if (!(z.minutes >= 1 && z.minutes <= MAX_QUICK_MINUTES)) throw new Error(`Run time must be 1–${MAX_QUICK_MINUTES} minutes`)
+    }
+    if (new Set(zones.map((z) => z.zoneId)).size !== zones.length) throw new Error('Each zone can only be in the run once')
+    if (new Set(zones.map((z) => state.zoneDevice[z.zoneId])).size > 1) throw new Error('Those zones are on different controllers')
+    const name = (id: string) => state.zones.find((z) => z.id === id)?.name ?? 'the zone'
+    if (zones.length === 1) await api('/zone/start', { method: 'PUT', body: { id: zones[0].zoneId, duration: zones[0].minutes * 60 } })
+    else await api('/zone/start_multiple', { method: 'PUT', body: { zones: zones.map((z, k) => ({ id: z.zoneId, duration: z.minutes * 60, sortOrder: k + 1 })) } })
+    await cacheDelete(pauseKey())
+    await expectStart(state, zones.length === 1 ? name(zones[0].zoneId) : 'the quick run',
+      zones.map((z) => ({ zoneId: z.zoneId, seconds: z.minutes * 60 })), zones.length === 1 ? null : 'Quick run')
+    await cacheDelete(stateKey())
+    showNow()
+    return
+  }
   if (action === 'quick') {
     const state = await cached(stateKey(), STATE_MAX_AGE, loadState)
     const q = quickId ? state.quick[quickId] : undefined
@@ -656,8 +688,8 @@ export async function rachioCommand(action: string, zoneId: string, durationSeco
       const times = state.runTimes?.[q.scheduleId] ?? (rule?.zoneRuns ?? []).map((z) => ({ zoneId: z.zoneId, seconds: z.seconds ? Math.round(z.seconds * k) : 0 }))
       await expectStart(state, label, times.map((z) => ({ zoneId: z.zoneId, seconds: z.seconds || null })), rule?.name ?? label, false)
     } else {
-      // The hold panel can pick another time (1–180 minutes)
-      const seconds = extra.minutes ? Math.min(180, Math.max(1, Math.round(Number(extra.minutes)))) * 60 : q.seconds
+      // The hold panel can pick another time (1–60 minutes)
+      const seconds = extra.minutes ? Math.min(MAX_QUICK_MINUTES, Math.max(1, Math.round(Number(extra.minutes)))) * 60 : q.seconds
       await api('/zone/start', { method: 'PUT', body: { id: q.zoneId, duration: seconds } })
       await expectStart(state, label, [{ zoneId: q.zoneId!, seconds: seconds ?? null }], null)
     }
@@ -727,6 +759,7 @@ export async function rachioCommand(action: string, zoneId: string, durationSeco
     }
     // Show Rachio's real state right away
     latest = { zones: after.zones, summary: { ...after.summary, lastSkipped: skippedToShow() } }
+    latestAt = Date.now()
     if (missed.length || extraSkips.length) {
       const parts = [
         missed.length ? `didn’t skip ${missed.map((t) => t.name).join(', ')}` : '',

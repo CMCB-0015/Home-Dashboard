@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Play, Pause, Square } from 'lucide-react'
 import { useHome } from '../../lib/useHome'
 import { categories } from '../../lib/categories'
@@ -6,21 +7,21 @@ import { DetailLayout } from '../../components/DetailLayout'
 import { Card } from '../../components/Card'
 import { Pill, StatusPill } from '../../components/Buttons'
 import { nextRunText, useIrrigationActions, IrrigationControls } from '../../components/tiles/SmallTiles'
+import { QuickRunPicker, QuickRunSheet, DEFAULT_MINUTES } from '../../components/irrigation/QuickRunPicker'
+import type { IrrigationZone } from '../../types'
 
 const cfg = categories.irrigation
 
 export function IrrigationPage() {
-  const { data, update, send } = useHome()
-  const { stop, resume, pause } = useIrrigationActions()
+  const { data } = useHome()
+  const { stop, resume, pause, startZones } = useIrrigationActions()
+  const [pick, setPick] = useState<IrrigationZone | null>(null)
   if (!data) return null
   const next = data.irrigation?.nextRun
   const quickRuns = data.irrigation?.quickRuns ?? []
   const unmatched = quickRuns.filter((r) => !r.available)
 
-  const startZone = (id: string) => {
-    update((s) => ({ ...s, irrigationZones: s.irrigationZones.map((z) => (z.id === id ? { ...z, isWatering: true, minutesLeft: 10 } : z)) }))
-    send('rachio/command', { action: 'start', zoneId: id }, { refresh: true })
-  }
+  const zoneChoices = data.irrigationZones.map((z) => ({ id: z.id, name: z.name.trim() }))
 
   return (
     <DetailLayout title="Irrigation" subtitle="Schedules stay in the Rachio app — run or stop anything from here." color={cfg.color}>
@@ -66,11 +67,17 @@ export function IrrigationPage() {
                       : <Pill color={cfg.color} dim={cfg.dim} onClick={() => pause(z)}><Pause size={12} fill="currentColor" /> Pause</Pill>}
                     <Pill color={cfg.color} dim={cfg.dim} onClick={() => stop(z)}><Square size={11} fill="currentColor" /> Stop</Pill>
                   </div>
-                : <Pill color={cfg.color} dim={cfg.dim} onClick={() => startZone(z.id)}><Play size={12} /> Run 10 min</Pill>}
+                : <Pill color={cfg.color} dim={cfg.dim} onClick={() => setPick(z)}><Play size={12} fill="currentColor" /> Quick run</Pill>}
             </div>
           </Card>
         ))}
       </div>
+      {pick && (
+        <QuickRunSheet title={pick.name.trim()} onClose={() => setPick(null)}>
+          <QuickRunPicker zones={zoneChoices} first={{ zoneId: pick.id, minutes: DEFAULT_MINUTES }}
+            onStart={(rows) => { setPick(null); void startZones(rows) }} />
+        </QuickRunSheet>
+      )}
     </DetailLayout>
   )
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.19.0
+- Irrigation, Quick run with a time: the Irrigation page's "Run 10 min" is now **Quick run**. It opens a pop-up with a minute wheel (1–60 min, starts on 10) plus 2 / 5 / 10 / 15 / 30 shortcuts, then Start. One tap, no confirm
+- **Add another zone**: line up several zones in one quick run, each with its own time; they run one after another (Rachio `zone/start_multiple`) and the card lists them as "Quick run · zone 1 of 3"
+- Holding a zone chip on the Irrigation card (Back slope, Back lawn) opens the same pop-up, starting on that chip's time. Holding Lawns still shows its zones and Start
+- Watering on the Slate: for a run with several zones the countdown ring (84 px) sits on the left and the zone list fills the right side down to the buttons; long names wrap to two lines, the zone watering now is highlighted and kept in view, and longer lists scroll. Schedule, zone number and finish time sit on one line under the header
+- Fix: a Stop (or a new start) right after another button press could be "confirmed" by a reading of Rachio taken before the press, so the card flipped back to watering — or stayed idle — for up to a minute. Only readings taken after the press can confirm it now
+
 ## 1.18.1
 - Cameras: **motion shows again**. Your cameras don't send Home Assistant a Detection event, so a **new "Last event" picture now counts as motion** (it only changes when the camera recorded something). Detection events still win when a camera sends them, and add the type (Person, Pet, Vehicle)
 - Cameras: the picture says when it's from: **"Motion · just now"** for 3 minutes, then the time, **"Motion · 7:34 PM"** ("Yesterday 7:34 PM", "Sat 7:34 PM" for older ones)
