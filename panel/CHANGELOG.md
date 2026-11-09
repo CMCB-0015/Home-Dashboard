@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.17.0
+- **Baseline release: no idle screensaver.** Same as 1.16.1 with the experimental screensaver from 1.16.0 taken out (its three idle_* settings are gone too). This is the version to go back to if the screensaver ever misbehaves (GitHub branch `baseline-pre-idle-dim`)
+
 ## 1.16.1
 - Cameras: **fixed "Motion · just now" showing all the time**. Motion now comes only from each camera's real Detection event (person, pet, vehicle, motion). 1.15.0 also used the picture's update time, which changes whenever Home Assistant renews the picture's access token (every few minutes). Until a camera reports its first detection, its picture says "No motion yet" and no chip shows
 - Cameras: the overnight-motion list from 1.15.0 held those false events and is cleared on update
@@ -7,9 +10,7 @@
 - **Open screens reload themselves after a Panel update** (the tablet and phone no longer keep the old screens on new data)
 
 ## 1.16.0
-- **Idle screensaver (experimental)**: after 2 minutes with no touch, Panel fades to a near-black screen with a faint clock, the date, the current weather and alert / camera / launch chips. The first tap only wakes it — it never presses what's underneath. An open camera live view closes when it dims
-- New settings **idle_dim** (on/off), **idle_minutes** (default 2), **idle_brightness** (10–60%, default 32). idle_dim off = no screensaver at all, exactly as 1.15.0
-- Baseline to go back to: 1.15.0 (commit 37bbb8c, branch `baseline-pre-idle-dim`). See DOCS → Idle screensaver
+- Idle screensaver (experimental) — removed again in 1.17.0, back in 1.18.0
 
 ## 1.15.0
 - Cameras: **connected** — Front Yard and Garage (eufyCam S3 Pro) and the HomeBase, through Home Assistant's eufy-sdk integration and the eufy-sdk bridge app. Replaces the placeholder card

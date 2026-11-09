@@ -6,7 +6,6 @@ import { categories } from '../../lib/categories'
 import { Segmented } from '../Buttons'
 import { BatteryTag } from '../tiles/CamerasCard'
 import type { Camera } from '../../types'
-import { IDLE_EVENT } from '../IdleOverlay'
 
 const cfg = categories.cameras
 
@@ -38,8 +37,7 @@ export function CameraSheet({ cameras, startId, onClose }:
   useEffect(() => {
     const hide = () => { if (document.hidden) onClose() }
     document.addEventListener('visibilitychange', hide)
-    window.addEventListener(IDLE_EVENT, onClose) // the idle screensaver came on
-    return () => { document.removeEventListener('visibilitychange', hide); window.removeEventListener(IDLE_EVENT, onClose) }
+    return () => document.removeEventListener('visibilitychange', hide)
   }, [onClose])
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }

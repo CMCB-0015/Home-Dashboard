@@ -18,9 +18,6 @@ const OPTION_NAMES: Record<string, string> = {
   google_client_id: 'GOOGLE_CLIENT_ID',
   google_client_secret: 'GOOGLE_CLIENT_SECRET',
   google_maps_key: 'GOOGLE_MAPS_KEY',
-  idle_dim: 'IDLE_DIM',
-  idle_minutes: 'IDLE_MINUTES',
-  idle_brightness: 'IDLE_BRIGHTNESS',
 }
 
 let loaded = false
