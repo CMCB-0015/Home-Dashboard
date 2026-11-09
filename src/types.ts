@@ -72,10 +72,19 @@ export interface Camera {
   id: string; name: string; status: 'online' | 'offline'
   lastMotionAt: string | null
   snapshotUrl: string | null      // latest motion thumbnail
-  liveUrl: string | null          // link that opens the live feed
+  liveUrl: string | null          // unused (live view runs in Panel's pop-up)
+  /** Battery % (S3 Pro is a battery camera) */
+  battery: number | null
+  /** What the camera's AI saw last: Person, Vehicle, Pet or plain Motion */
+  lastEvent: 'Person' | 'Vehicle' | 'Pet' | 'Motion' | 'Package' | 'Sound' | null
+  /** Solar panel reading from the camera ("Solar Intensity"); 1 at night */
+  solar: number | null
+  /** "Spotlight Enabled": the light that turns on with motion at night */
+  spotlight: boolean
 }
 
-export type GuardMode = 'home' | 'away'
+/** HomeBase Security mode; 'other' = disarmed, schedule or a custom mode set in the Eufy app */
+export type GuardMode = 'home' | 'away' | 'other'
 
 /** One room on the dashboard's floor plan (shapes from src/config/home.ts) */
 export interface VacuumRoom {
@@ -501,6 +510,8 @@ export interface HomeState {
   lighting?: Lighting
   cameras: Camera[]
   guardMode: GuardMode
+  /** Stargazing: motion lights off until this time (ISO), null when off */
+  stargazingUntil: string | null
   /** The vacuum card (null = not found in Home Assistant) */
   vacuum?: VacuumState | null
   irrigationZones: IrrigationZone[]

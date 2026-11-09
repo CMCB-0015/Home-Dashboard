@@ -7,6 +7,12 @@ import type { HomeState, Light } from '../types.ts'
 
 const at = (minutesFromNow: number) => new Date(Date.now() + minutesFromNow * 60_000).toISOString()
 const ago = (m: number) => at(-m)
+// Mockup only: ?mock=motion shows a person at Front Yard just now
+const MOCK_Q = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+const MOCK_DAY = MOCK_Q?.get('mock') === 'day'
+const MOCK_STARS = MOCK_Q?.get('mock') === 'stars'
+const MOCK_NIGHT = MOCK_Q?.get('mock') === 'overnight'
+const MOCK_MOTION = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mock') === 'motion'
 
 function L(id: string, name: string, room: string, on: boolean, brightnessPct: number, color: string | null, kelvin: number | null,
   extra: Partial<Light> = {}): Light {
@@ -102,10 +108,11 @@ export function buildMockState(): HomeState {
       notes: [],
     },
     cameras: [
-      { id: 'eufy-1', name: 'Front Door', status: 'online', lastMotionAt: ago(14), snapshotUrl: '/demo/front-door.svg', liveUrl: null },
-      { id: 'eufy-2', name: 'Driveway', status: 'online', lastMotionAt: ago(52), snapshotUrl: '/demo/driveway.svg', liveUrl: null },
+      { id: 'eufy-1', name: 'Front Yard', status: 'online', lastMotionAt: MOCK_MOTION ? ago(0.3) : ago(14), snapshotUrl: '/demo/front-door.svg', liveUrl: null, battery: 82, lastEvent: 'Person', solar: MOCK_DAY ? 72 : 1, spotlight: !MOCK_STARS },
+      { id: 'eufy-2', name: 'Garage', status: 'online', lastMotionAt: MOCK_NIGHT ? ago(6 * 60 + 2) : ago(52), snapshotUrl: '/demo/driveway.svg', liveUrl: null, battery: 64, lastEvent: MOCK_NIGHT ? 'Pet' : 'Vehicle', solar: MOCK_DAY ? 58 : 1, spotlight: !MOCK_STARS },
     ],
     guardMode: 'home',
+    stargazingUntil: MOCK_STARS ? at(33) : null,
     vacuum: demoVacuum(ago(20 * 60)),
     irrigationZones: [
       { id: 'rachio-1', name: 'Front Lawn', isWatering: false, minutesLeft: null, rainDelay: false, nextRunAt: at(14 * 60), lastRunAt: ago(28 * 60) },
@@ -256,9 +263,9 @@ export function buildMockState(): HomeState {
       },
     },
     alerts: [
-      { id: 'a2', category: 'cameras', severity: 'warning', message: 'Motion detected', deviceName: 'Front Door', timestamp: ago(14) },
+      ...(MOCK_NIGHT ? [{ id: 'n1', category: 'cameras' as const, severity: 'info' as const, message: 'Pet detected at 2:43 AM last night', deviceName: 'Garage', timestamp: ago(6 * 60 + 2) }] : []),
+      ...(MOCK_MOTION ? [{ id: 'm1', category: 'cameras' as const, severity: 'info' as const, message: 'Person', deviceName: 'Front Yard', timestamp: ago(0.3) }] : []),
       { id: 'a3', category: 'vehicles', severity: 'info', message: 'Finished charging', deviceName: 'WillaWilla', timestamp: ago(60) },
-      { id: 'a4', category: 'cameras', severity: 'warning', message: 'Motion detected', deviceName: 'Driveway', timestamp: ago(52) },
       { id: 'a5', category: 'irrigation', severity: 'info', message: 'Rain delay applied, schedule skipped', deviceName: 'Back Slope', timestamp: ago(120) },
       { id: 'a6', category: 'climate', severity: 'info', message: 'Switched to Eco mode', deviceName: 'Thermostat', timestamp: ago(9 * 60) },
       { id: 'a7', category: 'vacuum', severity: 'info', message: 'Finished cleaning, returned to dock', deviceName: 'S8 Pro Ultra', timestamp: ago(20 * 60) },

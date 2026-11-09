@@ -206,6 +206,27 @@ project turn on **Maps JavaScript API** (Google wants a billing account on the p
 free monthly allowance covers a home dashboard), create an **API key**, restrict it to that
 API and to `http://192.168.86.207:8099/*`, paste it in, Save, Restart.
 
+## Cameras (Eufy)
+
+**One-time setup (done Nov 8, 2026):** the **eufy-sdk bridge** app (repository
+`https://github.com/mega-yfue/ha-eufy-sdk-addon`, signed in with the secondary Eufy account, country `US`)
+and the **eufy-sdk** integration (Marketplace → custom repository `https://github.com/mega-yfue/ha-eufy-sdk`,
+host = the Lenovo's address, port 3000). Panel finds the cameras on its own, by device; renaming a camera
+in the Eufy app needs no change here.
+
+- **Card:** latest motion picture ("Last event"), what the camera saw ("Detection"), Battery and Solar
+  Intensity. Tap a camera for live view.
+- **Live view** uses Home Assistant's own WebRTC (no extra setting). It ends when the pop-up closes, when the
+  screen stops checking in for 30 seconds, and after 10 minutes, so a battery camera is never left streaming.
+- **Stargazing** turns the cameras' "Spotlight Enabled" switches off for an hour (only the ones that were on),
+  and back on when the hour is up. It survives an app restart.
+- **Motion chips:** 3 minutes for motion now; motion between 10 PM and 6 AM stays until 9 AM.
+- **Nothing showing?** Open `/api/setup-check` → `cameras`: each camera lists the entities it found. A
+  `null` means that entity is missing or disabled in Home Assistant (Settings → Devices & services → eufy-sdk →
+  the camera → entities).
+- **Bridge log noise:** `get_devs_list failed (10003)` repeats with a shared (secondary) account; harmless.
+- The secondary Eufy account must stay **signed out of the Eufy app** on phones (Eufy allows one session).
+
 ## Shopping list (Bring!)
 
 **One-time setup:** in Home Assistant, Settings → Devices & services → Add integration → **Bring!**, and sign

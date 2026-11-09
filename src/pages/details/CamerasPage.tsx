@@ -1,23 +1,28 @@
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useHome } from '../../lib/useHome'
 import { categories } from '../../lib/categories'
 import { relativeTime } from '../../lib/format'
 import { DetailLayout } from '../../components/DetailLayout'
 import { Card } from '../../components/Card'
-import { Snapshot, GuardToggle, openLive } from '../../components/tiles/CamerasCard'
+import { Snapshot, GuardToggle, StargazingButton } from '../../components/tiles/CamerasCard'
+import { CameraSheet } from '../../components/cameras/CameraSheet'
 
 const cfg = categories.cameras
 
 export function CamerasPage() {
   const { data } = useHome()
-  const navigate = useNavigate()
+  // ?live=camera.front_yard (from a motion chip) opens that camera's live view
+  const [params, setParams] = useSearchParams()
+  const [open, setOpenState] = useState<string | null>(() => params.get('live'))
+  const setOpen = (id: string | null) => { setOpenState(id); if (params.has('live')) setParams({}, { replace: true }) }
   if (!data) return null
   const motion = data.alerts.filter((a) => a.category === 'cameras').sort((a, b) => b.timestamp.localeCompare(a.timestamp))
   return (
-    <DetailLayout title="Cameras" subtitle="Live view opens once Eufy is connected." color={cfg.color} action={<GuardToggle />}>
+    <DetailLayout title="Cameras" subtitle="Tap a camera for live view." color={cfg.color} action={<div className="flex items-center gap-2"><StargazingButton /><GuardToggle /></div>}>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {data.cameras.map((c) => (
-          <div id={c.id} key={c.id}><Snapshot cam={c} onOpen={() => openLive(c, navigate)} /></div>
+          <div id={c.id} key={c.id}><Snapshot cam={c} onOpen={() => setOpen(c.id)} /></div>
         ))}
       </div>
       <div className="mt-6">
@@ -33,6 +38,7 @@ export function CamerasPage() {
           </div>
         </Card>
       </div>
+      {open && <CameraSheet cameras={data.cameras} startId={open} onClose={() => setOpen(null)} />}
     </DetailLayout>
   )
 }

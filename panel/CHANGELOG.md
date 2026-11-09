@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.15.0
+- Cameras: **connected** — Front Yard and Garage (eufyCam S3 Pro) and the HomeBase, through Home Assistant's eufy-sdk integration and the eufy-sdk bridge app. Replaces the placeholder card
+- Each camera shows its **latest motion picture** with what it saw and when ("Person · 14m ago", "Pet", "Vehicle"), and a **battery** drawn like the Tesla card's (green bar to the real level, red under 20%) with the %. When the solar panel reads 10 or more, a **sun with the solar level** sits beside it ("82% │ ☀ 72")
+- **Motion just now** (first 3 minutes): that camera gets an outline and a filled "Person · just now" tag, the card a soft camera-colored glow, and a camera-colored chip leads the status bar. Tap the chip for that camera's live view
+- **Overnight motion** (10 PM–6 AM) keeps a chip until 9 AM: "Garage · Pet detected at 2:43 AM last night". Camera chips lead the status bar
+- **Live view**: tap a camera. Opens in the same pop-up as Twilight; video comes straight from Home Assistant (WebRTC) and **stops when you close it** (battery cameras). Also stops if the tablet goes to sleep or the page goes to the background, and after 10 minutes. Front Yard / Garage switch at the bottom
+- **Stargazing**: one tap turns off the motion lights ("Spotlight Enabled") on both cameras for 1 hour; they keep recording. A countdown sits beside the button in 5-minute steps ("35 min"); tap Stargazing again to reset it to a full hour, × to end it now. The Lenovo turns the lights back on when the hour is up, even with no screen open, and after an app restart
+- **HomeBase Home / Away** switches the HomeBase's Security mode
+- Status bar: a camera that's **offline** or under **20% battery** gets an amber chip
+- `/api/setup-check` → `cameras` lists every camera entity Panel found (picture, detection, battery, solar, spotlight) and the HomeBase
+
 ## 1.14.0
 - Tesla: **driving home on the tablet** — the live map now takes the car picture's place, so the line with the arrival time and miles is never cut off. "Arriving" (green) at the end
 - Tesla: **speed and road while driving** — "Driving · 42 mph" (and "Driving · 0 mph" at a light). Driving anywhere else: the car on the road with the speed big and the road it's on ("I-5 S · San Juan Capistrano") under it, plus this drive's time and miles so far

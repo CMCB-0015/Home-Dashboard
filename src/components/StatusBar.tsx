@@ -8,7 +8,7 @@ import { HOME } from '../config/home'
 import { AppSheet } from './AppSheet'
 
 const AMBER = 'var(--color-weather)'
-const DOT: Record<StatusItem['kind'], string> = { alert: AMBER, calendar: 'var(--color-calendar)', sports: 'var(--color-ink)', launch: '#cfdaff' }
+const DOT: Record<StatusItem['kind'], string> = { alert: AMBER, calendar: 'var(--color-calendar)', sports: 'var(--color-ink)', launch: '#cfdaff', motion: 'var(--color-cameras)' }
 
 /** Launch chips (Option A, Nov 3, 2026): filled with Twilight's night-sky navy, pale star */
 const NAVY = '#070a1c'
@@ -77,12 +77,14 @@ function Chip({ item, onOpenPlanner, onOpenApp }: { item: StatusItem; onOpenPlan
   const cls = `flex h-10 max-w-[80vw] shrink-0 snap-start items-center gap-2 rounded-full border px-4 text-xs transition-colors ${launch ? 'hover:brightness-125' : 'bg-surface hover:bg-surface-raised'}`
   const style: React.CSSProperties = launch
     ? { background: NAVY, borderColor: NAVY_EDGE, boxShadow: '0 0 14px -4px rgba(120,150,230,0.35)' }
-    : { borderColor: alert ? AMBER : 'var(--color-edge)' }
+    : item.kind === 'motion'
+      ? { borderColor: 'var(--color-cameras)', background: 'color-mix(in srgb, var(--color-cameras) 14%, var(--color-surface))' }
+      : { borderColor: alert ? AMBER : 'var(--color-edge)' }
   const body = (
     <>
       {launch
         ? <Star />
-        : <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: DOT[item.kind], boxShadow: alert ? `0 0 6px ${AMBER}` : undefined }} />}
+        : <span style={{ background: DOT[item.kind], boxShadow: alert ? `0 0 6px ${AMBER}` : item.kind === 'motion' ? '0 0 6px var(--color-cameras)' : undefined }} className={`h-2 w-2 shrink-0 rounded-full ${item.kind === 'motion' && !item.label ? 'animate-pulse' : ''}`} />}
       {item.label && <span className="shrink-0 font-semibold text-ink">{item.label}</span>}
       <span className="truncate font-medium text-ink">{item.text}</span>
       {item.detail && <span className="shrink-0 text-ink-faint">{item.detail}</span>}
@@ -99,6 +101,6 @@ function Chip({ item, onOpenPlanner, onOpenApp }: { item: StatusItem; onOpenPlan
       ? <button role="listitem" onClick={() => onOpenApp({ url: href, app: launch ? 'twilight' : 'brief', subtitle })} className={cls} style={style}>{body}</button>
       : <span role="listitem" className={cls} style={style}>{body}</span>
   }
-  const to = item.category && PAGES.has(item.category) ? categories[item.category].path : '/alerts'
+  const to = item.kind === 'motion' && item.href ? item.href : item.category && PAGES.has(item.category) ? categories[item.category].path : '/alerts'
   return <Link role="listitem" to={to} className={cls} style={style}>{body}</Link>
 }

@@ -20,7 +20,7 @@ Open **http://192.168.86.207:8099** and bookmark it.
 | Vacuum (Roborock S8 Pro Ultra) | Roborock in Home Assistant, rooms matched by name | ✅ |
 | Weather | Open-Meteo, no key | ✅ |
 | Shopping list | Bring! in Home Assistant, every Bring! list by name | ✅ once Bring! is added in Home Assistant |
-| Cameras (Eufy) | — | Placeholder card until connected |
+| Cameras (Eufy S3 Pro × 2 + HomeBase) | eufy-sdk integration + eufy-sdk bridge app in Home Assistant | ✅ |
 
 ## Testing in the Codespace
 

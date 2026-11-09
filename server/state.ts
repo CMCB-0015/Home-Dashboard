@@ -23,12 +23,16 @@ import { gcalStatus } from './gcal.ts'
 import { env } from './env.ts'
 import { vacuumState, vacuumAlerts } from './vacuum.ts'
 import { shoppingState, startShopping } from './shopping.ts'
+import { camerasState, cameraAlerts, guardMode, stargazingUntil, startCameras } from './cameras.ts'
 
 let weather: Weather | null = null
 
 export function startBackgroundRefresh(changed: () => void) {
   onTeslaMapChange(changed)
   startShopping(changed)
+  startCameras()
+  // Motion chips come and go with time (3 minutes, 9 AM), not only when Home Assistant changes
+  setInterval(changed, 30_000)
   const loadWeather = async () => {
     try { weather = await getWeather(); changed() } catch (e) { console.warn('[weather]', e instanceof Error ? e.message : e) }
   }
@@ -114,8 +118,8 @@ export function buildState(): HomeState {
   // The card itself says when Bring! isn't responding; not worth a status-bar chip
   const shopping = fromHa('list', shoppingState, demo.shopping ?? null)
 
-  // Not connected to the dashboard yet. Placeholders on the real system, demo while testing.
-  for (const cat of ['cameras'] as Category[]) sources[cat] = haConfigured ? 'off' : 'demo'
+  const cameras = fromHa('cameras', camerasState, demo.cameras)
+  if (sources.cameras === 'live') alerts.push(...cameraAlerts(cameras))
 
   if (haConfigured && !haUp) alert('climate', 'critical', 'Home Assistant', "Can't reach Home Assistant — reconnecting")
 
@@ -128,6 +132,9 @@ export function buildState(): HomeState {
     tesla,
     vacuum,
     shopping,
+    cameras,
+    guardMode: sources.cameras === 'live' ? guardMode() : demo.guardMode,
+    stargazingUntil: sources.cameras === 'live' ? stargazingUntil() : demo.stargazingUntil,
     calendar,
     calendars: sources.calendar === 'live' ? calendarList() : demo.calendars,
     calendarRange: sources.calendar === 'live' ? calendarRange() ?? undefined : demo.calendarRange,

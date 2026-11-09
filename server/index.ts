@@ -21,6 +21,8 @@
 //   POST /api/vacuum/command                      Vacuum card and Map & rooms page (Roborock)
 //   POST /api/shopping/command                    Shopping list card (Bring!, through Home Assistant)
 //   POST /api/sonos/preset-save | preset-rename | preset-delete   quick-play buttons saved from the Sonos page
+//   POST /api/cameras/command                     Cameras card: Home / Away, Stargazing (Eufy, through Home Assistant)
+//   POST /api/cameras/live/start | candidate | stop · GET /api/cameras/live/poll   live view (WebRTC set-up)
 //   POST /api/rachio/command          GET /api/rachio/debug
 
 import http from 'node:http'
@@ -37,6 +39,8 @@ import { launchNotes, launchEvents } from './launches.ts'
 import { teslaCommand, teslaNotes } from './tesla.ts'
 import { vacuumCommand, vacuumNotes } from './vacuum.ts'
 import { shoppingCommand, shoppingNotes } from './shopping.ts'
+import { camerasCommand, cameraNotes } from './cameras.ts'
+import { liveStart, liveCandidate, livePoll, liveStop, iceServers } from './cameraLive.ts'
 import { calendarRangeEvents, createEvent, updateEvent, removeEvent, onCalendarChange } from './calendar.ts'
 import { linkStart, linkFinish, unlink, gcalStatus, listCalendars, gcalLinked } from './gcal.ts'
 import { sonosCommand, playPreset, playOn, getQueue, jumpToQueue, refreshFavorites, sonosNotes, savePreset, renamePreset, deletePreset } from './sonos.ts'
@@ -77,8 +81,6 @@ const act = (fn: (body: any) => Promise<unknown>): Handler => async (req) => {
     return fail(message, 502)
   }
 }
-
-const notConnected = (what: string): Handler => async () => fail(`${what} isn't connected to the dashboard yet`, 409)
 
 const routes: Record<string, Handler> = {
   '/api/home-state': async () => ok(buildState()),
@@ -140,6 +142,7 @@ const routes: Record<string, Handler> = {
     tesla: ha.status === 'connected' ? teslaNotes() : null,
     vacuum: ha.status === 'connected' ? vacuumNotes() : null,
     shopping: ha.status === 'connected' ? shoppingNotes() : null,
+    cameras: ha.status === 'connected' ? cameraNotes() : null,
     sports: { notes: sportsNotes(), games: sportsEvents().length },
     launches: { notes: launchNotes(), upcoming: launchEvents().length },
     rachio: { configured: rachioConfigured(), working: !!latestRachio(), problem: rachioError() },
@@ -157,7 +160,15 @@ const routes: Record<string, Handler> = {
 
   '/api/vacuum/command': act((b) => vacuumCommand(b)),
   '/api/tesla/command': act((b) => teslaCommand(b)),
-  '/api/eufy/guard-mode': notConnected('Eufy'),
+  '/api/cameras/command': act(async (b) => { await camerasCommand(b); changed() }),
+  '/api/cameras/live/ice': async (req) => ok({ iceServers: await iceServers(new URL(req.url).searchParams.get('camera') ?? '') }),
+  '/api/cameras/live/start': async (req) => {
+    if (req.method !== 'POST') return fail('POST only', 405)
+    try { return ok(await liveStart(await readJson(req))) } catch (e) { return fail(e instanceof Error ? e.message : 'Live view didn’t start', 502) }
+  },
+  '/api/cameras/live/candidate': act((b) => liveCandidate(b)),
+  '/api/cameras/live/poll': async (req) => ok(await livePoll(new URL(req.url).searchParams.get('id') ?? '')),
+  '/api/cameras/live/stop': act(async (b) => liveStop(b)),
   '/api/shopping/command': act(async (b) => { await shoppingCommand(b) }),
 }
 

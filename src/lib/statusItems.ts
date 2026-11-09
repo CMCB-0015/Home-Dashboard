@@ -16,7 +16,7 @@
 import { HOME, matchName } from '../config/home'
 import type { AlertItem, Category, CalendarEvent, HomeState, LaunchEvent, SportsEvent } from '../types'
 
-export type StatusKind = 'alert' | 'calendar' | 'sports' | 'launch'
+export type StatusKind = 'alert' | 'calendar' | 'sports' | 'launch' | 'motion'
 
 export interface StatusItem {
   id: string
@@ -56,6 +56,12 @@ const DEFAULT_LENGTH: Record<string, number> = { suns: 2.5 * HOUR, dbacks: 3 * H
 
 interface Timed { item: StatusItem; at: number }
 
+/** The Cameras page, opening that camera's live view (alert ids are cam-now-<camera> / cam-night-<camera>) */
+function liveLink(alertId: string): string {
+  const cam = /^cam-(?:now|night)-(camera\.[a-z0-9_]+)$/.exec(alertId)?.[1]
+  return cam ? `/cameras?live=${encodeURIComponent(cam)}` : '/cameras'
+}
+
 export function statusItems(data: Pick<HomeState, 'alerts' | 'calendar' | 'sports' | 'launches'>, now = new Date()): StatusItem[] {
   const nowMs = now.getTime()
   const today = startOfDay(now), tomorrow = startOfDay(now, 1), dayAfter = startOfDay(now, 2), bigLimit = startOfDay(now, 4)
@@ -63,7 +69,15 @@ export function statusItems(data: Pick<HomeState, 'alerts' | 'calendar' | 'sport
   // 1. Device alerts, newest first
   const alerts: StatusItem[] = [...data.alerts]
     .sort((a: AlertItem, b: AlertItem) => b.timestamp.localeCompare(a.timestamp))
-    .map((a) => ({ id: `alert-${a.id}`, kind: 'alert', text: `${a.deviceName} · ${a.message}`, category: a.category }))
+    .map((a): StatusItem => a.category === 'cameras' && a.severity === 'info'
+      // Camera motion: its own camera-colored chip, not an amber alert. Tap = that camera's live view.
+      ? (/ detected at /.test(a.message)
+        // Overnight motion (10 PM–6 AM) stays until 9 AM: "Garage · Pet detected at 2:43 AM last night"
+        ? { id: `alert-${a.id}`, kind: 'motion', label: a.deviceName, text: a.message, category: a.category, href: liveLink(a.id) }
+        : { id: `alert-${a.id}`, kind: 'motion', text: `${a.message} · ${a.deviceName}`, detail: 'just now', category: a.category, href: liveLink(a.id) })
+      : { id: `alert-${a.id}`, kind: 'alert', text: `${a.deviceName} · ${a.message}`, category: a.category })
+
+  alerts.sort((a, b) => Number(b.kind === 'motion') - Number(a.kind === 'motion'))
 
   const timed: Timed[] = []
 
