@@ -530,6 +530,8 @@ export interface HomeState {
   calendarRange?: { start: string; end: string }
   /** Google Maps key for the weather radar (a browser key; empty = radar shows how to add one) */
   mapsKey?: string | null
+  /** Idle dim + tap to wake (experimental). enabled = the idle_dim setting */
+  idle?: { enabled: boolean; minutes: number; brightness: number }
   /** Whether the calendar can add, edit and delete events (Panel's Google link) */
   calendarWrite?: CalendarWrite
   /** Upcoming games and races from The Brief (empty until its schedule feed exists) */

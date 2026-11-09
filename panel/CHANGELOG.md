@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.18.0
+- **Idle screensaver (experimental)**, rebuilt on top of 1.17.0: after 2 minutes with no touch, Panel fades to a near-black screen with a faint clock, the date, the current weather and alert / camera / launch chips. The first tap only wakes it — it never presses what's underneath. An open camera live view closes when it dims
+- Settings **idle_dim** (on/off), **idle_minutes** (default 2), **idle_brightness** (10–60%, default 32). idle_dim off = no screensaver at all, exactly as 1.17.0
+- Baseline to go back to: **1.17.0** (commit f7d09da, branch `baseline-pre-idle-dim`). See DOCS → Idle screensaver
+
 ## 1.17.0
 - **Baseline release: no idle screensaver.** Same as 1.16.1 with the experimental screensaver from 1.16.0 taken out (its three idle_* settings are gone too). This is the version to go back to if the screensaver ever misbehaves (GitHub branch `baseline-pre-idle-dim`)
 

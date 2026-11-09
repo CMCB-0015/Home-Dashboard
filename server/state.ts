@@ -153,6 +153,7 @@ export function buildState(): HomeState {
     calendarRange: sources.calendar === 'live' ? calendarRange() ?? undefined : demo.calendarRange,
     calendarWrite: gcalStatus(),
     mapsKey: env('GOOGLE_MAPS_KEY') ?? null,
+    idle: idleSettings(),
     sports: haConfigured ? sportsEvents() : demo.sports,
     launches: haConfigured ? launchEvents() : demo.launches,
     irrigationZones,
@@ -162,5 +163,15 @@ export function buildState(): HomeState {
     sources,
     homeAssistant: haConfigured ? (haUp ? 'connected' : 'connecting') : 'not-configured',
     build: BUILD,
+  }
+}
+
+/** Idle dim + tap to wake (experimental, 1.18.0). `idle_dim` off = no screensaver at all. */
+function idleSettings() {
+  const num = (v: string | undefined, d: number) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : d }
+  return {
+    enabled: (env('IDLE_DIM') ?? 'true').toLowerCase() !== 'false',
+    minutes: num(env('IDLE_MINUTES'), 2),
+    brightness: num(env('IDLE_BRIGHTNESS'), 32),
   }
 }
