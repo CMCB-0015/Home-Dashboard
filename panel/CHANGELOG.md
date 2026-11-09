@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.16.0
+- **Idle screensaver (experimental)**: after 2 minutes with no touch, Panel fades to a near-black screen with a faint clock, the date, the current weather and alert / camera / launch chips. The first tap only wakes it — it never presses what's underneath. An open camera live view closes when it dims
+- New settings **idle_dim** (on/off), **idle_minutes** (default 2), **idle_brightness** (10–60%, default 32). idle_dim off = no screensaver at all, exactly as 1.15.0
+- Baseline to go back to: 1.15.0 (commit 37bbb8c, tag `baseline-pre-idle-dim`). See DOCS → Idle screensaver
+
 ## 1.15.0
 - Cameras: **connected** — Front Yard and Garage (eufyCam S3 Pro) and the HomeBase, through Home Assistant's eufy-sdk integration and the eufy-sdk bridge app. Replaces the placeholder card
 - Each camera shows its **latest motion picture** with what it saw and when ("Person · 14m ago", "Pet", "Vehicle"), and a **battery** drawn like the Tesla card's (green bar to the real level, red under 20%) with the %. When the solar panel reads 10 or more, a **sun with the solar level** sits beside it ("82% │ ☀ 72")

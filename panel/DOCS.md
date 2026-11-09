@@ -12,8 +12,18 @@ phones or computer (home Wi-Fi only) and bookmark it.
 - **twilight_feed_key** — the same value as `PANEL_FEED_KEY` in Twilight's Netlify settings. Turns on Vandenberg launch chips in the status bar.
 - **google_client_id / google_client_secret** — Panel's own Google sign-in key, for adding, editing and deleting calendar events (see Calendar below).
 - **google_maps_key** — a Google Maps key for the weather radar and the Tesla map (see Weather and Tesla map below).
+- **idle_dim / idle_minutes / idle_brightness** — the idle screensaver (experimental; see Idle screensaver below). Off = Panel never dims.
 
 Click **Save**, then **Restart** the app after changing settings.
+
+## Idle screensaver (experimental, 1.16.0)
+
+After **idle_minutes** (default 2) with no touch, Panel fades to a near-black screen with a faint clock, the date, the current weather and any alert, camera or launch chips. **The first tap only wakes Panel** — it never presses the button underneath. Any key wakes it on the Chromebook. An open camera live view closes when it dims (battery cameras).
+
+- **idle_brightness** (10–60, default 32): how bright the clock and text are, in %. The background stays near-black.
+- The tablet's backlight stays on; a web page can't turn it down. ChromeOS: Settings → Power → When idle → Keep display on.
+- **To turn it off:** set **idle_dim** off, Save, Restart Panel. Panel then works exactly as 1.15.0 did.
+- **To remove it for good:** the baseline is **1.15.0, commit 37bbb8c** (GitHub tag `baseline-pre-idle-dim`). Revert the 1.16.0 idle commit, or restore 37bbb8c's code under a *higher* version number (Home Assistant only offers higher versions).
 
 ## If something looks wrong
 

@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import { HomeProvider, useHome } from './lib/useHome'
 import { LockScreen } from './components/LockScreen'
 import { Notice } from './components/Notice'
+import { IdleOverlay } from './components/IdleOverlay'
 import { Pager } from './pages/Pager'
 import { ClimatePage } from './pages/details/ClimatePage'
 import { LightsPage } from './pages/details/LightsPage'
@@ -16,6 +17,7 @@ function Screens() {
   const { lock } = useHome()
   if (lock !== 'open') return <LockScreen />
   return (
+    <>
       <Routes>
         <Route path="/" element={<Pager />} />
         <Route path="/climate" element={<ClimatePage />} />
@@ -28,6 +30,8 @@ function Screens() {
         <Route path="/sonos" element={<SonosPage />} />
         <Route path="*" element={<Pager />} />
       </Routes>
+      <IdleOverlay />
+    </>
   )
 }
 
