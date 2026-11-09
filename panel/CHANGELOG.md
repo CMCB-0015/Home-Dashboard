@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.18.1
+- Cameras: **motion shows again**. Your cameras don't send Home Assistant a Detection event, so a **new "Last event" picture now counts as motion** (it only changes when the camera recorded something). Detection events still win when a camera sends them, and add the type (Person, Pet, Vehicle)
+- Cameras: the picture says when it's from: **"Motion · just now"** for 3 minutes, then the time, **"Motion · 7:34 PM"** ("Yesterday 7:34 PM", "Sat 7:34 PM" for older ones)
+- Cameras: a Home Assistant restart or an integration reload re-stamps the picture; that is not counted as motion (nor are the picture's token renewals). Right after an update, each camera starts from "No motion yet" until its next motion
+- Live view: **video only** (it plays muted anyway). Asking for sound made Home Assistant start a sound converter that failed on the Slate ("webrtc: streams: exec/rtsp … 404"). Also uses a little less camera battery
+- Live view: **one automatic retry** before showing an error, and plain error text (the technical message goes to the browser console)
+
 ## 1.18.0
 - **Idle screensaver (experimental)**, rebuilt on top of 1.17.0: after 2 minutes with no touch, Panel fades to a near-black screen with a faint clock, the date, the current weather and alert / camera / launch chips. The first tap only wakes it — it never presses what's underneath. An open camera live view closes when it dims
 - Settings **idle_dim** (on/off), **idle_minutes** (default 2), **idle_brightness** (10–60%, default 32). idle_dim off = no screensaver at all, exactly as 1.17.0

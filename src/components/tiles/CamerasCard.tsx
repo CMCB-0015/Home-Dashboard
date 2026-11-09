@@ -3,7 +3,7 @@ import { Moon, Play, X } from 'lucide-react'
 import { Battery } from '../vacuum/VacuumCard'
 import { useHome } from '../../lib/useHome'
 import { categories } from '../../lib/categories'
-import { relativeTime } from '../../lib/format'
+import { clockTime } from '../../lib/format'
 import { Card } from '../Card'
 import { Segmented } from '../Buttons'
 import { CameraSheet } from '../cameras/CameraSheet'
@@ -12,6 +12,19 @@ import type { Camera, GuardMode } from '../../types'
 const cfg = categories.cameras
 /** Motion counts as "now" for this long: tile ring, card wash, status chip */
 export const MOTION_NOW_MS = 3 * 60_000
+
+/** "just now" for 3 minutes, then the time the picture is from: "7:34 PM", "Yesterday 7:34 PM", "Sat 7:34 PM" */
+export function motionWhen(iso: string): string {
+  const t = new Date(iso)
+  if (Date.now() - t.getTime() < MOTION_NOW_MS) return 'just now'
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const days = Math.round((day(new Date()) - day(t)) / 86_400_000)
+  const time = clockTime(iso)
+  if (days <= 0) return time
+  if (days === 1) return `Yesterday ${time}`
+  if (days < 7) return `${t.toLocaleDateString('en-US', { weekday: 'short' })} ${time}`
+  return `${t.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${time}`
+}
 
 export const motionNow = (cam: Camera) =>
   !!cam.lastMotionAt && Date.now() - new Date(cam.lastMotionAt).getTime() < MOTION_NOW_MS
@@ -75,7 +88,7 @@ export function Snapshot({ cam, onOpen }: { cam: Camera; onOpen: () => void }) {
       <span className="absolute right-2.5 top-2.5"><BatteryTag pct={cam.battery} solar={cam.solar} /></span>
       <span className="absolute bottom-2.5 left-2.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
         style={now ? { background: cfg.color, color: '#0e1318' } : { background: 'rgba(0,0,0,.7)' }}>
-        {offline ? 'Offline' : cam.lastMotionAt ? `${what} · ${relativeTime(cam.lastMotionAt)}` : 'No motion yet'}
+        {offline ? 'Offline' : cam.lastMotionAt ? `${what} · ${motionWhen(cam.lastMotionAt)}` : 'No motion yet'}
       </span>
       {!offline && (
         <span className="absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-medium">

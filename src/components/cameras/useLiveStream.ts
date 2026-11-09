@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 
+/** Home Assistant's raw stream errors ("webrtc: streams: exec/rtsp … 404") → plain words; the raw text goes to the console */
+function friendly(msg: string | null): string | null {
+  if (!msg) return msg
+  if (/webrtc|ffmpeg|rtsp|DESCRIBE|exec\/|Error opening/i.test(msg)) {
+    console.warn('[live view]', msg)
+    return 'The camera’s video stream didn’t start.'
+  }
+  return msg
+}
+
 export type LivePhase = 'connecting' | 'live' | 'error' | 'ended'
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -28,10 +38,11 @@ export function useLiveStream(camera: string, attempt: number) {
     setPhase('connecting'); setError(null)
     const pc = new RTCPeerConnection()
 
-    const fail = (msg: string) => { if (!stopped) { setError(msg); setPhase('error') } }
+    const fail = (msg: string) => { if (!stopped) { setError(friendly(msg)); setPhase('error') } }
 
+    // Video only: live view plays muted, and asking for audio makes Home Assistant
+    // start a sound converter (camera AAC → Opus) that failed on the Slate (404)
     pc.addTransceiver('video', { direction: 'recvonly' })
-    pc.addTransceiver('audio', { direction: 'recvonly' })
     pc.ontrack = (e) => {
       const v = videoRef.current
       if (v && e.streams[0] && v.srcObject !== e.streams[0]) v.srcObject = e.streams[0]
@@ -64,7 +75,7 @@ export function useLiveStream(camera: string, attempt: number) {
           const p = await api<{ candidates: RTCIceCandidateInit[]; ended: boolean; error: string | null }>(`poll?id=${r.id}`)
           for (const c of p.candidates) await pc.addIceCandidate(c).catch(() => {})
           if (p.ended) {
-            if (!stopped) { setError(p.error); setPhase(p.error ? 'error' : 'ended') }
+            if (!stopped) { setError(friendly(p.error)); setPhase(p.error ? 'error' : 'ended') }
             break
           }
         }

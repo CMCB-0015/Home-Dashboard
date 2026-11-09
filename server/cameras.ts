@@ -72,16 +72,49 @@ const EVENT_LABEL: Record<string, Camera['lastEvent']> = {
 }
 
 /**
- * Only a real Detection event counts as motion. (1.15.0 fell back to the picture's
- * last_updated, which changes whenever Home Assistant renews the picture's access
- * token, every few minutes, so it showed "Motion · just now" all the time.)
+ * Motion = a new "Last event" picture (the picture only changes when the camera
+ * recorded something), or a Detection event when the camera sends those (they add
+ * the type: Person, Pet…). Your cameras don't send Detection events to Home Assistant
+ * (Nov 9, 2026), so the picture is what counts.
+ *
+ * Not motion: the picture's access token being renewed (changes last_updated only;
+ * the bug in 1.15.0), and the picture being re-stamped when Home Assistant or the
+ * integration restarts (it was unavailable/unknown in between, or Panel only just
+ * connected). Then the new picture becomes the baseline without a motion time.
  */
+interface PicSeen { pic: string; at: string | null }
+const PIC_KEY = 'camera-picture-motion'
+let pics: Record<string, PicSeen> = {}
+const picGap = new Set<string>()   // pictures (image entities) that went unavailable since last seen
+// Watch every change: an integration reload makes the picture unavailable for well under a second
+ha.onStateChange((id, st) => { if (id.startsWith('image.') && (!st || !usable(st) || Number.isNaN(Date.parse(st.state)))) picGap.add(id) })
+let picsLoaded = false
+void cacheGet<Record<string, PicSeen>>(PIC_KEY).then((v) => { if (v) pics = { ...v, ...pics }; picsLoaded = true })
+
+function pictureMotion(f: Found): string | null {
+  const cam = f.camera.entity_id
+  const img = f.parts.image
+  if (!img || !usable(img) || Number.isNaN(Date.parse(img.state))) { if (img) picGap.add(img.entity_id); return pics[cam]?.at ?? null }
+  if (!picsLoaded) return pics[cam]?.at ?? null
+  const prev = pics[cam]
+  if (!prev || prev.pic !== img.state) {
+    const restart = !prev || picGap.has(img.entity_id) || Date.now() - ha.connectedAt < 120_000
+    pics[cam] = { pic: img.state, at: restart ? prev?.at ?? null : new Date(img.state).toISOString() }
+    picGap.delete(img.entity_id)
+    void cacheSet(PIC_KEY, pics)
+  }
+  return pics[cam].at
+}
+
 function lastDetection(f: Found): { at: string; label: NonNullable<Camera['lastEvent']> } | null {
   const ev = f.parts.detection
-  if (ev && usable(ev) && !Number.isNaN(Date.parse(ev.state))) {
-    return { at: new Date(ev.state).toISOString(), label: EVENT_LABEL[String(ev.attributes.event_type)] ?? 'Motion' }
-  }
-  return null
+  const det = ev && usable(ev) && !Number.isNaN(Date.parse(ev.state))
+    ? { at: new Date(ev.state).toISOString(), label: EVENT_LABEL[String(ev.attributes.event_type)] ?? 'Motion' }
+    : null
+  const pic = pictureMotion(f)
+  // The newest wins; a Detection within a minute of the picture gives the picture its type
+  if (det && (!pic || Date.parse(det.at) >= Date.parse(pic) - 60_000)) return det
+  return pic ? { at: pic, label: 'Motion' } : null
 }
 
 /** When the picture itself last changed (the image entity's state), not when its token was renewed */

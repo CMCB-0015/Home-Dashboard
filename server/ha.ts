@@ -52,6 +52,8 @@ function connection(): { ws: string; rest: string; token: string } | null {
 class HomeAssistant {
   states = new Map<string, HAState>()
   status: Status = 'not-configured'
+  /** When the connection (re)opened; right after, states may be from a Home Assistant restart */
+  connectedAt = 0
   private entities = new Map<string, EntityEntry>()
   private devices = new Map<string, DeviceEntry>()
   private areas = new Map<string, string>()
@@ -68,6 +70,9 @@ class HomeAssistant {
 
   /** Call `fn` whenever anything in Home Assistant changes. */
   onChange(fn: () => void) { this.listeners.add(fn) }
+  private stateListeners = new Set<(entityId: string, state: HAState | null) => void>()
+  /** Every single state change as it arrives (onChange is batched and can miss a brief "unavailable") */
+  onStateChange(fn: (entityId: string, state: HAState | null) => void) { this.stateListeners.add(fn) }
   private changed() { for (const fn of this.listeners) fn() }
   /** Tell open screens something changed that Home Assistant didn't announce */
   notify() { this.changed() }
@@ -129,6 +134,7 @@ class HomeAssistant {
           await this.command({ type: 'subscribe_events', event_type: t }).catch(() => {})
         }
         this.status = 'connected'
+        this.connectedAt = Date.now()
         console.log(`[home assistant] connected · ${this.states.size} entities`)
         this.pingTimer = setInterval(() => { this.command({ type: 'ping' }).catch(() => this.ws?.close()) }, 30_000)
         this.changed()
@@ -150,6 +156,7 @@ class HomeAssistant {
         const { entity_id, new_state } = e.data
         if (new_state) this.states.set(entity_id, new_state)
         else this.states.delete(entity_id)
+        for (const fn of this.stateListeners) { try { fn(entity_id, new_state ?? null) } catch { /* a listener's problem */ } }
         this.changed()
       } else if (typeof e?.event_type === 'string' && e.event_type.endsWith('_registry_updated')) {
         await this.loadRegistries().catch(() => {})

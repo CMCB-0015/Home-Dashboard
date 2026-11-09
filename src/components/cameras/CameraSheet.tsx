@@ -23,6 +23,13 @@ export function CameraSheet({ cameras, startId, onClose }:
   const [id, setId] = useState(startId)
   const [attempt, setAttempt] = useState(0)
   const { videoRef, phase, error } = useLiveStream(id, attempt)
+  // One quiet retry before showing an error (a waking camera sometimes misses the first try)
+  const retried = useRef(false)
+  useEffect(() => { retried.current = false }, [id])
+  const showError = phase === 'error' && retried.current
+  useEffect(() => {
+    if (phase === 'error' && !retried.current) { retried.current = true; setAttempt((n) => n + 1) }
+  }, [phase])
   const [secs, setSecs] = useState(0)
   const [drag, setDrag] = useState(0)
   const startY = useRef<number | null>(null)
@@ -92,17 +99,17 @@ export function CameraSheet({ cameras, startId, onClose }:
             )}
             <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 h-full w-full bg-black object-contain"
               style={{ opacity: phase === 'live' ? 1 : 0, transition: 'opacity .3s' }} />
-            {phase === 'connecting' && (
+            {(phase === 'connecting' || (phase === 'error' && !showError)) && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-ink">
                 <Loader2 size={26} className="animate-spin" style={{ color: cfg.color }} aria-hidden />
                 <span className="font-medium">Starting live view</span>
                 <span className="text-xs text-ink-dim">Battery cameras take a few seconds to wake</span>
               </div>
             )}
-            {(phase === 'error' || phase === 'ended') && (
+            {(showError || phase === 'ended') && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-sm text-ink">
                 <span className="max-w-[46ch]">{error ?? 'Live view ended to save the camera’s battery.'}</span>
-                <button onClick={() => setAttempt((n) => n + 1)}
+                <button onClick={() => { retried.current = false; setAttempt((n) => n + 1) }}
                   className="flex h-10 items-center gap-2 rounded-full border border-edge bg-surface-raised px-4 text-sm font-medium hover:bg-[#252e38]">
                   <RotateCcw size={15} aria-hidden /> {phase === 'ended' ? 'Watch again' : 'Try again'}
                 </button>
