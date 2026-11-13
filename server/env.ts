@@ -21,6 +21,7 @@ const OPTION_NAMES: Record<string, string> = {
   idle_dim: 'IDLE_DIM',
   idle_minutes: 'IDLE_MINUTES',
   idle_brightness: 'IDLE_BRIGHTNESS',
+  camera_offline_minutes: 'CAMERA_OFFLINE_MINUTES',
 }
 
 let loaded = false

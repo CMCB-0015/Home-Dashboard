@@ -33,6 +33,16 @@ const MOTION_NOW_MS = 3 * 60_000
 const STARGAZE_MS = 60 * 60_000
 /** The camera Stargazing turns off; the others stay on (Connor, Nov 12: "only front yard, keep garage on") */
 const STARGAZE_CAMERA = (env('STARGAZE_CAMERA') ?? 'Front Yard').toLowerCase()
+/**
+ * A camera only counts as offline after Home Assistant has called it unavailable this
+ * long without a break. A HomeBase mode change can flag a camera "unavailable" for a
+ * moment while it works fine (Nov 12, 2026). Change it in the app's Configuration tab
+ * (camera_offline_minutes); 1 minute when not set.
+ */
+const OFFLINE_AFTER_MS = (() => {
+  const m = Number(env('CAMERA_OFFLINE_MINUTES'))
+  return (Number.isFinite(m) && m >= 0 ? m : 1) * 60_000
+})()
 /** How often Panel asks the HomeBase for each camera's newest recording */
 const REFRESH_MS = 60_000
 
@@ -207,6 +217,23 @@ function rememberNight(name: string, d: { at: string; label: string }) {
   if (nightLoaded) void cacheSet(NIGHT_KEY, night)
 }
 
+// ── Offline only when it lasts ────────────────────────────────────────────
+/** When each camera became unavailable (cleared when it's back) */
+const unavailableSince = new Map<string, number>()
+ha.onStateChange((id, st) => {
+  if (!id.startsWith('camera.')) return
+  if (!st || st.state === 'unavailable') { if (!unavailableSince.has(id)) unavailableSince.set(id, Date.now()) }
+  else unavailableSince.delete(id)
+})
+function isOffline(cam: HAState): boolean {
+  if (cam.state !== 'unavailable') { unavailableSince.delete(cam.entity_id); return false }
+  // Unavailable when Panel started: count from Home Assistant's own change time
+  if (!unavailableSince.has(cam.entity_id)) unavailableSince.set(cam.entity_id, Date.parse(cam.last_changed) || Date.now())
+  return Date.now() - unavailableSince.get(cam.entity_id)! >= OFFLINE_AFTER_MS
+}
+/** The last good picture per camera, kept while the camera is briefly unavailable */
+const lastPicture = new Map<string, string>()
+
 // ── State for the dashboard ───────────────────────────────────────────────
 export function camerasState(): Camera[] | null {
   const found = resolve()
@@ -217,14 +244,15 @@ export function camerasState(): Camera[] | null {
     if (det) rememberNight(name, det)
     const img = f.parts.image
     const pic = img && usable(img) && typeof img.attributes.entity_picture === 'string' ? img.attributes.entity_picture as string : null
+    // Through Panel's /api/ha-image (Home Assistant needs a login); ?v= changes with each new picture
+    if (pic) lastPicture.set(f.camera.entity_id, `/api/ha-image?p=${encodeURIComponent(pic)}&v=${encodeURIComponent(pictureVersion(img!))}`)
     return {
       id: f.camera.entity_id,
       name,
-      status: f.camera.state === 'unavailable' ? 'offline' : 'online',
+      status: isOffline(f.camera) ? 'offline' : 'online',
       lastMotionAt: det?.at ?? null,
       lastEvent: det?.label ?? null,
-      // Through Panel's /api/ha-image (Home Assistant needs a login); ?v= changes with each new picture
-      snapshotUrl: pic ? `/api/ha-image?p=${encodeURIComponent(pic)}&v=${encodeURIComponent(pictureVersion(img!))}` : null,
+      snapshotUrl: lastPicture.get(f.camera.entity_id) ?? null,
       liveUrl: null,
       battery: num(f.parts.battery),
       solar: num(f.parts.solar),

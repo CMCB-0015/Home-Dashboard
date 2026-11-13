@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.1
+- Cameras: **no more false "Camera is offline"**. Switching the HomeBase to Away flagged the Front Yard camera unavailable for a moment while it worked fine. A camera now counts as offline only after Home Assistant has called it unavailable for **1 minute without a break**
+- New setting **camera_offline_minutes** (Configuration tab, default 1, 0–120) to change that wait
+- While a camera is briefly unavailable, its tile keeps the last motion picture instead of going blank
+
 ## 1.20.0
 - Cameras, **motion without phone alerts**: in Home mode the HomeBase sends no motion alerts, so Panel now asks it **once a minute** for each camera's newest recording ("Refresh last event"). That's a local HomeBase lookup: it doesn't wake the cameras or use battery. Only the camera that actually recorded something gets a new picture, so **one camera's motion no longer shows on both**, and the time is within about a minute
 - Cameras, **Away mode**: when the HomeBase is in Away, the cameras' real-time Motion and Person signals are used, with the exact time and the label (**Person**, Pet, Vehicle when the camera sends it)

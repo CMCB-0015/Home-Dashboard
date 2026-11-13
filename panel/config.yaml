@@ -2,7 +2,7 @@
 # To release an update: push the code to GitHub, raise `version` below, push again,
 # then click Update on the app in Home Assistant.
 name: Panel
-version: "1.20.0"
+version: "1.20.1"
 slug: panel
 description: Connor's home dashboard — open http://192.168.86.207:8099
 url: https://github.com/CMCB-0015/Home-Dashboard
@@ -32,6 +32,7 @@ options:
   idle_dim: true
   idle_minutes: 2
   idle_brightness: 32
+  camera_offline_minutes: 1
 schema:
   passcode: password
   rachio_api_key: password?
@@ -46,3 +47,4 @@ schema:
   idle_dim: bool
   idle_minutes: int(1,60)
   idle_brightness: int(10,60)
+  camera_offline_minutes: int(0,120)
