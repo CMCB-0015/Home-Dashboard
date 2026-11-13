@@ -79,8 +79,8 @@ export interface Camera {
   lastEvent: 'Person' | 'Vehicle' | 'Pet' | 'Motion' | 'Package' | 'Sound' | null
   /** Solar panel reading from the camera ("Solar Intensity"); 1 at night */
   solar: number | null
-  /** "Spotlight Enabled": the light that turns on with motion at night */
-  spotlight: boolean
+  /** The camera's "Enabled" switch is off (Stargazing, or turned off in the Eufy app) */
+  off: boolean
 }
 
 /** HomeBase Security mode; 'other' = disarmed, schedule or a custom mode set in the Eufy app */

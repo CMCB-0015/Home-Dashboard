@@ -229,6 +229,11 @@ class HomeAssistant {
 
   /** Run a Home Assistant action, e.g. callService('light', 'turn_on', { brightness_pct: 50 }, ['light.lamp']) */
   callService(domain: string, service: string, data: Record<string, unknown> = {}, entityIds?: string[]) {
+    // Never touch a Eufy camera's "Spotlight Enabled": turning it off from Home Assistant
+    // broke the Front Yard light until it was reset (Nov 12, 2026)
+    if (entityIds?.some((id) => /spotlight/i.test(id))) {
+      return Promise.reject(new Error(`Refused: Panel never changes ${entityIds.filter((id) => /spotlight/i.test(id)).join(', ')}`))
+    }
     return this.command({
       type: 'call_service', domain, service, service_data: data,
       ...(entityIds ? { target: { entity_id: entityIds } } : {}),

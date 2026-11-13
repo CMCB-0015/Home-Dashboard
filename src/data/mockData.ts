@@ -108,8 +108,8 @@ export function buildMockState(): HomeState {
       notes: [],
     },
     cameras: [
-      { id: 'eufy-1', name: 'Front Yard', status: 'online', lastMotionAt: MOCK_MOTION ? ago(0.3) : ago(14), snapshotUrl: '/demo/front-door.svg', liveUrl: null, battery: 82, lastEvent: 'Person', solar: MOCK_DAY ? 72 : 1, spotlight: !MOCK_STARS },
-      { id: 'eufy-2', name: 'Garage', status: 'online', lastMotionAt: MOCK_NIGHT ? ago(6 * 60 + 2) : ago(52), snapshotUrl: '/demo/driveway.svg', liveUrl: null, battery: 64, lastEvent: MOCK_NIGHT ? 'Pet' : 'Vehicle', solar: MOCK_DAY ? 58 : 1, spotlight: !MOCK_STARS },
+      { id: 'eufy-1', name: 'Front Yard', status: 'online', lastMotionAt: MOCK_MOTION ? ago(0.3) : ago(14), snapshotUrl: '/demo/front-door.svg', liveUrl: null, battery: 82, lastEvent: 'Person', solar: MOCK_DAY ? 72 : 1, off: MOCK_STARS },
+      { id: 'eufy-2', name: 'Garage', status: 'online', lastMotionAt: MOCK_NIGHT ? ago(6 * 60 + 2) : ago(52), snapshotUrl: '/demo/driveway.svg', liveUrl: null, battery: 64, lastEvent: MOCK_NIGHT ? 'Pet' : 'Vehicle', solar: MOCK_DAY ? 58 : 1, off: false },
     ],
     guardMode: 'home',
     stargazingUntil: MOCK_STARS ? at(33) : null,

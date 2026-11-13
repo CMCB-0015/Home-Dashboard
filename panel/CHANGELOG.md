@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20.0
+- Cameras, **motion without phone alerts**: in Home mode the HomeBase sends no motion alerts, so Panel now asks it **once a minute** for each camera's newest recording ("Refresh last event"). That's a local HomeBase lookup: it doesn't wake the cameras or use battery. Only the camera that actually recorded something gets a new picture, so **one camera's motion no longer shows on both**, and the time is within about a minute
+- Cameras, **Away mode**: when the HomeBase is in Away, the cameras' real-time Motion and Person signals are used, with the exact time and the label (**Person**, Pet, Vehicle when the camera sends it)
+- **Stargazing now turns the Front Yard camera off** for the hour (no motion light at all). **The Garage stays on.** Tap again = a full hour, × ends it, and Panel turns Front Yard back on at the end, even after a restart. The card says "Stargazing · Front Yard off", and the Front Yard picture shows "Camera off" (no live view while it's off)
+- **Spotlight Enabled is never touched again.** Turning it off from Home Assistant broke the Front Yard light until it was reset. Panel no longer looks it up, and Panel's server refuses any command to a spotlight switch. A Stargazing hour started on 1.18/1.19 ends without touching it
+- A camera that is switched off no longer raises an "offline" or battery chip
+
 ## 1.19.0
 - Irrigation, Quick run with a time: the Irrigation page's "Run 10 min" is now **Quick run**. It opens a pop-up with a minute wheel (1–60 min, starts on 10) plus 2 / 5 / 10 / 15 / 30 shortcuts, then Start. One tap, no confirm
 - **Add another zone**: line up several zones in one quick run, each with its own time; they run one after another (Rachio `zone/start_multiple`) and the card lists them as "Quick run · zone 1 of 3"

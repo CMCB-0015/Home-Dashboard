@@ -6,9 +6,15 @@
 //   event.<name>_detection        what the AI saw last (person, pet, vehicle, motion…) and when
 //   sensor.<name>_battery         battery %
 //   sensor.<name>_solar_intensity how much sun the panel gets
-//   switch.<name>_spotlight_enabled  the light that turns on with motion at night
+//   switch.<name>_enabled         camera on/off (Stargazing turns Front Yard off)
+//   button.<name>_refresh_last_event  asks the HomeBase for the newest recording (no camera wake)
+//   binary_sensor.<name>_motion / _person  real-time, only when the HomeBase mode notifies (Away)
 // and on the HomeBase:
 //   alarm_control_panel.<name>    Security mode (Home / Away / …)
+//
+// NEVER write "Spotlight Enabled" (switch.<name>_spotlight_enabled): turning it off
+// from Home Assistant broke the Front Yard light until it was reset (Nov 12, 2026).
+// Panel doesn't look it up, and ha.callService refuses any spotlight entity.
 //
 // Entities are matched by pattern on the camera's own device, so renaming a
 // camera in the Eufy app needs no change here. /api/setup-check → cameras
@@ -25,13 +31,21 @@ const TZ = env('TIMEZONE') ?? 'America/Los_Angeles'
 const MOTION_NOW_MS = 3 * 60_000
 /** Stargazing length; tapping again restarts it */
 const STARGAZE_MS = 60 * 60_000
+/** The camera Stargazing turns off; the others stay on (Connor, Nov 12: "only front yard, keep garage on") */
+const STARGAZE_CAMERA = (env('STARGAZE_CAMERA') ?? 'Front Yard').toLowerCase()
+/** How often Panel asks the HomeBase for each camera's newest recording */
+const REFRESH_MS = 60_000
 
 const FIND = {
   image: ['image', /_last_event$|last_event/],
   detection: ['event', /_detection$/],
   battery: ['sensor', /_battery$/],
   solar: ['sensor', /solar_intensity$|_solar$/],
-  spotlight: ['switch', /spotlight_enabled$|_spotlight$|spotlight/],
+  // The camera's own on/off: ends in "_enabled" but is never the spotlight one
+  enabled: ['switch', /^switch\.(?!.*spotlight).*_enabled$/],
+  refresh: ['button', /refresh_last_event$/],
+  motion: ['binary_sensor', /_motion$/],
+  person: ['binary_sensor', /_person$/],
 } as const satisfies Record<string, readonly [string, RegExp]>
 type Key = keyof typeof FIND
 
@@ -106,14 +120,34 @@ function pictureMotion(f: Found): string | null {
   return pics[cam].at
 }
 
-function lastDetection(f: Found): { at: string; label: NonNullable<Camera['lastEvent']> } | null {
+/**
+ * Real-time signals (Away mode; the HomeBase sends nothing in Home mode): the
+ * Motion / Person sensors turning on. Remembered here because they turn off again
+ * after a few seconds.
+ */
+type Det = { at: string; label: NonNullable<Camera['lastEvent']> }
+const sensorHits = new Map<string, Det>()
+ha.onStateChange((id, st) => {
+  if (!st || st.state !== 'on' || !id.startsWith('binary_sensor.')) return
+  if (/_person$/.test(id)) sensorHits.set(id, { at: new Date().toISOString(), label: 'Person' })
+  else if (/_motion$/.test(id)) sensorHits.set(id, { at: new Date().toISOString(), label: 'Motion' })
+})
+
+function lastDetection(f: Found): Det | null {
+  const typed: Det[] = []
   const ev = f.parts.detection
-  const det = ev && usable(ev) && !Number.isNaN(Date.parse(ev.state))
-    ? { at: new Date(ev.state).toISOString(), label: EVENT_LABEL[String(ev.attributes.event_type)] ?? 'Motion' }
-    : null
+  if (ev && usable(ev) && !Number.isNaN(Date.parse(ev.state))) typed.push({ at: new Date(ev.state).toISOString(), label: EVENT_LABEL[String(ev.attributes.event_type)] ?? 'Motion' })
+  for (const s of [f.parts.person, f.parts.motion]) {
+    const hit = s && sensorHits.get(s.entity_id)
+    if (hit) typed.push(hit)
+  }
+  // Newest typed signal; at the same moment a Person beats plain Motion
+  const rank = (d: Det) => Date.parse(d.at) + (d.label === 'Motion' ? 0 : 5_000)
+  const det = typed.sort((a, b) => rank(b) - rank(a))[0] ?? null
   const pic = pictureMotion(f)
-  // The newest wins; a Detection within a minute of the picture gives the picture its type
-  if (det && (!pic || Date.parse(det.at) >= Date.parse(pic) - 60_000)) return det
+  // The picture lands up to a minute or two after the push: a push within 2 min before it
+  // is the same motion, with its exact time and type
+  if (det && (!pic || Date.parse(det.at) >= Date.parse(pic) - 120_000)) return det
   return pic ? { at: pic, label: 'Motion' } : null
 }
 
@@ -194,7 +228,7 @@ export function camerasState(): Camera[] | null {
       liveUrl: null,
       battery: num(f.parts.battery),
       solar: num(f.parts.solar),
-      spotlight: f.parts.spotlight ? f.parts.spotlight.state !== 'off' : true,
+      off: f.parts.enabled?.state === 'off',
     } satisfies Camera
   })
 }
@@ -216,6 +250,8 @@ export function cameraAlerts(cams: Camera[]): AlertItem[] {
     }
     const n = night[c.name]
     if (n && now < n.until) out.push({ id: `cam-night-${c.id}`, category: 'cameras', severity: 'info', message: nightText(n, now), deviceName: c.name, timestamp: n.at })
+    // A camera switched off (Stargazing, or in the Eufy app) isn't a problem to flag
+    if (c.off) continue
     if (c.status === 'offline') out.push({ id: `cam-off-${c.id}`, category: 'cameras', severity: 'warning', message: 'Camera is offline', deviceName: c.name, timestamp: new Date().toISOString() })
     else if (c.battery !== null && c.battery <= 20) out.push({ id: `cam-batt-${c.id}`, category: 'cameras', severity: 'warning', message: `Battery ${c.battery}%`, deviceName: c.name, timestamp: new Date().toISOString() })
   }
@@ -226,10 +262,29 @@ export function cameraAlerts(cams: Camera[]): AlertItem[] {
   return out
 }
 
-// ── Stargazing: motion lights off for an hour ─────────────────────────────
+// ── Once a minute: ask the HomeBase for each camera's newest recording ───
+// Pressing "Refresh last event" makes the bridge query the HomeBase's recording list
+// (local, no camera wake, no battery). Only a camera that recorded something new
+// gets a new picture, and that new picture is the motion (pictureMotion above).
+let refreshing = false
+async function refreshPictures() {
+  if (refreshing || ha.status !== 'connected') return
+  const buttons = resolve().filter((f) => !(f.parts.enabled?.state === 'off')).map((f) => f.parts.refresh).filter((b): b is HAState => !!b && b.state !== 'unavailable').map((b) => b.entity_id)
+  if (!buttons.length) return
+  refreshing = true
+  try { await ha.callService('button', 'press', {}, buttons) }
+  catch (e) { console.warn('[cameras] refresh last event failed:', e instanceof Error ? e.message : e) }
+  finally { refreshing = false }
+}
+
+// ── Stargazing: the Front Yard camera off for an hour ─────────────────────
+// Off = no motion light at all (and no Front Yard recording; Connor is out there).
+// The Garage stays on. Uses the camera's "Enabled" switch, never Spotlight Enabled.
 interface Stargaze { until: number; switches: string[] }
 let stargaze: Stargaze | null = null
 let stargazeTimer: NodeJS.Timeout | null = null
+/** Only camera on/off switches may be restored (a 1.18/1.19 Stargazing hour saved Spotlight switches) */
+const safeSwitches = (list: string[]) => list.filter((id) => /^switch\..*_enabled$/.test(id) && !/spotlight/i.test(id))
 
 export function stargazingUntil(): string | null {
   return stargaze && stargaze.until > Date.now() ? new Date(stargaze.until).toISOString() : null
@@ -246,26 +301,34 @@ async function endStargazing(): Promise<void> {
   const s = stargaze
   if (!s) return
   if (ha.status !== 'connected') {
-    // Try again in a minute; the lights must come back on
+    // Try again in a minute; the camera must come back on
     stargazeTimer = setTimeout(() => { void endStargazing() }, 60_000)
     return
   }
   try {
-    if (s.switches.length) await ha.callService('switch', 'turn_on', {}, s.switches)
+    const switches = safeSwitches(s.switches)
+    if (switches.length) await ha.callService('switch', 'turn_on', {}, switches)
     stargaze = null
     await cacheSet('camera-stargazing', null)
     ha.notify()
   } catch (e) {
-    console.warn('[cameras] could not turn the motion lights back on, retrying in a minute:', e instanceof Error ? e.message : e)
+    console.warn('[cameras] could not turn the camera back on, retrying in a minute:', e instanceof Error ? e.message : e)
     stargazeTimer = setTimeout(() => { void endStargazing() }, 60_000)
   }
 }
 
-/** Pick up a Stargazing hour that was running when the app restarted */
 export function startCameras() {
+  // Pick up a Stargazing hour that was running when the app restarted
   void cacheGet<Stargaze>('camera-stargazing').then((s) => {
-    if (s && !stargaze) { stargaze = s; schedule() }
+    if (s && !stargaze) { stargaze = { until: s.until, switches: safeSwitches(s.switches ?? []) }; schedule() }
   })
+  setInterval(() => { void refreshPictures() }, REFRESH_MS)
+}
+
+function stargazeCamera(): Found | undefined {
+  const all = resolve()
+  return all.find((f) => ha.name(f.camera).toLowerCase() === STARGAZE_CAMERA)
+    ?? all.find((f) => ha.name(f.camera).toLowerCase().includes(STARGAZE_CAMERA.split(' ')[0]))
 }
 
 export async function camerasCommand(b: { action?: string; mode?: string; minutes?: number }) {
@@ -280,13 +343,12 @@ export async function camerasCommand(b: { action?: string; mode?: string; minute
   if (b.action === 'stargazing') {
     const minutes = Number(b.minutes)
     if (!minutes) { await endStargazing(); return }
-    // Lights that are on now get turned off; restarting keeps the original list
-    const lights = resolve().map((f) => f.parts.spotlight).filter((s): s is HAState => !!s && usable(s))
-    if (!lights.length) throw new Error('No “Spotlight Enabled” switch found on the cameras')
-    const switches = stargaze ? stargaze.switches : lights.filter((s) => s.state === 'on').map((s) => s.entity_id)
-    const toOff = lights.filter((s) => s.state === 'on').map((s) => s.entity_id)
-    if (toOff.length) await ha.callService('switch', 'turn_off', {}, toOff)
-    stargaze = { until: Date.now() + Math.min(minutes * 60_000, STARGAZE_MS), switches: [...new Set([...switches, ...toOff])] }
+    const sw = stargazeCamera()?.parts.enabled
+    if (!sw || !usable(sw)) throw new Error(`No “Enabled” switch found on the ${STARGAZE_CAMERA} camera`)
+    // Only turn back on what Stargazing turned off; tapping again keeps the original list
+    const switches = stargaze ? stargaze.switches : sw.state === 'on' ? [sw.entity_id] : []
+    if (sw.state === 'on') await ha.callService('switch', 'turn_off', {}, [sw.entity_id])
+    stargaze = { until: Date.now() + Math.min(minutes * 60_000, STARGAZE_MS), switches: safeSwitches([...new Set([...switches, ...(sw.state === 'on' ? [sw.entity_id] : [])])]) }
     await cacheSet('camera-stargazing', stargaze)
     schedule()
     ha.notify()
@@ -311,6 +373,8 @@ export function cameraNotes() {
     })),
     homeBase: homeBase() ? `${homeBase()!.entity_id} = ${homeBase()!.state}` : null,
     stargazingUntil: stargazingUntil(),
+    stargazingCamera: stargazeCamera() ? ha.name(stargazeCamera()!.camera) : null,
+    recentPushes: Object.fromEntries(sensorHits),
     overnight: night,
     notes,
   }

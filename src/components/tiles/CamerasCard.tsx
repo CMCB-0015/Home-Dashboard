@@ -68,29 +68,30 @@ export function BatteryTag({ pct, solar }: { pct: number | null; solar?: number 
 }
 
 export function Snapshot({ cam, onOpen }: { cam: Camera; onOpen: () => void }) {
-  const offline = cam.status === 'offline'
-  const now = !offline && motionNow(cam)
+  const off = cam.off
+  const offline = !off && cam.status === 'offline'
+  const now = !offline && !off && motionNow(cam)
   const what = cam.lastEvent ?? 'Motion'
   return (
-    <button onClick={onOpen}
+    <button onClick={off ? undefined : onOpen} disabled={off}
       className="group relative block aspect-video w-full overflow-hidden fit:aspect-auto fit:h-full rounded-xl bg-surface-raised text-left transition-shadow"
       style={now ? { boxShadow: `0 0 0 2px ${cfg.color}, 0 0 22px -6px ${cfg.color}` } : undefined}
-      aria-label={`Open live view for ${cam.name}`}>
+      aria-label={off ? `${cam.name} camera is off` : `Open live view for ${cam.name}`}>
       {cam.snapshotUrl && (
         <img src={cam.snapshotUrl} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-          style={offline ? { filter: 'grayscale(1) brightness(.5)' } : undefined} />
+          style={offline || off ? { filter: 'grayscale(1) brightness(.5)' } : undefined} />
       )}
       <span className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-medium">
         <span className={`h-1.5 w-1.5 rounded-full ${now ? 'animate-pulse' : ''}`} style={{ background: offline ? 'var(--color-critical)' : cfg.color }} />
         {cam.name}
-        {!cam.spotlight && <Moon size={11} style={{ color: STAR }} aria-label="motion light off" />}
+        {off && <Moon size={11} style={{ color: STAR }} aria-label="camera off" />}
       </span>
       <span className="absolute right-2.5 top-2.5"><BatteryTag pct={cam.battery} solar={cam.solar} /></span>
       <span className="absolute bottom-2.5 left-2.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
-        style={now ? { background: cfg.color, color: '#0e1318' } : { background: 'rgba(0,0,0,.7)' }}>
-        {offline ? 'Offline' : cam.lastMotionAt ? `${what} · ${motionWhen(cam.lastMotionAt)}` : 'No motion yet'}
+        style={now ? { background: cfg.color, color: '#0e1318' } : off ? { background: 'rgba(7,10,28,.85)', color: STAR } : { background: 'rgba(0,0,0,.7)' }}>
+        {off ? 'Camera off' : offline ? 'Offline' : cam.lastMotionAt ? `${what} · ${motionWhen(cam.lastMotionAt)}` : 'No motion yet'}
       </span>
-      {!offline && (
+      {!offline && !off && (
         <span className="absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-medium">
           <Play size={11} fill="currentColor" /> Live
         </span>
@@ -105,9 +106,9 @@ export const STARGAZE_MS = 60 * 60_000
 const coarse = (ms: number) => `${Math.max(5, Math.ceil(ms / 300_000) * 5)} min`
 
 /**
- * Stargazing: both cameras' motion lights off (they keep recording) for 1 hour.
+ * Stargazing: the Front Yard camera off for 1 hour (no motion light; the Garage stays on).
  * Tap while on = back to a full hour. The × on the countdown ends it now.
- * The Lenovo turns the lights back on when the hour is up, even if no screen is open.
+ * The Lenovo turns the camera back on when the hour is up, even if no screen is open.
  */
 export function StargazingButton() {
   const { data, update, send } = useHome()
@@ -118,11 +119,11 @@ export function StargazingButton() {
   const on = left > 0
   const start = () => {
     const until = new Date(Date.now() + STARGAZE_MS).toISOString()
-    update((s) => ({ ...s, stargazingUntil: until, cameras: s.cameras.map((c) => ({ ...c, spotlight: false })) }))
+    update((s) => ({ ...s, stargazingUntil: until }))
     send('cameras/command', { action: 'stargazing', minutes: 60 })
   }
   const end = () => {
-    update((s) => ({ ...s, stargazingUntil: null, cameras: s.cameras.map((c) => ({ ...c, spotlight: true })) }))
+    update((s) => ({ ...s, stargazingUntil: null }))
     send('cameras/command', { action: 'stargazing', minutes: 0 })
   }
   return (
@@ -131,11 +132,11 @@ export function StargazingButton() {
         <span className="flex h-9 items-center gap-1 rounded-full border pl-3 pr-1 text-xs font-medium tabular-nums"
           style={{ borderColor: NAVY_EDGE, color: STAR, background: 'rgba(7,10,28,.6)' }}>
           {coarse(left)}
-          <button onClick={end} aria-label="End stargazing: motion lights back on"
+          <button onClick={end} aria-label="End stargazing: Front Yard camera back on"
             className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10"><X size={13} aria-hidden /></button>
         </span>
       )}
-      <button onClick={start} aria-pressed={on} aria-label={on ? 'Stargazing on: tap to restart the hour' : 'Stargazing: motion lights off for 1 hour'}
+      <button onClick={start} aria-pressed={on} aria-label={on ? 'Stargazing on: tap to restart the hour' : 'Stargazing: Front Yard camera off for 1 hour'}
         className="flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors"
         style={on ? { background: NAVY, borderColor: NAVY_EDGE, color: STAR, boxShadow: `0 0 14px -4px ${STAR}` } : { borderColor: 'var(--color-edge)', color: 'var(--color-ink-dim)', background: 'var(--color-surface-raised)' }}>
         <Moon size={14} fill={on ? STAR : 'none'} aria-hidden />
@@ -171,7 +172,7 @@ export function CamerasCard() {
   return (
     <>
       <Card accent={cfg.color} title="Cameras" category="cameras"
-        subtitle={active ? `Motion now · ${data.cameras.filter(motionNow).map((c) => c.name).join(', ')}` : stars ? 'Stargazing · motion lights off' : `${online} of ${data.cameras.length} online`}
+        subtitle={active ? `Motion now · ${data.cameras.filter(motionNow).map((c) => c.name).join(', ')}` : stars ? 'Stargazing · Front Yard off' : `${online} of ${data.cameras.length} online`}
         headerRight={<div className="flex items-center gap-2"><StargazingButton /><GuardToggle /></div>} bodyClassName="flex flex-col"
         style={active ? { backgroundImage: 'linear-gradient(180deg, rgba(124,140,240,0.16) 0%, rgba(124,140,240,0.05) 45%, transparent 80%)' }
           : stars ? { backgroundImage: 'linear-gradient(180deg, rgba(22,20,54,0.95) 0%, rgba(7,10,28,0.55) 50%, transparent 85%)' } : undefined}>
