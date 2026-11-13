@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.2
+- Cameras: switching **Home / Away** no longer shows "Motion · just now" on an old picture. The switch makes the bridge swap between two copies of the same latest picture (the small one from an Away alert and the HomeBase's full one), which looked like a new picture. Picture changes in the **3 minutes after a mode switch** now keep the previous motion time
+- Cameras (Away mode): when an alert's picture is later replaced by the HomeBase's full picture of the same event, the motion keeps the alert's time and label instead of jumping to when the second picture arrived (alerts up to 10 minutes before a picture count as the same motion)
+
 ## 1.20.1
 - Cameras: **no more false "Camera is offline"**. Switching the HomeBase to Away flagged the Front Yard camera unavailable for a moment while it worked fine. A camera now counts as offline only after Home Assistant has called it unavailable for **1 minute without a break**
 - New setting **camera_offline_minutes** (Configuration tab, default 1, 0–120) to change that wait

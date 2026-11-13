@@ -112,6 +112,24 @@ let pics: Record<string, PicSeen> = {}
 const picGap = new Set<string>()   // pictures (image entities) that went unavailable since last seen
 // Watch every change: an integration reload makes the picture unavailable for well under a second
 ha.onStateChange((id, st) => { if (id.startsWith('image.') && (!st || !usable(st) || Number.isNaN(Date.parse(st.state)))) picGap.add(id) })
+/**
+ * A Home/Away switch makes the bridge swap which copy of the latest picture it serves
+ * (the small thumbnail from an Away alert vs the HomeBase's full cover of the same
+ * event). Home Assistant stamps that as a new picture, but it isn't motion
+ * (Nov 13, 2026: "motion just now" on the hour-old picture). Picture changes this soon
+ * after a mode change are taken as the new baseline, without a motion time.
+ */
+const MODE_SWITCH_GRACE_MS = 3 * 60_000
+/** A pushed alert (Away mode) this long before a new picture is the same motion: its time and label win */
+const PUSH_EXPLAINS_PICTURE_MS = 10 * 60_000
+let modeChangedAt = 0
+const lastMode = new Map<string, string>()
+ha.onStateChange((id, st) => {
+  if (!id.startsWith('alarm_control_panel.') || !st || !usable(st)) return
+  // Only a real mode change (not an attribute update)
+  if (lastMode.has(id) && lastMode.get(id) !== st.state) modeChangedAt = Date.now()
+  lastMode.set(id, st.state)
+})
 let picsLoaded = false
 void cacheGet<Record<string, PicSeen>>(PIC_KEY).then((v) => { if (v) pics = { ...v, ...pics }; picsLoaded = true })
 
@@ -123,6 +141,7 @@ function pictureMotion(f: Found): string | null {
   const prev = pics[cam]
   if (!prev || prev.pic !== img.state) {
     const restart = !prev || picGap.has(img.entity_id) || Date.now() - ha.connectedAt < 120_000
+      || Date.now() - modeChangedAt < MODE_SWITCH_GRACE_MS
     pics[cam] = { pic: img.state, at: restart ? prev?.at ?? null : new Date(img.state).toISOString() }
     picGap.delete(img.entity_id)
     void cacheSet(PIC_KEY, pics)
@@ -155,9 +174,10 @@ function lastDetection(f: Found): Det | null {
   const rank = (d: Det) => Date.parse(d.at) + (d.label === 'Motion' ? 0 : 5_000)
   const det = typed.sort((a, b) => rank(b) - rank(a))[0] ?? null
   const pic = pictureMotion(f)
-  // The picture lands up to a minute or two after the push: a push within 2 min before it
-  // is the same motion, with its exact time and type
-  if (det && (!pic || Date.parse(det.at) >= Date.parse(pic) - 120_000)) return det
+  // The picture lands after the push, sometimes twice (the alert's thumbnail, then the
+  // HomeBase's full cover a few minutes later): a push shortly before it is the same
+  // motion, with its exact time and type
+  if (det && (!pic || Date.parse(det.at) >= Date.parse(pic) - PUSH_EXPLAINS_PICTURE_MS)) return det
   return pic ? { at: pic, label: 'Motion' } : null
 }
 
