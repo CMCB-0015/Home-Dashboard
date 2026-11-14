@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useHome } from '../lib/useHome'
 import { WeatherIcon } from './WeatherIcon'
+import { skyNow } from '../lib/sky'
 
 function useNow(intervalMs = 15_000) {
   const [now, setNow] = useState(() => new Date())
@@ -54,10 +55,10 @@ export function PageHeader({ title, subtitle, page, onPageChange, showWeather }:
       <div className="flex items-center gap-5">
         {showWeather && w && (
           <button onClick={() => onPageChange(1)} className="hidden items-center gap-2 text-left md:flex" aria-label="Open weather">
-            <WeatherIcon kind={w.current.icon} size={40} />
+            <WeatherIcon kind={skyNow(w).icon} size={40} />
             <div>
               <div className="text-[28px] font-light leading-none">{w.current.tempF}°</div>
-              <div className="mt-1 text-[11px] text-ink-dim">{w.current.condition}</div>
+              <div className="mt-1 text-[11px] text-ink-dim">{skyNow(w).condition}</div>
             </div>
             <span className="ml-3 h-10 w-px bg-edge" />
           </button>

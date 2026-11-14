@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.3
+- Weather, **night fix**: after sunset the first day column reads **Tonight** with a moon and the night's sky ("Clear", "Partly cloudy", or rain/fog/storms if they fill at least a quarter of the night), instead of "Sunny" with a sun. Tapping it opens Tonight's details in the night tint
+- The current reading (weather card, header, screensaver) switches between **Sunny / Clear** and **Mostly sunny / Mostly clear**, and sun / moon, right at sunrise and sunset, instead of waiting for the next weather update
+- Every weather type checked day and night: clouds, fog, drizzle, rain, snow and thunderstorms look the same either way; only clear and partly cloudy skies change
+
 ## 1.20.2
 - Cameras: switching **Home / Away** no longer shows "Motion · just now" on an old picture. The switch makes the bridge swap between two copies of the same latest picture (the small one from an Away alert and the HomeBase's full one), which looked like a new picture. Picture changes in the **3 minutes after a mode switch** now keep the previous motion time
 - Cameras (Away mode): when an alert's picture is later replaced by the HomeBase's full picture of the same event, the motion keeps the alert's time and label instead of jumping to when the second picture arrived (alerts up to 10 minutes before a picture count as the same motion)

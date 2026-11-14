@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useHome } from '../lib/useHome'
 import { statusItems } from '../lib/statusItems'
 import { WeatherIcon } from './WeatherIcon'
+import { skyNow } from '../lib/sky'
 
 // Idle dim + tap to wake (EXPERIMENTAL, 1.18.0, Nov 8, 2026).
 // After `idle_minutes` with no touch, a near-black screensaver covers Panel:
@@ -104,9 +105,9 @@ export function IdleOverlay() {
       <span style={{ fontSize: 22, color: ink(soft) }}>{date}</span>
       {w && (
         <span className="flex items-center gap-3" style={{ fontSize: 20, color: ink(soft) }}>
-          <span style={{ opacity: level * 1.2, display: 'flex' }}><WeatherIcon kind={w.current.icon} size={28} /></span>
+          <span style={{ opacity: level * 1.2, display: 'flex' }}><WeatherIcon kind={skyNow(w).icon} size={28} /></span>
           <span className="font-display" style={{ fontSize: 26, color: ink(level) }}>{Math.round(w.current.tempF)}°</span>
-          <span>{w.current.condition}</span>
+          <span>{skyNow(w).condition}</span>
         </span>
       )}
       {chips.length > 0 && (

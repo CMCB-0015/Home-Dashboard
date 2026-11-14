@@ -396,6 +396,8 @@ export interface Weather {
   hourly: { time: string; tempF: number; rainChancePct: number }[]
   /** Every hour from midnight today, 7 days */
   hours?: WeatherHour[]
+  /** The rest of tonight (sunset to tomorrow's sunrise), worded for night: the Today column after dark */
+  tonight?: { icon: WeatherIcon; condition: string }
   /** Today first, then the next 6 days */
   daily: (Pick<WeatherDay, 'date' | 'icon' | 'highF' | 'lowF' | 'rainChancePct'> & Partial<WeatherDay>)[]
 }

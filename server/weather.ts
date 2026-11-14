@@ -18,6 +18,25 @@ function describe(code: number, isDay: boolean): { condition: string; icon: Weat
   return { condition: 'Cloudy', icon: 'cloudy' }
 }
 
+// How much a weather code matters when summing up a stretch of hours (storms beat rain beat clouds)
+function severity(code: number): number {
+  if (code >= 95) return 8
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 7
+  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return 6
+  if (code >= 51 && code <= 57) return 5
+  if (code === 45 || code === 48) return 4
+  return Math.min(code, 3)
+}
+
+/** One word for a run of hours: the most serious weather that fills at least a quarter of them */
+function summarize(codes: number[]): number | null {
+  if (!codes.length) return null
+  const count = new Map<number, number>()
+  for (const c of codes) count.set(c, (count.get(c) ?? 0) + 1)
+  const enough = [...count.keys()].filter((c) => count.get(c)! >= Math.max(1, codes.length / 4))
+  return enough.sort((a, b) => severity(b) - severity(a))[0]
+}
+
 function compass(deg: number): string {
   const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
   return dirs[Math.round(deg / 22.5) % 16]
@@ -102,6 +121,16 @@ export async function getWeather(): Promise<Weather> {
     }
   })
 
+  // Tonight: the hours from sunset (or now, if later) to tomorrow's sunrise
+  const startNight = Math.max(Date.parse(withOffset(D.sunset[0], off)), Date.now() - 3_600_000)
+  const endNight = D.sunrise[1] ? Date.parse(withOffset(D.sunrise[1], off)) : startNight + 12 * 3_600_000
+  const nightCodes = hourTimes.flatMap((t, i) => {
+    const at = Date.parse(t)
+    return at + 3_600_000 > startNight && at < endNight && typeof H.weather_code[i] === 'number' ? [H.weather_code[i] as number] : []
+  })
+  const nightCode = summarize(nightCodes)
+  const tonight = nightCode === null ? describe(D.weather_code[0], false) : describe(nightCode, false)
+
   const data: Weather = {
     location: name,
     updatedAt: new Date().toISOString(),
@@ -127,6 +156,7 @@ export async function getWeather(): Promise<Weather> {
     hourly,
     hours,
     daily,
+    tonight,
   }
   cache = { at: Date.now(), data }
   return data

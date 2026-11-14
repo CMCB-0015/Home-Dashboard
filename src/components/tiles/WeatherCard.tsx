@@ -4,6 +4,7 @@ import { useHome } from '../../lib/useHome'
 import { relativeTime } from '../../lib/format'
 import { Card } from '../Card'
 import { WeatherIcon } from '../WeatherIcon'
+import { isTonight, skyNow, tonightSky } from '../../lib/sky'
 import { SkyChart, SunArc, useWidth } from '../weather/SkyChart'
 import { RadarView } from '../weather/RadarView'
 import type { Weather, WeatherHour } from '../../types'
@@ -41,15 +42,15 @@ const hoursOn = (hours: WeatherHour[], date: string) => hours.filter((h) => {
 })
 
 /** Each day's low-to-high as a bar on one shared scale (red high above, blue low below) */
-function RangeBars({ days, onPick }: { days: Weather['daily']; onPick: (i: number) => void }) {
+function RangeBars({ days, onPick, tonight = false }: { days: Weather['daily']; onPick: (i: number) => void; tonight?: boolean }) {
   const lo = Math.min(...days.map((d) => d.lowF)), hi = Math.max(...days.map((d) => d.highF))
   const y = (t: number) => 18 + (1 - (t - lo) / Math.max(hi - lo, 1)) * 44
   return (
     <div className="grid grid-cols-6 gap-1">
       {days.map((d, i) => (
-        <button key={d.date} onClick={() => onPick(i)} aria-label={`${dayName(d.date, true)}: high ${d.highF}°, low ${d.lowF}°${d.rainChancePct >= 20 ? `, ${d.rainChancePct}% rain` : ''}. Tap for details`}
+        <button key={d.date} onClick={() => onPick(i)} aria-label={`${i === 0 && tonight ? `Tonight, ${d.condition ?? ''}; today` : dayName(d.date, true)}: high ${d.highF}°, low ${d.lowF}°${d.rainChancePct >= 20 ? `, ${d.rainChancePct}% rain` : ''}. Tap for details`}
           className="flex flex-col items-center gap-[3px] rounded-xl pb-1 pt-1.5 transition-colors hover:bg-white/[0.04] active:bg-white/[0.06]">
-          <span className="text-xs font-semibold" style={{ color: i === 0 ? 'var(--color-ink)' : 'var(--color-ink-dim)' }}>{i === 0 ? 'Today' : dayName(d.date)}</span>
+          <span className="text-xs font-semibold" style={{ color: i === 0 ? 'var(--color-ink)' : 'var(--color-ink-dim)' }}>{i === 0 ? (tonight ? 'Tonight' : 'Today') : dayName(d.date)}</span>
           <WeatherIcon kind={d.icon} size={24} />
           <span className="relative h-[82px] w-full">
             <span className="absolute inset-x-0 text-center font-display text-[13px] font-bold text-temp-high" style={{ top: y(d.highF) - 17 }}>{d.highF}°</span>
@@ -118,27 +119,27 @@ function RainRibbon({ days, hours, now }: { days: Weather['daily']; hours: Weath
 }
 
 /** One day in detail: slides up over the card in that day's tint */
-function DayPanel({ day, hours, onClose }: { day: Weather['daily'][number]; hours: WeatherHour[]; onClose: () => void }) {
+function DayPanel({ day, hours, onClose, tonight = false }: { day: Weather['daily'][number]; hours: WeatherHour[]; onClose: () => void; tonight?: boolean }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
   }, [onClose])
-  const tone = skyTone(day.icon, true)
+  const tone = skyTone(day.icon, !tonight)
   const wettest = hours.reduce<WeatherHour | null>((a, h) => (h.rainIn > (a?.rainIn ?? 0) ? h : a), null)
   const summary = (day.rainIn ?? 0) >= 0.01
     ? `${day.condition ?? 'Rain'}${wettest ? `, heaviest around ${new Date(wettest.time).toLocaleTimeString('en-US', { hour: 'numeric' })}` : ''} · ${day.rainIn!.toFixed(2)} in`
     : day.condition ?? ''
   return (
     <div className="absolute inset-x-0 bottom-0 top-12 z-[3] flex flex-col overflow-hidden rounded-t-2xl border-t border-[#33404c] bg-surface-raised shadow-[0_-16px_40px_rgba(0,0,0,0.45)] sheet-up"
-      role="dialog" aria-label={dayName(day.date, true)}>
+      role="dialog" aria-label={tonight ? `Tonight, ${dayName(day.date, true)}` : dayName(day.date, true)}>
       <div className="pointer-events-none absolute inset-x-0 top-0 h-56" style={{ background: tone.wash }} />
       <div className="relative mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-[#3a4754]" />
       <div className="relative flex items-center gap-2.5 py-1 pl-1.5 pr-5">
         <button onClick={onClose} aria-label="Close" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#c5ced6] hover:bg-white/5"><X size={20} /></button>
         <WeatherIcon kind={day.icon} size={34} />
         <div className="min-w-0 flex-1">
-          <p className="font-display text-[17px] font-semibold">{dayName(day.date, true)}</p>
+          <p className="font-display text-[17px] font-semibold">{tonight ? <>Tonight <span className="text-[13px] font-normal text-[#a3b0bc]">· {dayName(day.date, true)}</span></> : dayName(day.date, true)}</p>
           <p className="truncate text-xs text-[#a3b0bc]">{summary}</p>
         </div>
         <p className="flex gap-2 font-display text-xl"><span className="font-bold text-temp-high">{day.highF}°</span><span className="text-ink-faint">/</span><span className="font-bold text-temp-low">{day.lowF}°</span></p>
@@ -277,13 +278,16 @@ export function WeatherCard() {
     return <Card accent="var(--color-weather)" title="Weather"><p className="py-6 text-sm text-ink-faint">Weather unavailable right now.</p></Card>
   }
   const c = w.current
-  const isDay = c.isDay ?? (now >= Date.parse(w.today.sunrise) && now <= Date.parse(w.today.sunset))
-  const tone = skyTone(c.icon, isDay)
+  // Day or night by the clock (sunrise / sunset), so it flips right on time
+  const sky = skyNow(w, now)
+  const tone = skyTone(sky.icon, sky.isDay)
   const startIdx = Math.max(0, hours.findIndex((h) => Date.parse(h.time) + 3_600_000 > now))
   const next12 = hours.slice(startIdx, startIdx + 12)
   // Today first, like a weather app; the rain ribbon lines up under these columns
-  const days = w.daily.slice(0, 6)
-  const openDay = dayIdx === null ? null : w.daily[dayIdx]
+  // After sunset the Today column is Tonight: moon, and the night's wording
+  const tonight = isTonight(w, now)
+  const days = w.daily.slice(0, 6).map((d, i) => (i === 0 && tonight ? { ...d, ...tonightSky(w) } : d))
+  const openDay = dayIdx === null ? null : (days[dayIdx] ?? w.daily[dayIdx])
   const radarBtn = (
     <button onClick={() => setRadar(true)} aria-label="Show radar"
       className="flex h-9 items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.06] px-3 text-[12.5px] font-semibold text-ink transition-colors hover:bg-white/10">
@@ -309,7 +313,7 @@ export function WeatherCard() {
                 style={{ width: fold.dragging ? 56 : 44, background: fold.dragging ? 'var(--color-weather)' : 'var(--color-ink-faint)' }} />
             </button>
           )}
-          {openDay && <DayPanel day={openDay} hours={hoursOn(hours, openDay.date)} onClose={() => setDayIdx(null)} />}
+          {openDay && <DayPanel day={openDay} hours={hoursOn(hours, openDay.date)} tonight={dayIdx === 0 && tonight} onClose={() => setDayIdx(null)} />}
           {radar && <RadarView lat={w.lat ?? 33.427} lon={w.lon ?? -117.612} mapsKey={data?.mapsKey ?? null} place={w.location} onClose={() => setRadar(false)} />}
         </>
       }>
@@ -321,7 +325,7 @@ export function WeatherCard() {
             <span className="flex gap-2.5 font-display text-[17px]"><span className="font-bold text-temp-high">{w.today.highF}°</span><span className="text-ink-faint">/</span><span className="font-bold text-temp-low">{w.today.lowF}°</span></span>
           </button>
           <div className="flex min-w-[130px] flex-1 flex-col gap-0.5">
-            <span className="flex items-center gap-2"><WeatherIcon kind={c.icon} size={32} /><span className="text-base font-medium">{c.condition}</span></span>
+            <span className="flex items-center gap-2"><WeatherIcon kind={sky.icon} size={32} /><span className="text-base font-medium">{sky.condition}</span></span>
             <span className="text-[13px] text-[#a3b0bc]">Feels like {c.feelsLikeF}°</span>
             {rain && (
               <span className="mt-1 flex h-6 w-fit items-center gap-1.5 rounded-full border border-[rgba(111,176,255,.35)] bg-[rgba(111,176,255,.14)] px-2.5 text-[11.5px] text-[#cfe3ff]"
@@ -342,7 +346,7 @@ export function WeatherCard() {
           {c.aqi !== null && <span className={chip}>Air <b className={val}>{c.aqi}</b> {aqiLabel(c.aqi)}</span>}
         </div>
         <SkyChart hours={next12} color={tone.color} firstLabel="Now" />
-        {days.length > 0 && <RangeBars days={days} onPick={(i) => setDayIdx(i)} />}
+        {days.length > 0 && <RangeBars days={days} tonight={tonight} onPick={(i) => setDayIdx(i)} />}
         {days.length > 0 && <RainRibbon days={days} hours={hours} now={now} />}
         </div>
       </div>
