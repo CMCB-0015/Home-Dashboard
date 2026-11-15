@@ -151,9 +151,15 @@ in `match`.
 Drawing areas on the map is off until the floor plan is lined up with the robot's map
 (`vacuum.calibration`); rooms work without it.
 
-**Finish time:** the card shows "Done ~time" once every room left in the run has been
-timed on an earlier clean (vacuum + mop and vacuum only are timed separately).
-`/api/setup-check` → `vacuum.roomTimes` lists what's been learned. Mopping uses Medium
+**Finish time:** "Done ~time" is the **average of the last 5 runs** of the same kind
+(same rooms and passes; vacuum + mop, vacuum only and mop only kept separately), not
+counting pauses. One run is enough for a first estimate; it gets better as runs 2–5 come in.
+The time is set at the start and only moves while paused. For a set of rooms that hasn't
+been run before, it adds up each room's 5-run average instead (a room is timed until the
+robot reaches the next room of the run, so detours stay with the room it's working on).
+No time if there's nothing to go on yet; past the usual time it says "Finishing up".
+Runs sent to the dock early aren't learned. Kitchen starts from one 24-minute run.
+`/api/setup-check` → `vacuum.roomTimes` lists each average and the runs behind it. Mopping uses Medium
 water unless another level is picked on the Map & rooms page (`vacuum.waterDefault` in
 `src/config/home.ts`).
 

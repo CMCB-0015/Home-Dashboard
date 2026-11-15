@@ -81,6 +81,6 @@ export function dockRows(v: VacuumState) {
 export const statsText = (v: VacuumState) =>
   [v.cleanMinutes !== null ? `${v.cleanMinutes} min` : null, v.cleanAreaFt2 !== null ? `${v.cleanAreaFt2} ft²` : null].filter(Boolean).join(' · ')
 
-/** "Done ~5:42 PM" while cleaning, once every room left has been timed on an earlier run */
+/** "Done ~5:42 PM" while cleaning (learned from earlier runs), "Finishing up" once it's past its usual time */
 export const finishText = (v: VacuumState) =>
-  v.finishAt ? `Done ~${new Date(v.finishAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : null
+  v.finishAt ? `Done ~${new Date(v.finishAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : v.finishingUp ? 'Finishing up' : null

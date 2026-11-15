@@ -125,8 +125,10 @@ export interface VacuumState {
   currentRoom: string | null
   /** The run started from the dashboard (or a full clean) */
   run: { name: string; rooms: string[]; startedAt: string; mode?: 'vacmop' | 'vac' | 'mop'; reps?: number } | null
-  /** When the run should be done (learned from past runs); null until every room left has been timed once */
+  /** When the run should be done (average of the last 5 runs of this kind, or of its rooms); null when there's nothing to go on yet */
   finishAt?: string | null
+  /** Running past its typical time: shown as "Finishing up" instead of a time */
+  finishingUp?: boolean
   cleanMinutes: number | null
   cleanAreaFt2: number | null
   /** Current Roborock settings, as Roborock names them */

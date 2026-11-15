@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20.4
+- Vacuum, **finish time fix**: "Done ~" no longer creeps a minute ahead of the clock. The dock is in Kitchen/Living Room, so the robot never "walked into" that room and the kitchen was always counted as not started; its time had also been learned from the robot just driving through
+- "Done ~" now comes from the **average of the last 5 runs of the same kind** (Kitchen, Bedrooms, Full clean…; vacuum + mop / vacuum only / mop only kept apart), not counting pauses. Set at the start, it stays put while the robot works and moves out only while paused. One run gives a first estimate; it improves with each run up to 5
+- A set of rooms never run before adds up each room's 5-run average. Room times now count the room it starts in, run until the robot reaches the next room of the run (detours to wash the mop stay with that room), and never count a room it only drove through
+- Past the usual time the card says **"Finishing up"** instead of pushing the time out. Runs sent to the dock early aren't learned. Old room times are cleared once (they included drive-throughs); Kitchen starts from one 24-minute run. Timing survives a Panel restart mid-run
+- `/api/setup-check` → `vacuum.roomTimes` shows each average and the runs behind it
+
 ## 1.20.3
 - Weather, **night fix**: after sunset the first day column reads **Tonight** with a moon and the night's sky ("Clear", "Partly cloudy", or rain/fog/storms if they fill at least a quarter of the night), instead of "Sunny" with a sun. Tapping it opens Tonight's details in the night tint
 - The current reading (weather card, header, screensaver) switches between **Sunny / Clear** and **Mostly sunny / Mostly clear**, and sun / moon, right at sunrise and sunset, instead of waiting for the next weather update

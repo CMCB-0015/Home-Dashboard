@@ -16,7 +16,7 @@ import { HOME } from '../src/config/home.ts'
 import { configPresets, configRooms, fullOrder, whatText } from '../src/lib/vacuum.ts'
 import { ha, type HAState } from './ha.ts'
 import { cacheGet, cacheSet } from './cache.ts'
-import { finishAt, observe, roomsLeft, timingNotes, type CleanMode } from './vacuumTiming.ts'
+import { finishAt, markRunCut, observe, roomsLeft, timingNotes, type CleanMode } from './vacuumTiming.ts'
 
 const FIND = {
   battery: ['sensor', /_battery$/],
@@ -183,7 +183,7 @@ export function vacuumState(): VacuumState | null {
     presets,
     areas: !!HOME.vacuum.calibration,
     lastCleanAt: ok(e.lastCleanEnd) ? e.lastCleanEnd!.state : null,
-    finishAt: showFinish ? finishAt(run, now) : null,
+    ...(() => { const f = showFinish ? finishAt(run, now) : null; return { finishAt: f?.at ?? null, finishingUp: !!f?.finishingUp } })(),
   }
 }
 
@@ -250,8 +250,8 @@ export async function vacuumCommand(b: VacuumCommand) {
   switch (b.action) {
     case 'pause': return vac('pause')
     case 'resume': return vac('start')
-    case 'dock': return vac('return_to_base')
-    case 'stop': return vac('stop')
+    case 'dock': markRunCut(); return vac('return_to_base')
+    case 'stop': markRunCut(); return vac('stop')
     case 'preset': {
       const p = HOME.vacuum.presets.find((x) => x.id === b.preset)
       if (!p) throw new Error('That preset isn’t set up')
