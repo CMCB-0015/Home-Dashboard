@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type React from 'react'
 import { useHome } from '../../lib/useHome'
 import { HOME } from '../../config/home'
-import { VAC_GREY, roomCenter, whatText } from '../../lib/vacuum'
+import { VAC_GREY, doneBy, estimateRun, roomCenter, whatText, type Estimate } from '../../lib/vacuum'
 import { DetailLayout } from '../../components/DetailLayout'
 import { Switch } from '../../components/Sheet'
 import { FloorPlan, tint } from '../../components/vacuum/FloorPlan'
@@ -81,9 +81,17 @@ function MapPage({ v }: { v: VacuumState }) {
     setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id])); setZones([]); setMsg(null)
   }
 
+  // Re-draw every 30 s so "Done ~" keeps up with the clock
+  const [, setTick] = useState(0)
+  useEffect(() => { const t = setInterval(() => setTick((n) => n + 1), 30_000); return () => clearInterval(t) }, [])
+  // Runtime estimate for what's picked, worked out here as you tap
+  const est: Estimate | null = zones.length ? null : estimateRun(v, { rooms: sel, vacuum: vacOn, mop: mopOn, passes })
+  const estMin = (e: Estimate | null) => (e && e.state !== 'none' ? `~${e.minutes} min${e.state === 'partial' ? '+' : ''}` : null)
+
   const what = whatText(vacOn, mopOn)
   const where = zones.length ? `${zones.length} area${zones.length > 1 ? 's' : ''}` : sel.length ? `${sel.length} room${sel.length > 1 ? 's' : ''}` : 'whole home'
   const nothing = !vacOn && !mopOn
+  const showEst = !d.running && !nothing && !!est
 
   const start = async () => {
     if (nothing) return
@@ -137,6 +145,11 @@ function MapPage({ v }: { v: VacuumState }) {
       ))}
     </div>
   )
+  const roomTime = (id: string) => {
+    if (!est || nothing) return null
+    const m = estimateRun(v, { rooms: [id], vacuum: vacOn, mop: mopOn, passes }).parts[0]?.minutes
+    return m === null || m === undefined ? 'not timed' : `~${m} min`
+  }
   const has = (list: string[], val: string) => !list.length || list.includes(val)
   const subtitle = [v.name, d.header, v.batteryPct !== null ? `${v.batteryPct}%` : null, finishText(v)].filter(Boolean).join(' · ')
 
@@ -151,9 +164,12 @@ function MapPage({ v }: { v: VacuumState }) {
         {/* Map */}
         <div className="relative flex min-w-0 flex-1 flex-col overflow-visible rounded-2xl border border-edge bg-surface">
           <div className="h-[3px] rounded-t-2xl transition-colors" style={{ background: d.k ? d.color : VAC_GREY }} />
+          {showEst && est && (
+            <div className="px-4 pt-3.5"><EstimateStrip est={est} what={`${what} · ${where === 'whole home' ? 'whole home' : sel.length === 1 ? v.rooms.find((r) => r.id === sel[0])?.name ?? where : where}`} showParts={sel.length > 1} /></div>
+          )}
           <div className="relative px-4 pb-4 pt-9">
             <span className="absolute left-4 top-3 text-[12.5px] text-ink-dim">{hint}</span>
-            <div className="mx-auto w-full max-w-[min(100%,calc((100vh-330px)*690/514))] min-w-[260px]">
+            <div className={`mx-auto w-full min-w-[260px] ${showEst ? 'max-w-[min(100%,calc((100vh-420px)*690/514))]' : 'max-w-[min(100%,calc((100vh-330px)*690/514))]'}`}>
               <div ref={planRef} className="relative">
                 <FloorPlan rooms={v.rooms} robot={robot} big className="w-full rounded-xl bg-[#0b1015]"
                   room={(r, i, style) => {
@@ -165,7 +181,14 @@ function MapPage({ v }: { v: VacuumState }) {
                         aria-label={`${r.name}${picked ? ', picked' : ''}${ok ? '' : ' (no matching Roborock room)'}`}
                         className="flex items-center justify-center rounded-[3px] border-2 border-[#0b1015] p-0 text-[11px] font-semibold transition-colors sm:text-sm"
                         style={{ ...style, background: tint(r.color, alpha), color: alpha >= 0.75 ? '#0e1318' : '#e8edf2' }}>
-                        {i === r.main && <span className="px-1 text-center leading-tight">{r.name}</span>}
+                        {i === r.main && (
+                          <span className="flex flex-col items-center gap-0.5 px-1 text-center leading-tight">
+                            <span>{r.name}</span>
+                            {!areasMode && !d.running && (picked || sel.length === 0) && roomTime(r.id) && (
+                              <span className="font-mono text-[10.5px] font-semibold opacity-85 sm:text-xs">{roomTime(r.id)}</span>
+                            )}
+                          </span>
+                        )}
                         {picked && i === r.main && (
                           <span className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-white text-bg"><Check /></span>
                         )}
@@ -287,7 +310,7 @@ function MapPage({ v }: { v: VacuumState }) {
                 : <Play />}
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="text-base font-semibold">{a.starting === 'map' ? 'Starting…' : d.running ? (v.state === 'paused' ? 'Resume' : 'Pause') : 'Start'}</span>
-                <span className="truncate text-[12.5px] opacity-75">{d.running ? d.run?.name ?? '' : nothing ? 'Turn on Vacuum or Mop first' : `${what} · ${where}`}</span>
+                <span className="truncate text-[12.5px] opacity-75">{d.running ? d.run?.name ?? '' : nothing ? 'Turn on Vacuum or Mop first' : [what, where, estMin(est)].filter(Boolean).join(' · ')}</span>
               </span>
             </button>
           </div>
@@ -296,7 +319,8 @@ function MapPage({ v }: { v: VacuumState }) {
         {/* Presets + dock */}
         <div className="flex w-full shrink-0 flex-col gap-2.5 lg:w-[320px]">
           <span className="text-[13px] font-semibold text-ink-dim">Presets</span>
-          {[{ id: 'full', name: 'Full clean', sub: 'Vacuum + mop · whole home', color: '#e8edf2', available: true, reason: undefined as string | undefined }, ...v.presets.map((p) => ({ ...p, sub: `${p.sub}${p.rooms.length > 1 ? ' · ' + p.rooms.map((id) => v.rooms.find((r) => r.id === id)?.name.replace(/ (bedroom|room)$/i, '')).join(', ') : ''}` }))].map((p) => (
+          {[{ id: 'full', name: 'Full clean', sub: 'Vacuum + mop · whole home', color: '#e8edf2', available: true, reason: undefined as string | undefined, est: estimateRun(v, { rooms: [], vacuum: true, mop: true }) },
+            ...v.presets.map((p) => ({ ...p, est: estimateRun(v, { rooms: p.rooms, vacuum: p.vacuum, mop: p.mop }), sub: `${p.sub}${p.rooms.length > 1 ? ' · ' + p.rooms.map((id) => v.rooms.find((r) => r.id === id)?.name.replace(/ (bedroom|room)$/i, '')).join(', ') : ''}` }))].map((p) => (
             <button key={p.id} disabled={!p.available || !!a.starting || d.running} title={p.reason}
               onClick={async () => { const ok = await (p.id === 'full' ? a.full() : a.preset(p.id)); if (ok) setMsg(`Started · ${p.name}`) }}
               className="flex h-16 items-center gap-3 rounded-[14px] border border-edge bg-surface px-3.5 text-left hover:bg-surface-raised disabled:opacity-45">
@@ -305,7 +329,9 @@ function MapPage({ v }: { v: VacuumState }) {
                 <span className="text-[15px] font-semibold">{p.name}</span>
                 <span className="truncate text-[12.5px] text-ink-dim">{a.starting === p.id ? 'Starting…' : p.available ? p.sub : p.reason}</span>
               </span>
-              <span className="ml-auto text-ink-dim"><Play size={16} /></span>
+              <span className="ml-auto shrink-0 font-mono text-sm font-semibold" style={{ color: p.est?.state === 'partial' ? AMBER : undefined }}>
+                {estMin(p.est) ?? <span className="text-ink-dim"><Play size={16} /></span>}
+              </span>
             </button>
           ))}
 
@@ -326,6 +352,44 @@ function MapPage({ v }: { v: VacuumState }) {
         </div>
       </div>
     </DetailLayout>
+  )
+}
+
+/** Top of the map: how long what's picked would take if started now */
+function EstimateStrip({ est, what, showParts }: { est: Estimate; what: string; showParts: boolean }) {
+  const none = est.state === 'none'
+  const missing = est.parts.filter((p) => p.minutes === null)
+  const parts = showParts || missing.length ? est.parts : []
+  return (
+    <div className="flex flex-wrap items-center gap-x-[18px] gap-y-2.5 rounded-[14px] border bg-surface-raised px-4 py-3"
+      style={{ borderColor: est.state === 'partial' ? tint(AMBER, 0.5) : '#29333d' }}>
+      <div className="flex shrink-0 items-center gap-3">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: none ? '#252e38' : '#e8edf2', color: none ? '#8493a1' : '#0e1318' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2" /><path d="M9 2h6" /></svg>
+        </span>
+        <span className="flex flex-col gap-px">
+          <span className="font-display text-[26px] font-semibold leading-none" style={{ color: none ? '#c9d2db' : undefined }}>
+            {none ? 'No estimate yet' : `~${est.minutes} min${est.state === 'partial' ? ' +' : ''}`}
+          </span>
+          <span className="text-[13px] text-[#c9d2db]">{none ? 'Learns from this run' : `Done ~${doneBy(est.minutes)} if started now`}</span>
+        </span>
+      </div>
+      <span className="hidden w-px self-stretch bg-edge sm:block" />
+      <div className="flex min-w-[200px] flex-1 flex-col gap-[7px]">
+        <span className="text-sm font-semibold">{what}</span>
+        {parts.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {parts.map((p) => (
+              <span key={p.id} className="flex h-6 items-center gap-1.5 rounded-[7px] border px-2 text-xs"
+                style={{ borderColor: p.minutes === null ? tint(AMBER, 0.6) : '#29333d', color: p.minutes === null ? AMBER : '#c9d2db' }}>
+                <span className="h-[7px] w-[7px] rounded-[2px]" style={{ background: p.color }} />
+                {p.name.replace(/ (bedroom|room)$/i, '')}{p.minutes === null ? ' · not timed yet' : ` ${p.minutes} min`}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 

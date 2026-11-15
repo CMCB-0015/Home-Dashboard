@@ -1,6 +1,6 @@
 // Shared by the vacuum card, the Map & rooms page and the server.
 import { HOME } from '../config/home'
-import type { VacuumPreset, VacuumRoom, VacuumState } from '../types'
+import type { VacuumEstimates, VacuumPreset, VacuumRoom, VacuumState } from '../types'
 
 export const VAC_GREY = '#8b9baa'
 
@@ -37,6 +37,50 @@ export function runProgress(v: VacuumState) {
   return { idx, done, total: run.rooms.length }
 }
 
+/** The key for a kind of run: its rooms (any order) and passes. Shared with the server. */
+export const runKey = (rooms: readonly string[], reps: number) => [...rooms].sort().join('+') + (reps > 1 ? `×${reps}` : '')
+
+export interface Estimate {
+  /** ok = a time; partial = a time for the rooms that have one (some don't yet); none = nothing to go on */
+  state: 'ok' | 'partial' | 'none'
+  minutes: number
+  /** Each room's own time, for the chips (null = not timed yet) */
+  parts: { id: string; name: string; color: string; minutes: number | null }[]
+}
+
+/**
+ * How long a run would take if started now, from the last 5 runs:
+ * the same run done before → its own average; otherwise add up each room's
+ * average (× passes), leaving out rooms with no time yet (state 'partial').
+ * No rooms = the whole home. Worked out in the browser, so it follows taps at once.
+ */
+export function estimateRun(v: VacuumState, pick: { rooms: readonly string[]; vacuum: boolean; mop: boolean; passes?: number }): Estimate {
+  const none: Estimate = { state: 'none', minutes: 0, parts: [] }
+  const mode = pick.vacuum && pick.mop ? 'vacmop' : pick.vacuum ? 'vac' : pick.mop ? 'mop' : null
+  const est: VacuumEstimates | undefined = v.estimates
+  if (!mode || !est) return none
+  const reps = Math.max(1, pick.passes ?? 1)
+  const ids = pick.rooms.length ? [...pick.rooms] : fullOrder(v.rooms)
+  const order = v.rooms.map((r) => r.id)
+  ids.sort((a, b) => order.indexOf(a) - order.indexOf(b))
+  const roomAvg = est.rooms[mode] ?? {}
+  const parts = ids.map((id) => {
+    const r = v.rooms.find((x) => x.id === id)
+    const s = roomAvg[id]
+    return { id, name: r?.name ?? id, color: r?.color ?? VAC_GREY, minutes: s ? Math.round((s * reps) / 60) : null }
+  })
+  const whole = est.runs[mode]?.[runKey(ids, reps)]
+  if (whole) return { state: 'ok', minutes: Math.max(1, Math.round(whole / 60)), parts }
+  const known = ids.filter((id) => roomAvg[id])
+  if (!known.length) return none
+  const secs = known.reduce((n, id) => n + roomAvg[id] * reps, 0)
+  return { state: known.length < ids.length ? 'partial' : 'ok', minutes: Math.max(1, Math.round(secs / 60)), parts }
+}
+
+/** "11:16 PM" for now + minutes */
+export const doneBy = (minutes: number, now = Date.now()) =>
+  new Date(now + minutes * 60_000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+
 export function demoVacuum(lastCleanAt: string): VacuumState {
   return {
     name: HOME.vacuum.model, state: 'docked', batteryPct: 100, error: null,
@@ -47,5 +91,6 @@ export function demoVacuum(lastCleanAt: string): VacuumState {
     mopRoute: 'standard', mopRouteOptions: ['standard', 'deep', 'deep_plus', 'fast'],
     rooms: configRooms().map((r, i) => ({ ...r, segment: 16 + i })),
     presets: configPresets(), areas: false, lastCleanAt, finishAt: null,
+    estimates: { runs: { vacmop: { kitchen: 25 * 60 } }, rooms: { vacmop: { kitchen: 26 * 60, hall: 300, guest: 600, margaux: 540, master: 900, hallbath: 240, masterbath: 360 }, vac: { margaux: 420 } } },
   }
 }

@@ -96,6 +96,12 @@ export interface VacuumRoom {
   segment: number | null
 }
 
+/** Average seconds, by mode: whole runs (by runKey) and single rooms (by room id) */
+export interface VacuumEstimates {
+  runs: Partial<Record<'vacmop' | 'vac' | 'mop', Record<string, number>>>
+  rooms: Partial<Record<'vacmop' | 'vac' | 'mop', Record<string, number>>>
+}
+
 export interface VacuumPreset {
   id: string; name: string
   /** "Vacuum + mop" */
@@ -129,6 +135,8 @@ export interface VacuumState {
   finishAt?: string | null
   /** Running past its typical time: shown as "Finishing up" instead of a time */
   finishingUp?: boolean
+  /** Learned times (seconds, average of the last 5) for estimating a run before it starts */
+  estimates?: VacuumEstimates
   cleanMinutes: number | null
   cleanAreaFt2: number | null
   /** Current Roborock settings, as Roborock names them */

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.21.0
+- Vacuum, **runtime estimate before you start**. Map & rooms: a strip at the top shows how long what's picked would take and when it would be done ("~34 min · Done ~12:03 AM if started now"), with each picked room's time. It updates as you tap rooms or turn Vacuum / Mop on and off. Picked rooms show their time on the map (every room does when nothing is picked), and the Start button's line adds the time
+- Each preset shows its time: on the Map & rooms page (right column) and in the card's Presets list (with its done-by time). The card's Full clean button shows its time when there's room
+- How it's worked out (from 1.20.4's learning): the same run done before → its own average of the last 5; otherwise each room's average added up (× passes). A room with no time yet is named in amber and the total gets a "+". Nothing learned for that mode → "No estimate yet · learns from this run". Nothing picked = Full clean. Drawn areas get no estimate. Worked out in the browser as you tap, so it's instant
+- The map shrinks a little while the strip shows, so the Start row still fits on one screen
+
 ## 1.20.4
 - Vacuum, **finish time fix**: "Done ~" no longer creeps a minute ahead of the clock. The dock is in Kitchen/Living Room, so the robot never "walked into" that room and the kitchen was always counted as not started; its time had also been learned from the robot just driving through
 - "Done ~" now comes from the **average of the last 5 runs of the same kind** (Kitchen, Bedrooms, Full clean…; vacuum + mop / vacuum only / mop only kept apart), not counting pauses. Set at the start, it stays put while the robot works and moves out only while paused. One run gives a first estimate; it improves with each run up to 5

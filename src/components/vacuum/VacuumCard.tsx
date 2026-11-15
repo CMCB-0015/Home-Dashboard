@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Panel } from '../irrigation/IrrigationCard'
 import { useHome } from '../../lib/useHome'
-import { VAC_GREY, roomCenter } from '../../lib/vacuum'
+import { VAC_GREY, doneBy, estimateRun, roomCenter } from '../../lib/vacuum'
 import { Card } from '../Card'
 import { FloorPlan, tint } from './FloorPlan'
 import { AMBER, GREEN, describe, dockRows, finishText, statsText, useVacuumActions } from './useVacuum'
@@ -60,6 +60,7 @@ export function VacuumCard() {
   const d = describe(v)
   const wash = d.k ? { backgroundImage: `linear-gradient(180deg, ${tint(d.color, 0.2 * d.k)} 0%, ${tint(d.color, 0.06 * d.k)} 45%, transparent 80%)` } : undefined
   const busy = !!a.starting
+  const fullEst = estimateRun(v, { rooms: [], vacuum: true, mop: true })
   const showMap = d.running || v.state === 'returning'
   const n = d.run?.rooms.length ?? 0
   const sub = d.running
@@ -80,6 +81,7 @@ export function VacuumCard() {
       <button onClick={() => void a.full()} disabled={busy} aria-busy={a.starting === 'full'} title="Full clean · vacuum + mop · all rooms"
         className={strip} style={{ background: 'var(--color-ink)', color: 'var(--color-bg)' }}>
         <Play size={12} />{a.starting === 'full' ? 'Starting…' : 'Full clean'}
+        {a.starting !== 'full' && fullEst.state !== 'none' && <span className="hidden font-mono text-[11px] opacity-60 @min-[300px]:inline">~{fullEst.minutes} min</span>}
       </button>
       <Link to="/vacuum" className={strip} style={{ background: 'var(--color-surface-raised)', color: 'var(--color-ink)' }}>Map &amp; rooms</Link>
     </div>
@@ -101,7 +103,15 @@ export function VacuumCard() {
                 <span className="truncate text-[13px] font-semibold">{p.name}</span>
                 <span className="truncate text-xs text-ink-dim">{p.available ? p.sub : 'Set up rooms'}</span>
               </span>
-              <span className="ml-auto text-ink-dim"><Play size={14} /></span>
+              {(() => {
+                const e = estimateRun(v, { rooms: p.rooms, vacuum: p.vacuum, mop: p.mop })
+                return e.state === 'none' ? <span className="ml-auto text-ink-dim"><Play size={14} /></span> : (
+                  <span className="ml-auto flex shrink-0 flex-col items-end">
+                    <span className="font-mono text-[13px] font-semibold" style={{ color: e.state === 'partial' ? AMBER : undefined }}>~{e.minutes} min{e.state === 'partial' ? '+' : ''}</span>
+                    <span className="text-[11px] text-ink-dim">done ~{doneBy(e.minutes)}</span>
+                  </span>
+                )
+              })()}
             </button>
           ))}
         </Panel>

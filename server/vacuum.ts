@@ -16,7 +16,7 @@ import { HOME } from '../src/config/home.ts'
 import { configPresets, configRooms, fullOrder, whatText } from '../src/lib/vacuum.ts'
 import { ha, type HAState } from './ha.ts'
 import { cacheGet, cacheSet } from './cache.ts'
-import { finishAt, markRunCut, observe, roomsLeft, timingNotes, type CleanMode } from './vacuumTiming.ts'
+import { estimateTables, finishAt, markRunCut, observe, roomsLeft, timingNotes, type CleanMode } from './vacuumTiming.ts'
 
 const FIND = {
   battery: ['sensor', /_battery$/],
@@ -184,6 +184,7 @@ export function vacuumState(): VacuumState | null {
     areas: !!HOME.vacuum.calibration,
     lastCleanAt: ok(e.lastCleanEnd) ? e.lastCleanEnd!.state : null,
     ...(() => { const f = showFinish ? finishAt(run, now) : null; return { finishAt: f?.at ?? null, finishingUp: !!f?.finishingUp } })(),
+    estimates: estimateTables(),
   }
 }
 

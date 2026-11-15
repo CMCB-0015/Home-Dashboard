@@ -27,6 +27,8 @@
 // typical time the card says "Finishing up" instead of a time.
 
 import { cacheDelete, cacheGet, cacheSet } from './cache.ts'
+import { runKey } from '../src/lib/vacuum.ts'
+import type { VacuumEstimates } from '../src/types.ts'
 
 export type CleanMode = 'vacmop' | 'vac' | 'mop'
 type Samples = Partial<Record<CleanMode, Record<string, number[]>>>
@@ -58,8 +60,7 @@ function merge(a: Samples, b: Samples): Samples {
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
 
-/** The key for a kind of run: its rooms (any order) and passes */
-export const runKey = (rooms: string[], reps: number) => [...rooms].sort().join('+') + (reps > 1 ? `×${reps}` : '')
+export { runKey }
 
 function typical(s: Samples, mode: CleanMode, key: string): number | null {
   const xs = s[mode]?.[key]
@@ -244,6 +245,13 @@ export function timingNotes() {
     return out
   }
   return { runs: show(runTimes), rooms: show(roomTimes) }
+}
+
+/** Average seconds for every learned run and room, for estimating a run before it starts */
+export function estimateTables(): VacuumEstimates {
+  const avg = (s: Samples) => Object.fromEntries(Object.entries(s).map(([m, keys]) =>
+    [m, Object.fromEntries(Object.entries(keys ?? {}).filter(([, xs]) => xs.length).map(([k, xs]) => [k, Math.round(mean(xs))]))]))
+  return { runs: avg(runTimes), rooms: avg(roomTimes) }
 }
 
 /** Tests only */
