@@ -100,23 +100,30 @@ export const HOME = {
     waterDefault: 'medium' as 'low' | 'medium' | 'high',
     rooms: [
       { id: 'kitchen', name: 'Kitchen/Living Room', color: '#6aa6ec', main: 1, match: ['Kitchen/Living Room', 'Living Room', 'Kitchen'],
-        rects: [[162, 2, 110, 75], [32, 77, 245, 170], [0, 247, 277, 65], [0, 312, 172, 150], [172, 372, 105, 70]] },
+        rects: [[190, 43, 180, 73], [58, 116, 312, 220], [13, 336, 363, 120], [13, 456, 181, 126], [13, 582, 50, 46], [251, 456, 125, 158]] },
       { id: 'masterbath', name: 'Master bath', color: '#e8c15a', main: 0, match: ['Master bath', 'Master bathroom', 'Primary bathroom'],
-        rects: [[309, 20, 141, 80], [309, 100, 60, 45]] },
+        rects: [[416, 46, 192, 110], [416, 156, 77, 53], [530, 156, 78, 53]] },
       { id: 'hallbath', name: 'Hall bath', color: '#3fd6c0', main: 0, match: ['Hall bath', 'Hall bathroom', 'Bathroom'],
-        rects: [[354, 157, 98, 83]] },
+        rects: [[473, 224, 135, 112]] },
       { id: 'master', name: 'Master bedroom', color: '#8fb8ef', main: 0, match: ['Master bedroom', 'Primary bedroom'],
-        rects: [[452, 0, 232, 234]] },
+        rects: [[608, 14, 305, 322], [685, 336, 228, 50]] },
       { id: 'hall', name: 'Hallway', color: '#e0805f', main: 0, match: ['Hallway', 'Hall', 'Corridor'],
-        rects: [[277, 244, 235, 63], [452, 307, 60, 207]] },
+        rects: [[376, 336, 309, 75], [465, 411, 103, 58], [603, 411, 82, 282]] },
       { id: 'guest', name: 'Guest bedroom', color: '#5f93dd', main: 0, match: ['Guest bedroom', 'Guest room', 'Guest'],
-        rects: [[287, 347, 165, 167]] },
+        rects: [[384, 469, 219, 224]] },
       { id: 'margaux', name: 'Margaux’s room', color: '#5fe0c4', main: 0, match: ['Margaux’s room', "Margaux's room", 'Margaux', 'Kids room'],
-        rects: [[512, 237, 178, 277]] },
+        rects: [[685, 386, 228, 307]] },
     ],
-    /** Floor-plan size, and where the dock sits on it */
-    size: [690, 514],
-    dock: [14, 423],
+    /**
+     * Floor-plan size, and where the dock sits on it. Units are pixels of the
+     * map picture (public/images/vacuum-map/<room id>.png: Connor's Roborock
+     * "Edit Room" screenshot of Nov 15 2026, cleaned up — outdoor spill, specks,
+     * hatching and labels removed — one transparent layer per room). The rects
+     * above are the invisible tap areas over each room.
+     */
+    size: [926, 709],
+    dock: [39, 577],
+    mapPicture: '/images/vacuum-map',
     /** Order the robot cleans in for a full clean (for "room 2 of 7") */
     fullOrder: ['kitchen', 'hall', 'guest', 'margaux', 'master', 'hallbath', 'masterbath'],
     presets: [
@@ -126,8 +133,9 @@ export const HOME = {
     ],
     /**
      * Drawn areas need the floor plan lined up with the robot's own map
-     * (millimetres). Until this is filled in at install, the Areas tool says
-     * so and rooms are the way to pick. robot = [a + b·x, c + d·y].
+     * (millimetres): robot = [a + b·x, c + d·y]. Normally set from the Map &
+     * rooms page (Areas → Line up the map) and saved on the Lenovo; a value
+     * here overrides that.
      */
     calibration: null as null | { x: [number, number]; y: [number, number] },
   },

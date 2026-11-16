@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.22.0
+- Vacuum, **new home map**: the Map & rooms page and the card's mini map now show Connor's real Roborock map (his "Edit Room" screenshot of Nov 15) cleaned up — outdoor spill, specks, hatching, furniture marks and labels removed, crisp walls — in the Roborock app's colours. One picture layer per room (`public/images/vacuum-map/<room>.png`), so picked rooms stay lit and the rest dim; rooms you can't pick are greyed. Invisible tap areas sit over each room (`HOME.vacuum.rooms[].rects`, now in map-picture pixels; `size` 926 × 709, dock moved to match)
+- **Line up the map** (turns on drawn areas): Areas → two steps. 1 · with the robot on the dock, Read position. 2 · start a clean, pause it far from the dock, tap that spot on the map. Panel reads the robot's position each time (`roborock.get_vacuum_current_position`) and works out the scale and offset (handles a flipped axis). Taps too close to the dock, or that don't match where the robot is, are refused with a reason. Saved on the Lenovo (`/data` keys `vacuum-calibration`, `vacuum-cal-dock`); "Line up the map again" under the Areas list resets it. A value in `HOME.vacuum.calibration` still wins
+- Map & rooms: the estimate strip hides while the Areas pop-up is open (rooms aren't used there)
+
 ## 1.21.0
 - Vacuum, **runtime estimate before you start**. Map & rooms: a strip at the top shows how long what's picked would take and when it would be done ("~34 min · Done ~12:03 AM if started now"), with each picked room's time. It updates as you tap rooms or turn Vacuum / Mop on and off. Picked rooms show their time on the map (every room does when nothing is picked), and the Start button's line adds the time
 - Each preset shows its time: on the Map & rooms page (right column) and in the card's Presets list (with its done-by time). The card's Full clean button shows its time when there's room

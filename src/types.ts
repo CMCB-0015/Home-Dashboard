@@ -150,6 +150,8 @@ export interface VacuumState {
   presets: VacuumPreset[]
   /** Drawn areas work (the floor plan is lined up with the robot's map) */
   areas: boolean
+  /** Lining the map up with the robot's own (Areas → Line up the map) */
+  lineUp?: { dockRead: boolean; done: boolean; fromConfig: boolean }
   lastCleanAt: string | null
 }
 

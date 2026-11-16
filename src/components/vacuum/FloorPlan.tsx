@@ -14,13 +14,16 @@ export const tint = (hex: string, a: number) => {
 }
 
 /**
- * The dashboard's own floor plan (Home Assistant only offers the Roborock map
- * as a picture). Scales to whatever width it's given. `room` draws each box;
- * `children` go on top (robot dot, drawn areas).
+ * The home map: Connor's Roborock map, cleaned up, drawn as one picture layer
+ * per room (so a room can be dimmed or lit on its own), with `room` drawing an
+ * invisible tap box over each part of a room. Scales to whatever width it's
+ * given. `children` go on top (robot dot, drawn areas).
  */
-export function FloorPlan({ rooms, room, children, className = '', robot, dock = true, big = false }: {
+export function FloorPlan({ rooms, room, shade, children, className = '', robot, dock = true, big = false }: {
   rooms: VacuumRoom[]
   room: (r: VacuumRoom, rectIndex: number, style: React.CSSProperties) => ReactNode
+  /** How bright each room's picture is, 0–1 (default 1) */
+  shade?: (r: VacuumRoom) => number
   children?: ReactNode
   className?: string
   /** Robot position in floor-plan units */
@@ -31,6 +34,11 @@ export function FloorPlan({ rooms, room, children, className = '', robot, dock =
   const [dx, dy] = HOME.vacuum.dock
   return (
     <div className={`relative ${className}`} style={{ aspectRatio: `${W} / ${H}` }}>
+      {rooms.map((r) => (
+        <img key={`pic-${r.id}`} src={`${HOME.vacuum.mapPicture}/${r.id}.png`} alt="" aria-hidden draggable={false}
+          className="pointer-events-none absolute inset-0 h-full w-full select-none transition-opacity duration-200"
+          style={{ opacity: shade ? shade(r) : 1 }} />
+      ))}
       {rooms.flatMap((r) => r.rects.map((q, i) => room(r, i, { position: 'absolute', left: pctX(q[0]), top: pctY(q[1]), width: pctX(q[2]), height: pctY(q[3]) })))}
       {dock && (
         <span aria-hidden className="pointer-events-none absolute rounded-[2px] bg-ink"

@@ -148,8 +148,13 @@ picture, so the dashboard draws its own floor plan from `vacuum.rooms` in
 names and which ones matched — if a preset or room is greyed out, fix the name there or
 in `match`.
 
-Drawing areas on the map is off until the floor plan is lined up with the robot's map
-(`vacuum.calibration`); rooms work without it.
+The map is Connor's Roborock map, cleaned up (`public/images/vacuum-map/`, one picture per
+room). To re-do it after the robot remaps the house: take a new Edit Room screenshot and
+have Claude clean it up again and re-measure the room tap areas (`vacuum.rooms[].rects`).
+
+**Drawn areas** need the map lined up with the robot's own map, once: Map & rooms → Areas →
+1 · robot on the dock → Read position; 2 · start a clean, pause it far from the dock (the far
+side of the Master bedroom), tap that spot. Saved on the Lenovo. Rooms work without it.
 
 **Finish time:** "Done ~time" is the **average of the last 5 runs** of the same kind
 (same rooms and passes; vacuum + mop, vacuum only and mop only kept separately), not

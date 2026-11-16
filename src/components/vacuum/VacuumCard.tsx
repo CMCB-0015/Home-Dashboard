@@ -30,11 +30,11 @@ function MiniMap({ v, d }: { v: VacuumState; d: ReturnType<typeof describe> }) {
   const robot = d.cur ? roomCenter(d.cur) : null
   return (
     <FloorPlan rooms={v.rooms} robot={robot} className="w-full overflow-hidden rounded-[10px] bg-[#0b1015]"
-      room={(r, i, style) => {
+      shade={(r) => {
         const pos = plan.indexOf(r.id)
-        const a = pos < 0 ? 0.14 : pos < done ? 0.85 : pos === done && d.running && d.cur ? 1 : 0.4
-        return <div key={`${r.id}-${i}`} style={{ ...style, background: tint(r.color, a), borderRadius: 1 }} />
-      }} />
+        return pos < 0 ? 0.18 : pos < done ? 0.85 : pos === done && d.running && d.cur ? 1 : 0.45
+      }}
+      room={() => null} />
   )
 }
 

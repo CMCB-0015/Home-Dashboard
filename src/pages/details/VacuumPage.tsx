@@ -7,7 +7,7 @@ import { DetailLayout } from '../../components/DetailLayout'
 import { Switch } from '../../components/Sheet'
 import { FloorPlan, tint } from '../../components/vacuum/FloorPlan'
 import { AMBER, GREEN, describe, dockRows, finishText, useVacuumActions } from '../../components/vacuum/useVacuum'
-import type { VacuumState } from '../../types'
+import type { VacuumRoom, VacuumState } from '../../types'
 
 // ── Icons from the mockup ────────────────────────────────────────────────
 const ic = (children: ReactNode, extra: React.SVGProps<SVGSVGElement> = {}) => (
@@ -72,6 +72,15 @@ function MapPage({ v }: { v: VacuumState }) {
   const [zones, setZones] = useState<Box[]>([])
   const [zonePasses, setZonePasses] = useState(1)
   const [msg, setMsg] = useState<string | null>(null)
+  // Lining the map up (Areas → Line up the map): step 2 waits for a tap on the map
+  const [calTap, setCalTap] = useState(false)
+  const [calBusy, setCalBusy] = useState<string | null>(null)
+  const lineUp = async (body: Record<string, unknown>, busy: string) => {
+    setCalBusy(busy)
+    const ok = await a.act(body)
+    setCalBusy(null)
+    return ok
+  }
   useEffect(() => { if (!msg) return; const t = setTimeout(() => setMsg(null), 8000); return () => clearTimeout(t) }, [msg])
 
   const areasMode = sheet === 'areas' || zones.length > 0
@@ -85,7 +94,7 @@ function MapPage({ v }: { v: VacuumState }) {
   const [, setTick] = useState(0)
   useEffect(() => { const t = setInterval(() => setTick((n) => n + 1), 30_000); return () => clearInterval(t) }, [])
   // Runtime estimate for what's picked, worked out here as you tap
-  const est: Estimate | null = zones.length ? null : estimateRun(v, { rooms: sel, vacuum: vacOn, mop: mopOn, passes })
+  const est: Estimate | null = zones.length || sheet === 'areas' ? null : estimateRun(v, { rooms: sel, vacuum: vacOn, mop: mopOn, passes })
   const estMin = (e: Estimate | null) => (e && e.state !== 'none' ? `~${e.minutes} min${e.state === 'partial' ? '+' : ''}` : null)
 
   const what = whatText(vacOn, mopOn)
@@ -115,7 +124,7 @@ function MapPage({ v }: { v: VacuumState }) {
     const r = planRef.current!.getBoundingClientRect()
     return { x: Math.max(0, Math.min(W, ((e.clientX - r.left) / r.width) * W)), y: Math.max(0, Math.min(H, ((e.clientY - r.top) / r.height) * H)) }
   }
-  const drawing = sheet === 'areas' && v.areas
+  const drawing = sheet === 'areas' && v.areas && !calTap
   const boxOf = (g: NonNullable<typeof drag>): Box => [Math.min(g.x, g.x2), Math.min(g.y, g.y2), Math.abs(g.x2 - g.x), Math.abs(g.y2 - g.y)]
   const roomAt = (z: Box) => {
     const cx = z[0] + z[2] / 2, cy = z[1] + z[3] / 2
@@ -124,9 +133,17 @@ function MapPage({ v }: { v: VacuumState }) {
   }
 
   // Below the room's label, so the dot doesn't cover the name
-  const robot: [number, number] | null = d.cur ? ((c) => [c[0], c[1] + 42] as [number, number])(roomCenter(d.cur)) : null
-  const hint = !areasMode ? 'Tap rooms to pick them · none picked = whole home'
-    : v.areas ? 'Drag on the map to draw an area' : 'Drawn areas need a one-time setup — pick rooms for now'
+  const robot: [number, number] | null = d.cur ? ((c) => [c[0], c[1] + 56] as [number, number])(roomCenter(d.cur)) : null
+  // How bright each room's picture is: all lit with nothing picked, picked rooms lit and the rest dimmed
+  const shadeOf = (r: VacuumRoom) => {
+    if (r.segment === null && !areasMode) return 0.15
+    if (areasMode) return 0.55
+    if (!sel.length) return 0.9
+    return sel.includes(r.id) ? 1 : 0.3
+  }
+  const hint = calTap ? 'Tap the spot on the map where the robot is now'
+    : !areasMode ? 'Tap rooms to pick them · none picked = whole home'
+    : v.areas ? 'Drag on the map to draw an area' : 'Line up the map below to turn on drawn areas'
 
   const tools: { id: Tool; label: string; value: string; on: boolean }[] = [
     { id: 'vacuum', label: 'Vacuum', value: vacOn ? suction + (passes === 2 ? ' · 2×' : '') : 'Off', on: vacOn },
@@ -169,18 +186,19 @@ function MapPage({ v }: { v: VacuumState }) {
           )}
           <div className="relative px-4 pb-4 pt-9">
             <span className="absolute left-4 top-3 text-[12.5px] text-ink-dim">{hint}</span>
-            <div className={`mx-auto w-full min-w-[260px] ${showEst ? 'max-w-[min(100%,calc((100vh-420px)*690/514))]' : 'max-w-[min(100%,calc((100vh-330px)*690/514))]'}`}>
+            <div className="mx-auto w-full min-w-[260px]" style={{ maxWidth: `min(100%, calc((100vh - ${showEst ? 420 : 330}px) * ${W} / ${H}))` }}>
               <div ref={planRef} className="relative">
                 <FloorPlan rooms={v.rooms} robot={robot} big className="w-full rounded-xl bg-[#0b1015]"
+                  shade={(r) => shadeOf(r)}
                   room={(r, i, style) => {
                     const picked = !areasMode && sel.includes(r.id)
                     const ok = r.segment !== null
-                    const alpha = areasMode ? 0.4 : !ok ? 0.12 : sel.length === 0 ? 0.8 : picked ? 1 : 0.28
+                    const alpha = shadeOf(r)
                     return (
-                      <button key={`${r.id}-${i}`} onClick={() => toggleRoom(r.id)} aria-pressed={picked} disabled={!ok && !areasMode}
-                        aria-label={`${r.name}${picked ? ', picked' : ''}${ok ? '' : ' (no matching Roborock room)'}`}
-                        className="flex items-center justify-center rounded-[3px] border-2 border-[#0b1015] p-0 text-[11px] font-semibold transition-colors sm:text-sm"
-                        style={{ ...style, background: tint(r.color, alpha), color: alpha >= 0.75 ? '#0e1318' : '#e8edf2' }}>
+                      <button key={`${r.id}-${i}`} onClick={() => (calTap ? undefined : toggleRoom(r.id))} aria-pressed={picked} disabled={!ok && !areasMode}
+                        aria-label={`${r.name}${picked ? ', picked' : ''}${ok ? '' : ' (no matching Roborock room)'}`} tabIndex={i === r.main ? 0 : -1}
+                        className="flex items-center justify-center border-0 bg-transparent p-0 text-[11px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-white sm:text-sm"
+                        style={{ ...style, color: alpha >= 0.75 ? '#0e1318' : '#e8edf2' }}>
                         {i === r.main && (
                           <span className="flex flex-col items-center gap-0.5 px-1 text-center leading-tight">
                             <span>{r.name}</span>
@@ -197,12 +215,21 @@ function MapPage({ v }: { v: VacuumState }) {
                   }}>
                   {zones.map((z, i) => <ZoneBox key={i} z={z} label={`Area ${i + 1}`} />)}
                   {drag && <ZoneBox z={boxOf(drag)} label="" />}
+                  {calTap && (
+                    <button aria-label="Tap where the robot is" className="absolute inset-0 cursor-crosshair rounded-xl bg-white/5 ring-2 ring-inset ring-white/60"
+                      onClick={async (e) => {
+                        const r = planRef.current!.getBoundingClientRect()
+                        const at = [Math.round(((e.clientX - r.left) / r.width) * W), Math.round(((e.clientY - r.top) / r.height) * H)]
+                        setCalTap(false)
+                        if (await lineUp({ action: 'lineup-point', at }, 'point')) setMsg('Map lined up · drawn areas are on')
+                      }} />
+                  )}
                   {drawing && (
                     <div className="absolute inset-0 cursor-crosshair touch-none"
                       onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture(e.pointerId); const p = toPlan(e); setDrag({ x: p.x, y: p.y, x2: p.x, y2: p.y }) }}
                       onPointerMove={(e) => { if (drag) { const p = toPlan(e); setDrag({ ...drag, x2: p.x, y2: p.y }) } }}
                       onPointerUp={() => {
-                        if (drag) { const b = boxOf(drag); if (b[2] > 25 && b[3] > 25 && zones.length < 5) { setZones([...zones, b]); setSel([]) } }
+                        if (drag) { const b = boxOf(drag); if (b[2] > 34 && b[3] > 34 && zones.length < 5) { setZones([...zones, b]); setSel([]) } }
                         setDrag(null)
                       }} />
                   )}
@@ -272,15 +299,21 @@ function MapPage({ v }: { v: VacuumState }) {
                       </div>
                     ))}
                     {zones.length < 5 && (
-                      <button onClick={() => { setZones([...zones, [W / 2 - 60, H / 2 - 45, 120, 90]]); setSel([]) }}
+                      <button onClick={() => { setZones([...zones, [W / 2 - 80, H / 2 - 60, 160, 120]]); setSel([]) }}
                         className="h-11 rounded-xl border border-dashed border-[#3a4652] text-[13.5px] font-medium text-[#c9d2db]">+ Add area</button>
                     )}
                   </div>
                   <Field label="Passes">{seg([1, 2, 3].map((n) => ({ label: `${n}×`, value: n })), zonePasses, setZonePasses, 'grid-cols-3')}</Field>
+                  {v.lineUp?.done && !v.lineUp.fromConfig && (
+                    <button onClick={() => void lineUp({ action: 'lineup-reset' }, 'reset')} className="self-start text-[12.5px] text-ink-dim underline underline-offset-2">
+                      Areas landing in the wrong spot? Line up the map again
+                    </button>
+                  )}
                 </>) : (
-                  <span className="text-[13px] leading-relaxed text-ink-dim">
-                    Drawing areas needs the floor plan lined up with the robot’s own map — a one-time step at install (vacuum.calibration in the dashboard settings). Until then, pick rooms.
-                  </span>
+                  <LineUpSteps v={v} busy={calBusy} tapping={calTap}
+                    onDock={() => void lineUp({ action: 'lineup-dock' }, 'dock')}
+                    onTap={() => { setCalTap(true); setSheet(null); setMsg(null) }}
+                    onCancelTap={() => setCalTap(false)} />
                 ))}
               </div>
             )}
@@ -352,6 +385,49 @@ function MapPage({ v }: { v: VacuumState }) {
         </div>
       </div>
     </DetailLayout>
+  )
+}
+
+/** Areas → Line up the map: the one-time steps that turn on drawn areas */
+function LineUpSteps({ v, busy, tapping, onDock, onTap, onCancelTap }: {
+  v: VacuumState; busy: string | null; tapping: boolean
+  onDock: () => void; onTap: () => void; onCancelTap: () => void
+}) {
+  const dockRead = !!v.lineUp?.dockRead
+  const docked = v.state === 'docked'
+  const steps = [
+    {
+      title: 'Robot is on the dock',
+      sub: dockRead ? 'Done · dock position read' : docked ? 'Reads where the robot thinks the dock is' : 'Send the robot to the dock first',
+      btn: busy === 'dock' ? 'Reading…' : dockRead ? 'Read again' : 'Read position',
+      on: !dockRead, done: dockRead, disabled: !docked || !!busy, go: onDock,
+    },
+    {
+      title: 'Tap where the robot is now',
+      sub: !dockRead ? 'After step 1' : tapping ? 'Tap the robot’s spot on the map above' : 'Start a clean and pause it far from the dock (the far side of the Master bedroom works well), then tap that spot',
+      btn: busy === 'point' ? 'Reading…' : tapping ? 'Cancel' : 'Tap the map',
+      on: dockRead, done: false, disabled: !dockRead || !!busy || (!tapping && v.state === 'docked'), go: tapping ? onCancelTap : onTap,
+    },
+  ]
+  return (
+    <div className="flex flex-col gap-3.5">
+      <span className="text-[13px] leading-relaxed text-ink-dim">
+        Drawn areas need the map lined up with the robot’s own map. One time, two steps.
+      </span>
+      {steps.map((st, i) => (
+        <div key={i} className="flex items-center gap-3">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-bold"
+            style={{ background: st.done ? GREEN : st.on ? '#e8edf2' : '#252e38', color: st.done || st.on ? '#0e1318' : '#8493a1' }}>{i + 1}</span>
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-sm font-semibold" style={{ color: st.on || st.done ? '#e8edf2' : '#8493a1' }}>{st.title}</span>
+            <span className="text-[12.5px] text-ink-dim">{st.sub}</span>
+          </span>
+          <button onClick={st.go} disabled={st.disabled}
+            className="h-11 shrink-0 rounded-xl px-4 text-[13.5px] font-semibold disabled:opacity-40"
+            style={{ background: st.on ? '#e8edf2' : '#252e38', color: st.on ? '#0e1318' : '#c9d2db' }}>{st.btn}</button>
+        </div>
+      ))}
+    </div>
   )
 }
 

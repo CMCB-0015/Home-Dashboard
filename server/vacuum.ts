@@ -84,6 +84,42 @@ async function loadRooms(vacId: string) {
   }
 }
 
+// ── Lining the floor plan up with the robot's own map (for drawn areas) ──
+// Two readings of the robot's position (roborock.get_vacuum_current_position,
+// millimetres): one on the dock (we know where the dock is on the picture),
+// one somewhere far away that Connor taps on the map. That gives scale and
+// offset for each direction: robot = a + b·plan. Saved on the Lenovo.
+type Cal = { x: [number, number]; y: [number, number] }
+let savedCal: Cal | null = null
+let calDock: { robot: [number, number]; at: string } | null = null
+void cacheGet<Cal>('vacuum-calibration').then((c) => { if (c) { savedCal = c; ha.notify() } })
+void cacheGet<typeof calDock>('vacuum-cal-dock').then((c) => { if (c) calDock = c })
+/** The line-up in use: a value in src/config/home.ts wins, else the one set from the page */
+export const calibration = (): Cal | null => HOME.vacuum.calibration ?? savedCal
+
+async function robotPosition(id: string): Promise<[number, number]> {
+  let res: any
+  try { res = await ha.callServiceForResponse<any>('roborock', 'get_vacuum_current_position', {}, [id]) }
+  catch (e) { throw new Error(`Couldn’t read the robot’s position: ${e instanceof Error ? e.message : e}`) }
+  const p = res?.[id] ?? (Object.values(res ?? {})[0] as any) ?? res
+  const x = Number(p?.x), y = Number(p?.y)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error('The robot didn’t report its position — try again in a moment')
+  return [x, y]
+}
+
+/** Work out the line-up from the dock reading and a second reading at `plan` (floor-plan units). Throws with a reason if it doesn't add up. */
+export function solveCalibration(dockPlan: [number, number], dockRobot: [number, number], plan: [number, number], robot: [number, number]): Cal {
+  const [W, H] = HOME.vacuum.size
+  const dpx = plan[0] - dockPlan[0], dpy = plan[1] - dockPlan[1]
+  if (Math.abs(dpx) < W * 0.2 || Math.abs(dpy) < H * 0.2) throw new Error('Pick a spot further from the dock, both across and up the map (the far side of the Master bedroom works well)')
+  const drx = robot[0] - dockRobot[0], dry = robot[1] - dockRobot[1]
+  if (Math.abs(drx) < 500 || Math.abs(dry) < 500) throw new Error('The robot hasn’t moved far enough from the dock — pause it further away, then tap where it is')
+  const bx = drx / dpx, by = dry / dpy
+  const ratio = Math.abs(bx) / Math.abs(by)
+  if (ratio < 0.7 || ratio > 1.43) throw new Error('That tap doesn’t match where the robot is — check the spot and try again')
+  return { x: [dockRobot[0] - bx * dockPlan[0], bx], y: [dockRobot[1] - by * dockPlan[1], by] }
+}
+
 // ── The run started from the dashboard ──────────────────────────────────
 type Run = NonNullable<VacuumState['run']>
 let run: Run | null = null
@@ -181,7 +217,8 @@ export function vacuumState(): VacuumState | null {
     mopRouteOptions: opts(e.mopMode),
     rooms,
     presets,
-    areas: !!HOME.vacuum.calibration,
+    areas: !!calibration(),
+    lineUp: { dockRead: !!calDock, done: !!calibration(), fromConfig: !!HOME.vacuum.calibration },
     lastCleanAt: ok(e.lastCleanEnd) ? e.lastCleanEnd!.state : null,
     ...(() => { const f = showFinish ? finishAt(run, now) : null; return { finishAt: f?.at ?? null, finishingUp: !!f?.finishingUp } })(),
     estimates: estimateTables(),
@@ -204,7 +241,7 @@ export function vacuumNotes() {
   const notes: string[] = []
   if (roomsError) notes.push(roomsError)
   for (const r of HOME.vacuum.rooms) if (segments[r.id] === undefined) notes.push(`${r.name}: no Roborock room named ${r.match.map((m) => `"${m}"`).join(' or ')}`)
-  if (!HOME.vacuum.calibration) notes.push('Drawn areas are off until the floor plan is calibrated (vacuum.calibration in src/config/home.ts)')
+  if (!calibration()) notes.push('Drawn areas are off until the map is lined up (Map & rooms → Areas → Line up the map)')
   const found: Record<string, string> = { vacuum: e.vac.entity_id }
   for (const k of Object.keys(FIND) as Key[]) if (e[k]) found[k] = e[k]!.entity_id
   return { found, notes, roborockRooms, matched: segments, roomTimes: timingNotes() }
@@ -221,6 +258,8 @@ export interface VacuumCommand {
   water?: string; route?: string
   preset?: string
   name?: string
+  /** lineup-point: where the robot is, in floor-plan units */
+  at?: number[]
 }
 
 const clampPasses = (n: unknown, max: number) => Math.min(max, Math.max(1, Math.round(Number(n) || 1)))
@@ -259,6 +298,28 @@ export async function vacuumCommand(b: VacuumCommand) {
       return clean(e, { rooms: [...p.rooms], vacuum: p.vacuum, mop: p.mop, name: p.name })
     }
     case 'clean': return clean(e, b)
+    case 'lineup-dock': {
+      const st = MODE[e.vac.state] ?? 'idle'
+      if (st !== 'docked') throw new Error('Put the robot on the dock first (Send to dock), then read its position')
+      calDock = { robot: await robotPosition(id), at: new Date().toISOString() }
+      void cacheSet('vacuum-cal-dock', calDock); ha.notify()
+      return
+    }
+    case 'lineup-point': {
+      if (!calDock) throw new Error('Do step 1 first: read the position with the robot on the dock')
+      const at = b.at
+      if (!Array.isArray(at) || at.length !== 2 || !at.every((n) => Number.isFinite(n))) throw new Error('Tap the spot on the map where the robot is')
+      const robot = await robotPosition(id)
+      const cal = solveCalibration(HOME.vacuum.dock as [number, number], calDock.robot, [at[0], at[1]], robot)
+      savedCal = cal; void cacheSet('vacuum-calibration', cal); ha.notify()
+      console.log('[vacuum] map lined up', JSON.stringify(cal))
+      return
+    }
+    case 'lineup-reset': {
+      savedCal = null; calDock = null
+      void cacheSet('vacuum-calibration', null); void cacheSet('vacuum-cal-dock', null); ha.notify()
+      return
+    }
     default: throw new Error('Unknown vacuum command')
   }
 }
@@ -281,7 +342,7 @@ async function clean(e: NonNullable<ReturnType<typeof resolve>>, b: VacuumComman
     const names = missing.map((r) => HOME.vacuum.rooms.find((x) => x.id === r)?.name ?? r)
     throw new Error(`No Roborock room matches ${names.join(', ')} — check the room names in the Roborock app`)
   }
-  if (b.areas?.length && !HOME.vacuum.calibration) throw new Error('Drawn areas need the floor plan calibrated first — pick rooms instead')
+  if (b.areas?.length && !calibration()) throw new Error('Drawn areas need the map lined up first (Areas → Line up the map) — pick rooms instead')
 
   // 1. Settings: suction (off = mop only), water flow (off = vacuum only), mop route
   const fanList: string[] = Array.isArray(e.vac.attributes.fan_speed_list) ? e.vac.attributes.fan_speed_list.map(String) : []
@@ -317,7 +378,7 @@ async function clean(e: NonNullable<ReturnType<typeof resolve>>, b: VacuumComman
 
   // 2. Areas (needs calibration)
   if (b.areas?.length) {
-    const cal = HOME.vacuum.calibration!
+    const cal = calibration()!
     const zones = b.areas.slice(0, 5).map(([x, y, w, h]) => {
       const xs = [cal.x[0] + cal.x[1] * x, cal.x[0] + cal.x[1] * (x + w)].sort((a, c) => a - c)
       const ys = [cal.y[0] + cal.y[1] * y, cal.y[0] + cal.y[1] * (y + h)].sort((a, c) => a - c)
