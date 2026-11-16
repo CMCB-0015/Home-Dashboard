@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.23.0
+- Weather, **Tides tab**: the expanded weather card gets a **Forecast / Tides** switch under the chips. **Forecast is always the default**, and the card goes back to it when it collapses, when you swipe to the Home page, and when the screensaver comes on. The top row (temperature, sunrise / sunset arc) is unchanged
+- Tides shows one day, midnight to midnight: the tide as a teal line over a **0 ft baseline** (mean lower low water), with every high and low labeled with its height and time ("+0.6 ft", "6.9 ft"). Labels always sit clear of the line, above a high and below a low. Tides **below 0 ft are filled in orange**. Nights are shaded, and an amber line marks now
+- Above the chart: today = the tide now (rising / falling), the next tide and the one after, with heights and times. Another day = its lowest low and highest high, with heights and times
+- Seven day tiles under the chart (a small tide line plus that day's highest high and lowest low) pick the day. All days use one height scale, so they compare at a glance
+- Tide predictions come from **NOAA** (free, no key), highs and lows for the next 9 days, refreshed every 6 hours. The line between them is drawn the way NOAA draws its own charts. New setting **tide_station** (empty = San Clemente)
+
 ## 1.22.0
 - Vacuum, **new home map**: the Map & rooms page and the card's mini map now show Connor's real Roborock map (his "Edit Room" screenshot of Nov 15) cleaned up — outdoor spill, specks, hatching, furniture marks and labels removed, crisp walls — in the Roborock app's colours. One picture layer per room (`public/images/vacuum-map/<room>.png`), so picked rooms stay lit and the rest dim; rooms you can't pick are greyed. Invisible tap areas sit over each room (`HOME.vacuum.rooms[].rects`, now in map-picture pixels; `size` 926 × 709, dock moved to match)
 - **Line up the map** (turns on drawn areas): Areas → two steps. 1 · with the robot on the dock, Read position. 2 · start a clean, pause it far from the dock, tap that spot on the map. Panel reads the robot's position each time (`roborock.get_vacuum_current_position`) and works out the scale and offset (handles a flipped axis). Taps too close to the dock, or that don't match where the robot is, are refused with a reason. Saved on the Lenovo (`/data` keys `vacuum-calibration`, `vacuum-cal-dock`); "Line up the map again" under the Areas list resets it. A value in `HOME.vacuum.calibration` still wins

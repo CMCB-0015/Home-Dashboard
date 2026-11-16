@@ -8,6 +8,7 @@ phones or computer (home Wi-Fi only) and bookmark it.
 - **passcode** — each device enters this once. Changing it signs every device out.
 - **rachio_api_key** — Rachio app → Account → API Access.
 - **weather_lat / weather_lon / weather_location_name** — forecast location.
+- **tide_station** — the NOAA tide station for the weather card's Tides tab. Leave empty for San Clemente (NOAA's `TWC0419`; if that sends nothing, `9410580`). To use another, find it on tidesandcurrents.noaa.gov → Tide Predictions and copy its station ID. `/api/setup-check` → `tides` shows the station in use and the next tide.
 - **brief_feed_key** — the same value as `PANEL_FEED_KEY` in The Brief's Netlify settings. Turns on sports chips in the status bar.
 - **twilight_feed_key** — the same value as `PANEL_FEED_KEY` in Twilight's Netlify settings. Turns on Vandenberg launch chips in the status bar.
 - **google_client_id / google_client_secret** — Panel's own Google sign-in key, for adding, editing and deleting calendar events (see Calendar below).

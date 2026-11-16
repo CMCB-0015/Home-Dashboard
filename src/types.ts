@@ -391,6 +391,22 @@ export interface WeatherDay {
   dewPointF: number
 }
 
+export interface TideEvent {
+  /** When (ISO, UTC) */
+  time: string
+  /** Feet above mean lower low water (the 0 ft line); negative = a minus tide */
+  ft: number
+  high: boolean
+}
+
+/** Tide highs and lows from NOAA for about the next 9 days */
+export interface Tides {
+  station: string
+  stationName: string | null
+  events: TideEvent[]
+  updatedAt: string
+}
+
 export interface Weather {
   location: string
   updatedAt: string
@@ -537,6 +553,8 @@ export interface HomeState {
   tesla?: Tesla | null
   sonos: SonosState | null
   weather: Weather | null
+  /** Tide highs and lows (null = NOAA not reached yet) */
+  tides?: Tides | null
   calendar: CalendarEvent[]
   /** The calendars shown, with their colors */
   calendars?: CalendarInfo[]

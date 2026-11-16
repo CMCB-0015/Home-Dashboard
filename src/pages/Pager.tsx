@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { HomePage } from './HomePage'
 import { PlannerPage } from './PlannerPage'
+import { PAGE_EVENT } from '../lib/tides'
 
 // The two swipeable pages. Uses native horizontal scrolling with snap, so a
 // finger swipe on a tablet or phone just works. The dots, arrow keys, and
@@ -18,6 +19,9 @@ export function Pager() {
     if (!el) return
     el.scrollTo({ left: p * el.clientWidth, behavior: smooth ? 'smooth' : 'auto' })
   }, [])
+
+  // Let cards know which page is showing (the weather card goes back to Forecast on Home)
+  useEffect(() => { window.dispatchEvent(new CustomEvent(PAGE_EVENT, { detail: page })) }, [page])
 
   // Start on the right page when coming back from a detail screen
   useEffect(() => { goTo(page, false) }, [])

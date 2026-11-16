@@ -7,6 +7,9 @@ import { WeatherIcon } from '../WeatherIcon'
 import { isTonight, skyNow, tonightSky } from '../../lib/sky'
 import { SkyChart, SunArc, useWidth } from '../weather/SkyChart'
 import { RadarView } from '../weather/RadarView'
+import { TidesView, tidesReady } from '../weather/TidesView'
+import { PAGE_EVENT } from '../../lib/tides'
+import { IDLE_EVENT } from '../IdleOverlay'
 import type { Weather, WeatherHour } from '../../types'
 
 function aqiLabel(aqi: number) {
@@ -267,12 +270,25 @@ export function WeatherCard() {
   const w = data?.weather
   const [dayIdx, setDayIdx] = useState<number | null>(null)
   const [radar, setRadar] = useState(false)
+  // Forecast / Tides. Forecast is always the default; Tides is never remembered
+  const [tab, setTab] = useState<'forecast' | 'tides'>('forecast')
+  const [tideDay, setTideDay] = useState(0)
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(t) }, [])
 
   const hours = useMemo(() => w?.hours ?? w?.hourly.map((h) => ({ time: h.time, tempF: h.tempF, rainChancePct: h.rainChancePct, rainIn: 0, icon: w.current.icon })) ?? [], [w])
   // A day's details or the radar need the room: open the card while they show
   const fold = useCollapse(dayIdx !== null || radar, !!w)
+
+  // Back to Forecast when the card collapses, when the Home page is swiped to, and when the screensaver comes on
+  const backToForecast = useCallback(() => { setTab('forecast'); setTideDay(0) }, [])
+  useEffect(() => { if (!fold.expanded) backToForecast() }, [fold.expanded, backToForecast])
+  useEffect(() => {
+    const onPage = (e: Event) => { if ((e as CustomEvent<number>).detail !== 1) backToForecast() }
+    window.addEventListener(PAGE_EVENT, onPage)
+    window.addEventListener(IDLE_EVENT, backToForecast)
+    return () => { window.removeEventListener(PAGE_EVENT, onPage); window.removeEventListener(IDLE_EVENT, backToForecast) }
+  }, [backToForecast])
 
   if (!w) {
     return <Card accent="var(--color-weather)" title="Weather"><p className="py-6 text-sm text-ink-faint">Weather unavailable right now.</p></Card>
@@ -345,9 +361,26 @@ export function WeatherCard() {
           <span className={chip}>UV <b className={val}>{c.uvIndex}</b> {uvLabel(c.uvIndex)}</span>
           {c.aqi !== null && <span className={chip}>Air <b className={val}>{c.aqi}</b> {aqiLabel(c.aqi)}</span>}
         </div>
-        <SkyChart hours={next12} color={tone.color} firstLabel="Now" />
-        {days.length > 0 && <RangeBars days={days} tonight={tonight} onPick={(i) => setDayIdx(i)} />}
-        {days.length > 0 && <RainRibbon days={days} hours={hours} now={now} />}
+        <div role="tablist" aria-label="Weather view" className="flex w-fit gap-1 rounded-xl border border-white/[0.07] bg-white/[0.04] p-[3px]">
+          {(['forecast', 'tides'] as const).map((k) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => { setTab(k); setTideDay(0) }}
+              className="flex h-8 items-center rounded-[9px] px-4 text-[12.5px] font-semibold transition-colors"
+              style={tab === k ? { background: k === 'tides' ? '#4fd6c8' : 'var(--color-ink)', color: '#0e1318' } : { color: '#8493a1' }}>
+              {k === 'forecast' ? 'Forecast' : 'Tides'}
+            </button>
+          ))}
+        </div>
+        {tab === 'forecast' ? (
+          <>
+            <SkyChart hours={next12} color={tone.color} firstLabel="Now" />
+            {days.length > 0 && <RangeBars days={days} tonight={tonight} onPick={(i) => setDayIdx(i)} />}
+            {days.length > 0 && <RainRibbon days={days} hours={hours} now={now} />}
+          </>
+        ) : tidesReady(data?.tides, now) ? (
+          <TidesView tides={data?.tides} daily={w.daily} now={now} day={tideDay} onDay={setTideDay} />
+        ) : (
+          <p className="py-6 text-sm text-ink-faint">Tide predictions aren't available right now.</p>
+        )}
         </div>
       </div>
     </Card>

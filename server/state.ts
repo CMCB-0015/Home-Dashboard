@@ -6,10 +6,11 @@
 //   demo — sample data, only when Home Assistant isn't configured (testing in the Codespace)
 //   off  — not connected yet: the card keeps its place but shows as a placeholder
 
-import type { AlertItem, Category, HomeState, Weather } from '../src/types.ts'
+import type { AlertItem, Category, HomeState, Tides, Weather } from '../src/types.ts'
 import { buildMockState } from '../src/data/mockData.ts'
 import { ha } from './ha.ts'
 import { getWeather } from './weather.ts'
+import { getTides } from './tides.ts'
 import { latestRachio, rachioConfigured, rachioError, rachioNotice } from './rachio.ts'
 import { lightingState } from './lights.ts'
 import { thermostats } from './climate.ts'
@@ -39,6 +40,7 @@ import { shoppingState, startShopping } from './shopping.ts'
 import { camerasState, cameraAlerts, guardMode, stargazingUntil, startCameras } from './cameras.ts'
 
 let weather: Weather | null = null
+let tides: Tides | null = null
 
 export function startBackgroundRefresh(changed: () => void) {
   onTeslaMapChange(changed)
@@ -51,6 +53,12 @@ export function startBackgroundRefresh(changed: () => void) {
   }
   void loadWeather()
   setInterval(loadWeather, 10 * 60_000)
+  // Tide predictions barely change: fetched every 6 hours (checked every 15 minutes in case NOAA was down)
+  const loadTides = async () => {
+    try { const t = await getTides(); if (t !== tides) { tides = t; changed() } } catch (e) { console.warn('[tides]', e instanceof Error ? e.message : e) }
+  }
+  void loadTides()
+  setInterval(loadTides, 15 * 60_000)
 
   const loadSports = async () => { if (await refreshSports()) changed() }
   void loadSports()
@@ -159,6 +167,7 @@ export function buildState(): HomeState {
     irrigationZones,
     irrigation,
     weather: weather ?? demo.weather,
+    tides,
     alerts: haConfigured ? alerts : demo.alerts,
     sources,
     homeAssistant: haConfigured ? (haUp ? 'connected' : 'connecting') : 'not-configured',

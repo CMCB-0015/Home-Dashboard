@@ -47,6 +47,7 @@ import { sonosCommand, playPreset, playOn, getQueue, jumpToQueue, refreshFavorit
 import { rachioCommand, rachioConfigured, rachioDebug, startRachioWatcher, pokeRachio, latestRachio, rachioError } from './rachio.ts'
 import { calendarError } from './calendar.ts'
 import { env } from './env.ts'
+import { tideNotes } from './tides.ts'
 
 const PORT = Number(env('PANEL_PORT') ?? 8099)
 const DIST = resolve(env('PANEL_DIST') ?? 'dist')
@@ -146,6 +147,7 @@ const routes: Record<string, Handler> = {
     sports: { notes: sportsNotes(), games: sportsEvents().length },
     launches: { notes: launchNotes(), upcoming: launchEvents().length },
     rachio: { configured: rachioConfigured(), working: !!latestRachio(), problem: rachioError() },
+    tides: tideNotes(),
   }),
 
   '/api/ha-image': async (req) => {
