@@ -14,9 +14,10 @@
 //     Twilight's feed already leaves out launched and scrubbed ones.
 
 import { HOME, matchName } from '../config/home'
+import { whenLabel, zonesLabel } from '../components/irrigation/scheduled'
 import type { AlertItem, Category, CalendarEvent, HomeState, LaunchEvent, SportsEvent } from '../types'
 
-export type StatusKind = 'alert' | 'calendar' | 'sports' | 'launch' | 'motion'
+export type StatusKind = 'alert' | 'calendar' | 'sports' | 'launch' | 'motion' | 'quickrun'
 
 export interface StatusItem {
   id: string
@@ -28,8 +29,10 @@ export interface StatusItem {
   detail?: string
   /** Device category of an alert (decides where tapping goes) */
   category?: Category
-  /** Sports: the game's page in The Brief. Launch: Twilight opened to that launch */
+  /** Sports: the game's page in The Brief. Launch: Twilight opened to that launch. Quick run: its details */
   href?: string | null
+  /** Quick run waiting / missed: amber */
+  warn?: boolean
 }
 
 const HOUR = 3_600_000
@@ -62,7 +65,7 @@ function liveLink(alertId: string): string {
   return cam ? `/cameras?live=${encodeURIComponent(cam)}` : '/cameras'
 }
 
-export function statusItems(data: Pick<HomeState, 'alerts' | 'calendar' | 'sports' | 'launches'>, now = new Date()): StatusItem[] {
+export function statusItems(data: Pick<HomeState, 'alerts' | 'calendar' | 'sports' | 'launches'> & Partial<Pick<HomeState, 'irrigation'>>, now = new Date()): StatusItem[] {
   const nowMs = now.getTime()
   const today = startOfDay(now), tomorrow = startOfDay(now, 1), dayAfter = startOfDay(now, 2), bigLimit = startOfDay(now, 4)
 
@@ -137,5 +140,18 @@ export function statusItems(data: Pick<HomeState, 'alerts' | 'calendar' | 'sport
   }
 
   timed.sort((a, b) => a.at - b.at)
-  return [...alerts, ...timed.map((t) => t.item)]
+  // Scheduled quick runs (kept by Panel): right after alerts, soonest first. Tap = details.
+  //   "Quick run scheduled · Back Lawn 10m · Tomorrow 6:00 AM", "Quick run in 4 min",
+  //   "Quick run waiting · Lawns is watering · starts after", "Quick run missed · Panel was off at 6:00 AM · Run now?"
+  const quick: StatusItem[] = (data.irrigation?.scheduled ?? []).map((q) => {
+    const at = Date.parse(q.at), mins = Math.round((at - nowMs) / 60_000)
+    const what = zonesLabel(q.zones)
+    const href = `/irrigation?scheduled=${encodeURIComponent(q.id)}`
+    if (q.state === 'missed') return { id: `quick-${q.id}`, kind: 'quickrun', label: 'Quick run missed', text: q.reason ?? what, detail: 'Run now?', href, warn: true }
+    if (q.state === 'waiting') return { id: `quick-${q.id}`, kind: 'quickrun', label: 'Quick run waiting', text: q.reason ? `${q.reason} · starts after` : what, href, warn: true }
+    if (mins <= 60) return { id: `quick-${q.id}`, kind: 'quickrun', label: mins <= 0 ? 'Quick run starting' : `Quick run in ${mins} min`, text: what, href }
+    return { id: `quick-${q.id}`, kind: 'quickrun', label: 'Quick run scheduled', text: what, detail: whenLabel(at, nowMs), href }
+  })
+
+  return [...alerts, ...quick, ...timed.map((t) => t.item)]
 }

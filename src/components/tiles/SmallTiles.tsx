@@ -41,6 +41,12 @@ export function useIrrigationActions() {
       update((st) => ({ ...st, irrigationZones: st.irrigationZones.map((z) => (z.id === rows[0].zoneId ? { ...z, isWatering: true, isPaused: false, minutesLeft: rows[0].minutes } : z)) }))
       return send('rachio/command', { action: 'start-zones', zones: rows }, { refresh: true })
     },
+    /** Quick runs set to start later (kept by Panel, not Rachio) */
+    scheduleRun: (rows: { zoneId: string; minutes: number }[], at: number) => send('rachio/scheduled', { action: 'add', zones: rows, at: new Date(at).toISOString() }),
+    updateScheduled: (id: string, rows: { zoneId: string; minutes: number }[], at: number) => send('rachio/scheduled', { action: 'update', id, zones: rows, at: new Date(at).toISOString() }),
+    cancelScheduled: (id: string) => send('rachio/scheduled', { action: 'cancel', id }),
+    dismissScheduled: (id: string) => send('rachio/scheduled', { action: 'dismiss', id }),
+    runScheduledNow: (id: string, rows?: { zoneId: string; minutes: number }[]) => send('rachio/scheduled', { action: 'run-now', id, ...(rows ? { zones: rows } : {}) }, { refresh: true }),
     /** Skip to the next zone of the running schedule (stop + start the rest) */
     nextZone: () => send('rachio/command', { action: 'next-zone' }, { refresh: true }),
     resume: (zone: IrrigationZone) => {

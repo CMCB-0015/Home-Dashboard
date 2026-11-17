@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.24.0
+- Irrigation, **scheduled quick runs**: the Quick run picker gets a **Starts** switch — **Now** (the default, same as before) or **Start at…**, with day chips (Today + the next 4 days, or a calendar up to 14 days ahead) and a time (type it, or tap hour / minutes / AM-PM). Works for one zone or several ("Add another zone"), from the card's zone chips, the card's hold pop-up and the Irrigation page
+- Runs on **Panel's backend** (the Lenovo), not Rachio — Rachio's own schedules are untouched. Saved on the Lenovo (`/data` key `rachio-scheduled`), so a restart keeps them. At the time, Panel starts the zones as a normal manual run, so it **runs even if Rachio's automatic skips (rain, wind, freeze) are in place**
+- **Runs into a Rachio schedule?** The picker checks Rachio's upcoming runs (and other scheduled quick runs) and shows an amber note — "Runs into Back Slope 7:00–7:02 AM" — with one-tap fixes: start so it **ends before**, or start **after it**
+- **Something already watering at the time** → the quick run waits ("Quick run waiting" chip, amber) and starts as soon as it ends (gives up after 3 h)
+- **Lenovo off at the time** (more than 3 min late) → it doesn't start on its own; a **"Quick run missed"** chip offers **Run now** or Dismiss
+- Status bar chip **"Quick run scheduled"** (zone/minutes, when); "Quick run in N min" in the last hour. Tap → details: zones, total, done-by time, **Edit** (same picker, pre-filled), **Start now**, **Cancel this run** (with a 5-second Undo)
+- Irrigation card: the week strip shows a clock on days with a scheduled quick run (a hollow cyan slot if Rachio has nothing that day); the day panel lists it; "Next run" shows the quick run when it comes before Rachio's next run. The Irrigation page lists scheduled quick runs above Zones
+- One-off only — no repeats (Rachio's schedules do that)
+
 ## 1.23.2
 - Vacuum: one-time reset (Connor's call) of the learned whole-run times for the three presets — **Kitchen, Margaux's room, Bedrooms** — since runs between 1.20.4 and 1.23.1 could be cut short at a mop wash. Each relearns from its next run; until then a preset's estimate is added up from its rooms' times (if known). Full clean and the room times are left as they are
 

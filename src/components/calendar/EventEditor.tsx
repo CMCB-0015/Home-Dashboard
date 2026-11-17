@@ -105,7 +105,7 @@ export function previewEvent(d: Draft, cal: CalendarInfo | undefined, id: string
 
 
 /** Small month grid for picking a day */
-function MiniMonth({ value, onPick }: { value: string; onPick: (d: string) => void }) {
+export function MiniMonth({ value, onPick, color = 'var(--color-calendar)', min }: { value: string; onPick: (d: string) => void; color?: string; min?: string }) {
   const picked = fromYmd(value)
   const [month, setMonth] = useState(() => new Date(picked.getFullYear(), picked.getMonth(), 1))
   const start = addDays(month, -month.getDay())
@@ -123,11 +123,12 @@ function MiniMonth({ value, onPick }: { value: string; onPick: (d: string) => vo
         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <span key={i} className="text-[10px] font-semibold text-ink-faint">{d}</span>)}
         {Array.from({ length: weeks * 7 }, (_, i) => addDays(start, i)).map((d) => {
           const on = sameDay(d, picked), inMonth = d.getMonth() === month.getMonth(), isToday = sameDay(d, today)
+          const off = !!min && ymd(d) < min
           return (
-            <button type="button" key={d.toDateString()} onClick={() => onPick(ymd(d))} aria-pressed={on}
+            <button type="button" key={d.toDateString()} onClick={() => onPick(ymd(d))} aria-pressed={on} disabled={off}
               aria-label={d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              className="flex h-10 items-center justify-center rounded-lg font-mono text-[13px] transition-colors hover:bg-surface-raised"
-              style={{ background: on ? 'var(--color-calendar)' : undefined, color: on ? 'var(--color-bg)' : isToday ? 'var(--color-calendar)' : inMonth ? 'var(--color-ink)' : 'var(--color-ink-faint)', fontWeight: on || isToday ? 600 : 400 }}>
+              className="flex h-10 items-center justify-center rounded-lg font-mono text-[13px] transition-colors hover:bg-surface-raised disabled:opacity-30"
+              style={{ background: on ? color : undefined, color: on ? 'var(--color-bg)' : isToday ? color : inMonth ? 'var(--color-ink)' : 'var(--color-ink-faint)', fontWeight: on || isToday ? 600 : 400 }}>
               {d.getDate()}
             </button>
           )

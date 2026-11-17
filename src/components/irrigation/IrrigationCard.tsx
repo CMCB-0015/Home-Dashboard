@@ -1,17 +1,18 @@
 import type React from 'react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
-import { Check, SkipForward, X } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Check, Clock, SkipForward, X } from 'lucide-react'
 import { useHome } from '../../lib/useHome'
 import { categories } from '../../lib/categories'
 import { clockTime } from '../../lib/format'
 import { useLongPress } from '../../lib/useLongPress'
 import { PAUSE_MINUTES, RAIN_EFFECT } from '../../config/irrigation'
 import { QuickRunPicker, QuickRunSheet, DEFAULT_MINUTES, type PickZone, type RunRow } from './QuickRunPicker'
+import { dayKey, firstScheduled, upcomingScheduled, totalMinutes, timeOf } from './scheduled'
 import { Card } from '../Card'
 import { RainLayer } from './RainLayer'
 import { useIrrigationActions } from '../tiles/SmallTiles'
-import type { HomeState, IrrigationRun, IrrigationZone, QuickRun, RunZone } from '../../types'
+import type { HomeState, IrrigationRun, IrrigationSummary, IrrigationZone, QuickRun, RunZone, ScheduledQuickRun } from '../../types'
 
 const CYAN = '#35c2d6'
 const AMBER = '#f2c14e'
@@ -66,18 +67,24 @@ function WeekStrip({ data, selected, onPick, faded }: { data: HomeState; selecte
         const live = d.runs.filter((r) => !r.skipped)
         const allSkipped = d.runs.length > 0 && live.length === 0
         const isNext = !!nextAt && live.some((r) => r.at === nextAt)
+        const quick = upcomingScheduled(data.irrigation).filter((q) => dayKey(Date.parse(q.at)) === d.date)
         const today = i === 0
         const picked = selected === i
-        const slot: React.CSSProperties = allSkipped
-          ? { background: 'transparent', border: `1.5px dashed ${AMBER}` }
-          : { background: live.length ? (isNext ? CYAN : cyan(0.55)) : 'var(--color-surface-raised)' }
+        // A day with only a scheduled quick run: hollow slot with a clock (Rachio's own runs stay solid)
+        const slot: React.CSSProperties = quick.length && !live.length
+          ? { background: 'transparent', border: `1.5px solid ${CYAN}` }
+          : allSkipped
+            ? { background: 'transparent', border: `1.5px dashed ${AMBER}` }
+            : { background: live.length ? (isNext ? CYAN : cyan(0.55)) : 'var(--color-surface-raised)' }
         return (
           <button key={d.date} onClick={() => onPick?.(i)} disabled={!onPick} aria-pressed={picked}
-            aria-label={`${dayOf(d.date).toLocaleDateString('en-US', { weekday: 'long' })}: ${d.runs.length ? d.runs.map((r) => `${r.name} ${clockTime(r.at)}${r.skipped ? ' (skipped)' : ''}`).join(', ') : 'nothing scheduled'}`}
+            aria-label={`${dayOf(d.date).toLocaleDateString('en-US', { weekday: 'long' })}: ${d.runs.length || quick.length ? [...d.runs.map((r) => `${r.name} ${clockTime(r.at)}${r.skipped ? ' (skipped)' : ''}`), ...quick.map((q) => `quick run ${clockTime(q.at)}`)].join(', ') : 'nothing scheduled'}`}
             className="flex min-w-0 flex-col items-center gap-1.5 rounded-lg py-1.5 transition-colors"
             style={{ background: picked ? 'var(--color-surface-raised)' : undefined, outline: picked ? `2px solid ${CYAN}` : today ? `1px solid ${CYAN}` : undefined }}>
             <span className="text-[11px] font-semibold" style={{ color: picked ? 'var(--color-ink)' : today ? CYAN : 'var(--color-ink-dim)' }}>{dayLetters(d.date)}</span>
-            <span className="box-border h-[22px] w-full rounded-[5px]" style={slot} />
+            <span className="relative box-border flex h-[22px] w-full items-center justify-center rounded-[5px]" style={slot}>
+              {quick.length > 0 && <Clock size={11} strokeWidth={2.6} aria-hidden style={{ color: live.length && !allSkipped ? 'var(--color-bg)' : CYAN }} />}
+            </span>
           </button>
         )
       })}
@@ -182,13 +189,14 @@ const sbtn = 'flex min-h-11 items-center justify-center rounded-[10px] border bo
  * on the chip's time, Add another zone) — the same one as the Irrigation page; it
  * needs more room than the card has. A schedule shows its zones and Start in the card.
  */
-function HoldPanel({ q, zones, onStartSchedule, onStartZones, onClose }: {
-  q: QuickRun; zones: PickZone[]; onStartSchedule: () => void; onStartZones: (rows: RunRow[]) => void; onClose: () => void
+function HoldPanel({ q, zones, summary, onStartSchedule, onStartZones, onScheduleZones, onClose }: {
+  q: QuickRun; zones: PickZone[]; summary: IrrigationSummary; onStartSchedule: () => void; onStartZones: (rows: RunRow[]) => void
+  onScheduleZones: (rows: RunRow[], at: number) => void; onClose: () => void
 }) {
   if (q.kind !== 'schedule' && q.zoneIds?.[0]) {
     return (
       <QuickRunSheet title={q.label} subtitle={lastRanText(q.lastRunAt) ?? undefined} onClose={onClose}>
-        <QuickRunPicker zones={zones} first={{ zoneId: q.zoneIds[0], minutes: q.minutes ?? DEFAULT_MINUTES }} onStart={onStartZones} />
+        <QuickRunPicker zones={zones} first={{ zoneId: q.zoneIds[0], minutes: q.minutes ?? DEFAULT_MINUTES }} summary={summary} onStart={onStartZones} onSchedule={onScheduleZones} />
       </QuickRunSheet>
     )
   }
@@ -201,10 +209,22 @@ function HoldPanel({ q, zones, onStartSchedule, onStartZones, onClose }: {
   )
 }
 
-function DayPanel({ date, runs, onSkip, onClose }: { date: string; runs: IrrigationRun[]; onSkip: (r: IrrigationRun) => void; onClose: () => void }) {
+function DayPanel({ date, runs, quick, onSkip, onOpenQuick, onClose }: {
+  date: string; runs: IrrigationRun[]; quick: ScheduledQuickRun[]
+  onSkip: (r: IrrigationRun) => void; onOpenQuick: (q: ScheduledQuickRun) => void; onClose: () => void
+}) {
   return (
     <Panel title={dayOf(date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} onClose={onClose}>
-      {!runs.length && <p className="py-2 text-sm text-ink-dim">Nothing scheduled</p>}
+      {!runs.length && !quick.length && <p className="py-2 text-sm text-ink-dim">Nothing scheduled</p>}
+      {quick.map((q) => (
+        <button key={q.id} type="button" onClick={() => onOpenQuick(q)} className="flex items-center justify-between gap-2.5 rounded-xl border bg-surface px-3 py-2.5 text-left" style={{ borderColor: CYAN }}>
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-sm font-medium leading-snug"><Clock size={13} style={{ color: CYAN }} />Quick run <span className="font-mono" style={{ color: CYAN }}>{timeOf(Date.parse(q.at))}</span></p>
+            <p className="mt-0.5 truncate text-xs text-ink-dim">{totalMinutes(q.zones)} min · {q.zones.map((z) => z.name).join(', ')}</p>
+          </div>
+          <span className={`${sbtn} shrink-0 px-3.5`}>Details</span>
+        </button>
+      ))}
       {runs.map((r) => (
         <div key={r.id} className="flex items-center justify-between gap-2.5 rounded-xl border bg-surface px-3 py-2.5" style={{ borderColor: 'var(--color-edge)', borderStyle: r.skipped ? 'dashed' : 'solid' }}>
           <div className="min-w-0">
@@ -251,12 +271,15 @@ export function IrrigationCard() {
   const a = useIrrigationActions()
   const [day, setDay] = useState<number | null>(null)
   const [hold, setHold] = useState<QuickRun | null>(null)
+  const navigate = useNavigate()
   const zones = data?.irrigationZones ?? []
   const active: IrrigationZone | undefined = zones.find((z) => z.isWatering || z.isPaused)
   useSecondTick(!!active?.isWatering)
   if (!data) return null
 
   const s = data.irrigation
+  const firstQuick = firstScheduled(s)
+  const openQuick = (q: ScheduledQuickRun) => { setDay(null); navigate(`/irrigation?scheduled=${encodeURIComponent(q.id)}`) }
   const paused = !!active?.isPaused
   const watering = s.watering && active && s.watering.zoneId === active.id ? s.watering : null
   const k = active ? (paused ? 0.5 : 1) : 0
@@ -322,9 +345,11 @@ export function IrrigationCard() {
   const overlay = (
     <>
       {RAIN_EFFECT && <RainLayer active={!!active && !paused} />}
-      {hold && <HoldPanel q={hold} zones={pickZones} onStartSchedule={() => startQuick(hold)} onStartZones={(rows) => { setHold(null); a.startZones(rows) }} onClose={() => setHold(null)} />}
+      {hold && <HoldPanel q={hold} zones={pickZones} summary={s} onStartSchedule={() => startQuick(hold)} onStartZones={(rows) => { setHold(null); a.startZones(rows) }}
+        onScheduleZones={(rows, at) => { setHold(null); void a.scheduleRun(rows, at) }} onClose={() => setHold(null)} />}
       {day !== null && week[day] && !active && (
-        <DayPanel date={week[day].date} runs={week[day].runs} onSkip={(r) => skipRun(week[day].date, r)} onClose={() => setDay(null)} />
+        <DayPanel date={week[day].date} runs={week[day].runs} quick={upcomingScheduled(s).filter((q) => dayKey(Date.parse(q.at)) === week[day].date)}
+          onSkip={(r) => skipRun(week[day].date, r)} onOpenQuick={openQuick} onClose={() => setDay(null)} />
       )}
     </>
   )
@@ -364,6 +389,17 @@ export function IrrigationCard() {
       )
       ) : (
         <>
+          {firstQuick ? (
+            // A scheduled quick run comes first: it's the next run (tap for details)
+            <button type="button" onClick={() => openQuick(firstQuick)} className={`text-left transition-opacity ${day !== null ? 'opacity-35' : ''}`}>
+              <p className="mb-1 text-xs text-ink-dim">{firstQuick.state === 'waiting' ? 'Quick run waiting' : 'Next run'}</p>
+              <p className="font-mono text-[22px] leading-tight @min-[300px]:text-[26px]">{whenText(firstQuick.at)}</p>
+              <p className="mt-1 truncate text-[13px] text-ink-dim">
+                {firstQuick.state === 'waiting' && firstQuick.reason ? `${firstQuick.reason} · starts after`
+                  : ['Quick run', firstQuick.zones.length === 1 ? firstQuick.zones[0].name : `${firstQuick.zones.length} zones`, `${totalMinutes(firstQuick.zones)} min`].join(' · ')}
+              </p>
+            </button>
+          ) : (
           <div className={`transition-opacity ${day !== null ? 'opacity-35' : ''}`}>
             <p className="mb-1 text-xs text-ink-dim">Next run</p>
             <p className="font-mono text-[22px] leading-tight @min-[300px]:text-[26px]">{s.nextRun ? whenText(s.nextRun.at) : '—'}</p>
@@ -373,6 +409,7 @@ export function IrrigationCard() {
                 : zones.some((z) => z.rainDelay) ? 'Paused for rain' : 'Nothing scheduled'}
             </p>
           </div>
+          )}
           {week.length > 0 && <WeekStrip data={data} selected={day} onPick={(i) => { setHold(null); setDay(day === i ? null : i) }} />}
           <div className="flex flex-wrap gap-2">
             {s.quickRuns.map((q) => <Chip key={q.id} q={q} onTap={() => startQuick(q)} onHold={() => { setDay(null); setHold(q) }} />)}

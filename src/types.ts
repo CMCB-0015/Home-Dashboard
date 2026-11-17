@@ -236,6 +236,19 @@ export interface IrrigationSummary {
   quickRuns: QuickRun[]
   /** "Skip tomorrow's runs" button state */
   skipTomorrow: { available: boolean; skipped: boolean; label: string }
+  /** Quick runs set to start later, kept by Panel (not Rachio), soonest first */
+  scheduled?: ScheduledQuickRun[]
+}
+
+/** A quick run set to start later ("Start at…") */
+export interface ScheduledQuickRun {
+  id: string
+  at: string
+  createdAt: string
+  /** pending = waiting for its time; waiting = due, but something else is watering / Rachio busy; missed = didn't start (Run now or dismiss) */
+  state: 'pending' | 'waiting' | 'missed'
+  reason: string | null
+  zones: { zoneId: string; name: string; minutes: number }[]
 }
 
 /** The Tesla (WillaWilla), from Teslemetry through Home Assistant */

@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, X } from 'lucide-react'
+import { CalendarDays, Clock, Plus, TriangleAlert, X } from 'lucide-react'
+import { MiniMonth, minLabel, parseTime } from '../calendar/EventEditor'
+import type { IrrigationSummary } from '../../types'
+import { clearTimes, dayKey, inLabel, overlaps, timeOf, whenLabel, MINUTE } from './scheduled'
 
 const CYAN = 'var(--color-irrigation)'
 const cyan = (a: number) => `rgba(53, 194, 214, ${a})`
@@ -78,13 +81,24 @@ export interface RunRow { zoneId: string; minutes: number }
  * time, run one after another), then Start. Used in the Irrigation page's
  * pop-up and the card's hold panel.
  */
-export function QuickRunPicker({ zones, first, onStart, compact = false }: {
+export function QuickRunPicker({ zones, first, firstRows, onStart, onSchedule, summary, initialAt, editId, compact = false }: {
   zones: PickZone[]
   first: RunRow
+  /** Editing a scheduled run: its zones */
+  firstRows?: RunRow[]
   onStart: (rows: RunRow[]) => void
+  /** Start later (“Start at…”); without it the picker only starts now */
+  onSchedule?: (rows: RunRow[], at: number) => void
+  /** Rachio's runs and other scheduled quick runs, for the overlap check */
+  summary?: IrrigationSummary
+  /** Editing a scheduled run: its start time (opens on Start at…) */
+  initialAt?: number
+  editId?: string
   compact?: boolean
 }) {
-  const [rows, setRows] = useState<RunRow[]>([first])
+  const [rows, setRows] = useState<RunRow[]>(firstRows?.length ? firstRows : [first])
+  const [later, setLater] = useState(initialAt !== undefined)
+  const [at, setAt] = useState<number>(() => initialAt ?? defaultStart())
   const [sel, setSel] = useState(0)
   const [adding, setAdding] = useState(false)
   const name = (id: string) => zones.find((z) => z.id === id)?.name ?? 'Zone'
@@ -148,15 +162,151 @@ export function QuickRunPicker({ zones, first, onStart, compact = false }: {
         </button>
       )}
 
-      <button type="button" onClick={() => onStart(rows)} className="min-h-12 rounded-xl text-sm font-semibold text-bg active:scale-[0.98]" style={{ background: CYAN }}>
-        {multi ? `Start ${rows.length} zones · ${total} min` : `Start ${compact ? '' : `${name(cur.zoneId)} `}· ${cur.minutes} min`}
-      </button>
+      {onSchedule && (
+        <>
+          <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Starts</p>
+          <div role="radiogroup" aria-label="When to start" className="grid grid-cols-2 rounded-xl border border-edge bg-surface p-[3px]">
+            {([false, true] as const).map((v) => (
+              <button key={String(v)} type="button" role="radio" aria-checked={later === v} onClick={() => setLater(v)}
+                className="flex min-h-10 items-center justify-center gap-1.5 rounded-[9px] text-[13.5px] font-medium transition-colors"
+                style={later === v ? { background: 'var(--color-edge)', color: 'var(--color-ink)' } : { color: 'var(--color-ink-dim)' }}>
+                {v ? <><Clock size={14} />Start at…</> : 'Now'}
+              </button>
+            ))}
+          </div>
+          {later && <StartAt value={at} onChange={setAt} summary={summary} minutes={total} editId={editId} />}
+        </>
+      )}
+
+      {later && onSchedule ? (
+        <button type="button" disabled={!startOk(at)} onClick={() => onSchedule(rows, at)}
+          className="min-h-12 rounded-xl text-sm font-semibold text-bg active:scale-[0.98] disabled:opacity-40" style={{ background: CYAN }}>
+          {editId ? 'Save' : 'Schedule'}{multi ? ` ${rows.length} zones` : ''} · {whenLabel(at)}
+        </button>
+      ) : (
+        <button type="button" onClick={() => onStart(rows)} className="min-h-12 rounded-xl text-sm font-semibold text-bg active:scale-[0.98]" style={{ background: CYAN }}>
+          {editId ? `Start now · ${total} min` : multi ? `Start ${rows.length} zones · ${total} min` : `Start ${compact ? '' : `${name(cur.zoneId)} `}· ${cur.minutes} min`}
+        </button>
+      )}
     </div>
   )
 }
 
+// ── Start at…: day + time ─────────────────────────────────────────────────
+const AHEAD_DAYS = 14
+const startOk = (t: number) => t >= Date.now() + MINUTE && t <= Date.now() + AHEAD_DAYS * 86_400_000
+
+/** The next whole hour (at least 15 min away) */
+function defaultStart() {
+  const d = new Date(Date.now() + 15 * MINUTE)
+  d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1)
+  return d.getTime()
+}
+const minOfDay = (t: number) => { const d = new Date(t); return d.getHours() * 60 + d.getMinutes() }
+const withDay = (t: number, ymd: string) => { const [y, m, dd] = ymd.split('-').map(Number); const d = new Date(t); d.setFullYear(y, m - 1, dd); return d.getTime() }
+const withMin = (t: number, min: number) => { const d = new Date(t); d.setHours(Math.floor(min / 60), min % 60, 0, 0); return d.getTime() }
+
+/**
+ * Day buttons (today + the next 4, a calendar for further out) and a time you can
+ * type ("6a", "545p") or pick (hour, minute, AM / PM) — the calendar editor's
+ * picker in the irrigation color. Warns when the run would overlap a Rachio run
+ * or another scheduled quick run, with the nearest clear times one tap away.
+ */
+function StartAt({ value, onChange, summary, minutes, editId }: { value: number; onChange: (t: number) => void; summary?: IrrigationSummary; minutes: number; editId?: string }) {
+  const [month, setMonth] = useState(false)
+  const [typed, setTyped] = useState<string | null>(null)
+  const today = dayKey(Date.now())
+  const days = Array.from({ length: 5 }, (_, k) => { const d = new Date(); d.setDate(d.getDate() + k); return d })
+  const picked = dayKey(value)
+  const v = minOfDay(value), h24 = Math.floor(v / 60), mi = v % 60, pm = h24 >= 12
+  const parsed = typed !== null && typed.trim() !== '' ? parseTime(typed) : null
+  const bad = typed !== null && typed.trim() !== '' && parsed === null
+  const past = value < Date.now() + MINUTE
+  const tooFar = value > Date.now() + AHEAD_DAYS * 86_400_000
+  const clash = summary && !past ? overlaps(summary, value, minutes, editId) : []
+  const fix = summary && clash.length ? clearTimes(summary, value, minutes, editId) : null
+  const chip = (on: boolean) => on
+    ? { background: cyan(0.16), borderColor: CYAN, color: CYAN, fontWeight: 600 }
+    : { background: 'var(--color-surface)', borderColor: 'var(--color-edge)', color: 'var(--color-ink)' }
+  const cell = 'min-h-9 rounded-[9px] border font-mono text-[13px] transition-colors'
+  const nearestHour = (h: number) => { const am = (h % 12) * 60 + mi, p = am + 720; return Math.abs(am - v) <= Math.abs(p - v) ? am : p }
+  const range = (o: { start: number; end: number }) => `${timeOf(o.start).replace(/ [AP]M$/, (new Date(o.start).getHours() >= 12) === (new Date(o.end).getHours() >= 12) ? '' : '$&')}–${timeOf(o.end)}`
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Day">
+        {days.map((d, k) => {
+          const key = dayKey(d), on = key === picked
+          return (
+            <button key={key} type="button" aria-pressed={on} onClick={() => { setMonth(false); onChange(withDay(value, key)) }}
+              className="flex min-h-11 flex-col items-center justify-center rounded-[10px] border px-2.5 text-[12.5px] leading-tight" style={chip(on)}>
+              {k === 0 ? 'Today' : k === 1 ? 'Tomorrow' : d.toLocaleDateString('en-US', { weekday: 'short' })}
+              <span className="text-[11px] font-normal" style={{ color: on ? CYAN : 'var(--color-ink-faint)' }}>{k < 2 ? d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }) : d.getDate()}</span>
+            </button>
+          )
+        })}
+        {!days.some((d) => dayKey(d) === picked) && (
+          <button type="button" aria-pressed onClick={() => setMonth((m) => !m)} className="flex min-h-11 flex-col items-center justify-center rounded-[10px] border px-2.5 text-[12.5px] leading-tight" style={chip(true)}>
+            {new Date(value).toLocaleDateString('en-US', { weekday: 'short' })}<span className="text-[11px] font-normal">{new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+          </button>
+        )}
+        <button type="button" aria-label="Pick another date" aria-expanded={month} onClick={() => setMonth((m) => !m)}
+          className="flex min-h-11 w-11 items-center justify-center rounded-[10px] border" style={chip(month)}><CalendarDays size={17} /></button>
+      </div>
+      {month && <MiniMonth value={picked} min={today} color={CYAN} onPick={(d) => { onChange(withDay(value, d)); setMonth(false) }} />}
+
+      <div className="flex items-center gap-2.5">
+        <input value={typed ?? minLabel(v)} aria-label={`Start time: ${minLabel(v)}. Type a time or pick one`} inputMode="text" autoComplete="off" spellCheck={false}
+          onFocus={(e) => { const el = e.target; setTimeout(() => el.select(), 0) }}
+          onChange={(e) => { setTyped(e.target.value); const m = parseTime(e.target.value); if (m !== null) onChange(withMin(value, m)) }}
+          onBlur={() => setTyped(null)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur() } }}
+          className="h-11 w-[112px] rounded-[10px] border px-2 text-center font-mono text-[15px] text-ink outline-none"
+          style={{ borderColor: bad ? AMBER_C : CYAN, background: 'var(--color-surface)' }} />
+        <span className="min-w-0 flex-1 text-xs font-semibold" aria-live="polite"
+          style={{ color: bad || past || tooFar ? AMBER_C : '#4fd18b' }}>
+          {bad ? 'Not a time yet' : past ? 'That time has passed' : tooFar ? 'Up to 14 days ahead' : `${whenLabel(value)} · ${inLabel(value)}`}
+        </span>
+      </div>
+      <div className="grid grid-cols-6 gap-1.5" role="group" aria-label="Hour">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => {
+          const on = (h24 % 12 || 12) === h
+          return <button type="button" key={h} aria-pressed={on} onClick={() => { setTyped(null); onChange(withMin(value, nearestHour(h))) }} className={cell} style={chip(on)}>{h}</button>
+        })}
+      </div>
+      <div className="grid grid-cols-6 gap-1.5" role="group" aria-label="Minute">
+        {[0, 10, 15, 20, 30, 45].map((m) => {
+          const on = mi === m
+          return <button type="button" key={m} aria-pressed={on} onClick={() => { setTyped(null); onChange(withMin(value, h24 * 60 + m)) }} className={cell} style={chip(on)}>:{String(m).padStart(2, '0')}</button>
+        })}
+      </div>
+      <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="AM or PM">
+        {(['AM', 'PM'] as const).map((x) => {
+          const on = (x === 'PM') === pm
+          return <button type="button" key={x} role="radio" aria-checked={on} onClick={() => { setTyped(null); if (!on) onChange(withMin(value, v + (x === 'PM' ? 720 : -720))) }} className={`${cell} font-sans font-semibold`} style={chip(on)}>{x}</button>
+        })}
+      </div>
+
+      {clash.length > 0 && (
+        <div role="status" className="flex flex-col gap-2 rounded-xl border px-3 py-2.5 text-[12.5px]" style={{ borderColor: AMBER_C, background: 'rgba(242,193,78,0.08)' }}>
+          <p className="flex items-start gap-2"><TriangleAlert size={15} className="mt-px shrink-0" style={{ color: AMBER_C }} />
+            <span>Runs into {clash.map((o) => <span key={o.start} className="font-semibold">{o.name} <span className="font-mono font-normal">{range(o)}</span></span>).reduce<ReactNode[]>((acc, el, k) => (k ? [...acc, ', ', el] : [el]), [])}. It would wait for it to finish.</span></p>
+          {fix && (fix.after || fix.before) && (
+            <div className="flex flex-wrap gap-1.5">
+              {fix.before && <button type="button" onClick={() => { setTyped(null); onChange(fix.before!) }} className="min-h-9 rounded-[9px] border border-edge bg-surface px-3 font-medium">Start {whenLabel(fix.before)} <span className="text-ink-dim">(ends before)</span></button>}
+              {fix.after && <button type="button" onClick={() => { setTyped(null); onChange(fix.after!) }} className="min-h-9 rounded-[9px] border border-edge bg-surface px-3 font-medium">Start {whenLabel(fix.after)} <span className="text-ink-dim">(after it)</span></button>}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const AMBER_C = '#f2c14e'
+
 /** Pop-up from the bottom of the screen, over a dimmed page (tap outside, X or Escape closes) */
-export function QuickRunSheet({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode }) {
+export function QuickRunSheet({ title, subtitle, eyebrow = 'Quick run', onClose, children }: { title: string; subtitle?: string; eyebrow?: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', key)
@@ -171,7 +321,7 @@ export function QuickRunSheet({ title, subtitle, onClose, children }: { title: s
         <div className="h-1 w-9 shrink-0 self-center rounded-full bg-edge" />
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Quick run</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">{eyebrow}</p>
             <p className="truncate font-display text-lg font-semibold">{title}</p>
             {subtitle && <p className="text-xs text-ink-dim">{subtitle}</p>}
           </div>

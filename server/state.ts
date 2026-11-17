@@ -12,6 +12,7 @@ import { ha } from './ha.ts'
 import { getWeather } from './weather.ts'
 import { getTides } from './tides.ts'
 import { latestRachio, rachioConfigured, rachioError, rachioNotice } from './rachio.ts'
+import { scheduledQuickRuns } from './rachioScheduled.ts'
 import { lightingState } from './lights.ts'
 import { thermostats } from './climate.ts'
 import { refreshFavorites, sonosState } from './sonos.ts'
@@ -120,7 +121,7 @@ export function buildState(): HomeState {
   if (rachioConfigured() && r) {
     sources.irrigation = 'live'
     irrigationZones = r.zones
-    irrigation = r.summary
+    irrigation = { ...r.summary, scheduled: scheduledQuickRuns(new Map(r.zones.map((z) => [z.id, z.name.trim()]))) }
     if (r.summary.lastSkipped) alert('irrigation', 'info', r.summary.lastSkipped.name, "Scheduled run didn't start (skipped)", r.summary.lastSkipped.at)
     if (r.zones.some((z) => z.rainDelay)) alert('irrigation', 'info', 'Rachio', 'Rain delay is on')
   } else {

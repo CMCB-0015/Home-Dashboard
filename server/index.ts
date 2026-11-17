@@ -24,6 +24,7 @@
 //   POST /api/cameras/command                     Cameras card: Home / Away, Stargazing (Eufy, through Home Assistant)
 //   POST /api/cameras/live/start | candidate | stop · GET /api/cameras/live/poll   live view (WebRTC set-up)
 //   POST /api/rachio/command          GET /api/rachio/debug
+//   POST /api/rachio/scheduled        (quick runs set to start later)
 
 import http from 'node:http'
 import { createReadStream, existsSync, statSync } from 'node:fs'
@@ -45,6 +46,7 @@ import { calendarRangeEvents, createEvent, updateEvent, removeEvent, onCalendarC
 import { linkStart, linkFinish, unlink, gcalStatus, listCalendars, gcalLinked } from './gcal.ts'
 import { sonosCommand, playPreset, playOn, getQueue, jumpToQueue, refreshFavorites, sonosNotes, savePreset, renamePreset, deletePreset } from './sonos.ts'
 import { rachioCommand, rachioConfigured, rachioDebug, startRachioWatcher, pokeRachio, latestRachio, rachioError } from './rachio.ts'
+import { scheduledCommand, startQuickRunScheduler } from './rachioScheduled.ts'
 import { calendarError } from './calendar.ts'
 import { env } from './env.ts'
 import { tideNotes } from './tides.ts'
@@ -125,6 +127,11 @@ const routes: Record<string, Handler> = {
   },
   '/api/gcal/link-finish': act(async (b: { pasted?: string }) => { await linkFinish(String(b.pasted ?? '')); changed() }),
   '/api/gcal/unlink': act(async () => { unlink(); changed() }),
+  // Quick runs set to start later: { action: add | update | cancel | dismiss | run-now, id?, zones?, at? }
+  '/api/rachio/scheduled': act(async (b: { action?: string; id?: string; zones?: unknown; at?: unknown }) => {
+    if (!rachioConfigured()) throw new Error('Add your Rachio API key in the app settings')
+    await scheduledCommand(String(b.action), b)
+  }),
   '/api/rachio/debug': async () => {
     if (!rachioConfigured()) return fail('No Rachio API key set', 409)
     try { return ok(await rachioDebug()) } catch (e) { return fail(e instanceof Error ? e.message : 'Rachio request failed', 502) }
@@ -259,6 +266,7 @@ ha.onChange(changed)
 onCalendarChange(changed)
 ha.start()
 startRachioWatcher(changed)
+if (rachioConfigured()) void startQuickRunScheduler(changed)
 startBackgroundRefresh(changed)
 
 server.listen(PORT, () => {

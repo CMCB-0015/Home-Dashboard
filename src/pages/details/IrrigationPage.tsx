@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Play, Pause, Square } from 'lucide-react'
+import { ChevronRight, Clock, Play, Pause, Square, TriangleAlert } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { useHome } from '../../lib/useHome'
 import { categories } from '../../lib/categories'
 import { relativeTime, untilTime } from '../../lib/format'
@@ -8,15 +9,24 @@ import { Card } from '../../components/Card'
 import { Pill, StatusPill } from '../../components/Buttons'
 import { nextRunText, useIrrigationActions, IrrigationControls } from '../../components/tiles/SmallTiles'
 import { QuickRunPicker, QuickRunSheet, DEFAULT_MINUTES } from '../../components/irrigation/QuickRunPicker'
+import { ScheduledRunSheet, useCancelWithUndo } from '../../components/irrigation/ScheduledRuns'
+import { whenLabel } from '../../components/irrigation/scheduled'
 import type { IrrigationZone } from '../../types'
 
 const cfg = categories.irrigation
 
 export function IrrigationPage() {
   const { data } = useHome()
-  const { stop, resume, pause, startZones } = useIrrigationActions()
+  const { stop, resume, pause, startZones, scheduleRun } = useIrrigationActions()
   const [pick, setPick] = useState<IrrigationZone | null>(null)
+  // A scheduled quick run's details open from ?scheduled=<id> (status-bar chip, card)
+  const [params, setParams] = useSearchParams()
+  const openId = params.get('scheduled')
+  const closeDetails = () => setParams((p) => { p.delete('scheduled'); return p }, { replace: true })
+  const undo = useCancelWithUndo()
   if (!data) return null
+  const scheduled = (data.irrigation?.scheduled ?? []).filter((r) => r.id !== undo.hiddenId)
+  const open = openId ? scheduled.find((r) => r.id === openId) : undefined
   const next = data.irrigation?.nextRun
   const quickRuns = data.irrigation?.quickRuns ?? []
   const unmatched = quickRuns.filter((r) => !r.available)
@@ -44,6 +54,29 @@ export function IrrigationPage() {
           )}
         </Card>
       </div>
+
+      {scheduled.length > 0 && (
+        <>
+          <h2 className="mb-2 mt-8 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Scheduled quick runs</h2>
+          <div className="flex flex-col gap-2">
+            {scheduled.map((r) => {
+              const warn = r.state !== 'pending'
+              return (
+                <button key={r.id} type="button" onClick={() => setParams((p) => { p.set('scheduled', r.id); return p })}
+                  className="flex min-h-14 items-center gap-3 rounded-2xl border bg-surface px-4 text-left hover:bg-surface-raised"
+                  style={{ borderColor: warn ? '#f2c14e' : 'var(--color-edge)' }}>
+                  {warn ? <TriangleAlert size={17} style={{ color: '#f2c14e' }} /> : <Clock size={17} style={{ color: cfg.color }} />}
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium">{r.state === 'missed' ? 'Missed · ' : r.state === 'waiting' ? 'Waiting · ' : ''}{whenLabel(Date.parse(r.at))}</span>
+                    <span className="block truncate text-xs text-ink-dim">{r.reason && warn ? `${r.reason} · ` : ''}{r.zones.map((z) => `${z.name} ${z.minutes}m`).join(', ')}</span>
+                  </span>
+                  <ChevronRight size={16} className="text-ink-faint" />
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
 
       <h2 className="mb-2 mt-8 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Zones</h2>
       <div className="flex flex-col gap-3">
@@ -74,10 +107,13 @@ export function IrrigationPage() {
       </div>
       {pick && (
         <QuickRunSheet title={pick.name.trim()} onClose={() => setPick(null)}>
-          <QuickRunPicker zones={zoneChoices} first={{ zoneId: pick.id, minutes: DEFAULT_MINUTES }}
-            onStart={(rows) => { setPick(null); void startZones(rows) }} />
+          <QuickRunPicker zones={zoneChoices} first={{ zoneId: pick.id, minutes: DEFAULT_MINUTES }} summary={data.irrigation}
+            onStart={(rows) => { setPick(null); void startZones(rows) }}
+            onSchedule={(rows, at) => { setPick(null); void scheduleRun(rows, at) }} />
         </QuickRunSheet>
       )}
+      {open && <ScheduledRunSheet key={open.id} run={open} summary={data.irrigation} zones={zoneChoices} onCancel={undo.cancel} onClose={closeDetails} />}
+      {undo.bar}
     </DetailLayout>
   )
 }
