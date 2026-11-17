@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.23.1
+- Vacuum, **fix: runs no longer end at the first mop wash.** Since 1.20.4 a trip back to the dock to wash the mop only counted as part of the run while a room was "still to go" — so a one-room run (Kitchen/Living Room, which starts at the dock) ended at its first wash and was learned as a few minutes, and the rest was then followed as a separate "Full clean". Now the robot's own **Cleaning** sensor (on for the whole job, washes included) decides; without it, any washing status keeps the run going. If "Cleaning" stays on while the robot sits quietly at the dock for 15 min, the run ends anyway
+- One-time clean-up (Connor's call): Kitchen's learned times under 10 min (the 5 and 1 min cut-short runs) are dropped from run and room times, so Kitchen goes from "16 min avg of 4 (29, 5, 1, 28)" to 29, 28
+
 ## 1.23.0
 - Weather, **Tides tab**: the expanded weather card gets a **Forecast / Tides** switch under the chips. **Forecast is always the default**, and the card goes back to it when it collapses, when you swipe to the Home page, and when the screensaver comes on. The top row (temperature, sunrise / sunset arc) is unchanged
 - Tides shows one day, midnight to midnight: the tide as a teal line over a **0 ft baseline** (mean lower low water), with every high and low labeled with its height and time ("+0.6 ft", "6.9 ft"). Labels always sit clear of the line, above a high and below a low. Tides **below 0 ft are filled in orange**. Nights are shaded, and an amber line marks now

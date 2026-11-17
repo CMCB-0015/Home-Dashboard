@@ -16,7 +16,7 @@ import { HOME } from '../src/config/home.ts'
 import { configPresets, configRooms, fullOrder, whatText } from '../src/lib/vacuum.ts'
 import { ha, type HAState } from './ha.ts'
 import { cacheGet, cacheSet } from './cache.ts'
-import { estimateTables, finishAt, markRunCut, observe, roomsLeft, timingNotes, type CleanMode } from './vacuumTiming.ts'
+import { estimateTables, finishAt, markRunCut, observe, timingNotes, type CleanMode } from './vacuumTiming.ts'
 
 const FIND = {
   battery: ['sensor', /_battery$/],
@@ -32,6 +32,8 @@ const FIND = {
   currentRoom: ['sensor', /_current_room$/],
   mopIntensity: ['select', /_mop_intensity$/],
   mopMode: ['select', /_mop_mode$/],
+  /** On for the whole job, mop-wash trips to the dock included (Roborock's in_cleaning) */
+  inCleaning: ['binary_sensor', /_cleaning$/],
 } as const satisfies Record<string, readonly [string, RegExp]>
 type Key = keyof typeof FIND
 
@@ -128,6 +130,7 @@ const setRun = (r: Run | null) => { run = r; void cacheSet('vacuum-run', r); ha.
 // Pick up the room numbers and the current run after a restart
 void cacheGet<Record<string, number>>('vacuum-segments').then((s) => { if (s && !Object.keys(segments).length) segments = s })
 void cacheGet<Run>('vacuum-run').then((r) => { if (r && !run) run = r })
+let quietDockSince: number | null = null
 
 const MODE: Record<string, VacuumState['state']> = {
   docked: 'docked', cleaning: 'cleaning', paused: 'paused', returning: 'returning', idle: 'idle', error: 'error',
@@ -144,10 +147,18 @@ export function vacuumState(): VacuumState | null {
   const state = MODE[e.vac.state] ?? (e.vac.state === 'unavailable' ? 'error' : 'idle')
   const battery = num(e.battery) ?? (Number.isFinite(Number(e.vac.attributes.battery_level)) ? Number(e.vac.attributes.battery_level) : null)
 
-  // Mid-run trip to the dock to wash the mop: the run isn't over while rooms are left
+  // Mid-run trip to the dock to wash the mop: the run isn't over yet. The robot's own
+  // "Cleaning" sensor stays on for the whole job, washes included; without it, any
+  // washing status counts. (Until 1.23.1 this also needed a room "still to go", so a
+  // one-room run — Kitchen, which starts at the dock — ended at its first mop wash.)
   const status = ok(e.status) ? e.status!.state : ''
   const washing = /wash|mop|empty|dust/i.test(status) && !/dry/i.test(status)
-  const midRunWash = !!run && washing && (roomsLeft(run)?.length ?? 1) > 0
+  const jobOn = ok(e.inCleaning) ? e.inCleaning!.state === 'on' : false
+  const atDock = state === 'docked' || state === 'idle'
+  // Safety: "Cleaning" stuck on while sitting quietly at the dock for 15 min ends the run anyway
+  if (run && atDock && jobOn && !washing) { quietDockSince ??= Date.now() } else quietDockSince = null
+  const stuck = quietDockSince !== null && Date.now() - quietDockSince > 15 * 60_000
+  const midRunWash = !!run && (washing || (jobOn && !stuck))
   // A run ends once the robot is back on the dock
   if (run && (state === 'docked' || state === 'idle') && !midRunWash && Date.now() - Date.parse(run.startedAt) > 120_000) { run = null; void cacheSet('vacuum-run', null) }
   // A clean started in the Roborock app (or on the robot): follow it as a full clean

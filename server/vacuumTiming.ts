@@ -48,6 +48,21 @@ let runTimes: Samples = {}
 void cacheDelete('vacuum-room-times')
 void cacheGet<Samples>('vacuum-room-times-v2').then((l) => { if (l) roomTimes = merge(l, roomTimes) })
 void cacheGet<Samples>('vacuum-run-times').then((l) => { runTimes = merge(l ?? SEED_RUNS, runTimes) })
+// One-time clean-up (1.23.1, Connor's call): Kitchen/Living Room runs cut short at their first mop
+// wash were learned as 5 and 1 min. Drop Kitchen samples under 10 min from run and room times.
+void (async () => {
+  if (await cacheGet<boolean>('vacuum-kitchen-fix-1.23.1')) return
+  await new Promise((r) => setTimeout(r, 1500)) // after the loads above
+  for (const [s, key] of [[runTimes, 'vacuum-run-times'], [roomTimes, 'vacuum-room-times-v2']] as const) {
+    let changed = false
+    for (const byKey of Object.values(s)) {
+      const xs = byKey?.kitchen
+      if (xs?.some((x) => x < 600)) { byKey!.kitchen = xs.filter((x) => x >= 600); changed = true }
+    }
+    if (changed) { void cacheSet(key, s); console.log(`[vacuum] dropped short Kitchen samples from ${key}`) }
+  }
+  void cacheSet('vacuum-kitchen-fix-1.23.1', true)
+})()
 
 function merge(a: Samples, b: Samples): Samples {
   const out: Samples = {}
