@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.23.2
+- Vacuum: one-time reset (Connor's call) of the learned whole-run times for the three presets — **Kitchen, Margaux's room, Bedrooms** — since runs between 1.20.4 and 1.23.1 could be cut short at a mop wash. Each relearns from its next run; until then a preset's estimate is added up from its rooms' times (if known). Full clean and the room times are left as they are
+
 ## 1.23.1
 - Vacuum, **fix: runs no longer end at the first mop wash.** Since 1.20.4 a trip back to the dock to wash the mop only counted as part of the run while a room was "still to go" — so a one-room run (Kitchen/Living Room, which starts at the dock) ended at its first wash and was learned as a few minutes, and the rest was then followed as a separate "Full clean". Now the robot's own **Cleaning** sensor (on for the whole job, washes included) decides; without it, any washing status keeps the run going. If "Cleaning" stays on while the robot sits quietly at the dock for 15 min, the run ends anyway
 - One-time clean-up (Connor's call): Kitchen's learned times under 10 min (the 5 and 1 min cut-short runs) are dropped from run and room times, so Kitchen goes from "16 min avg of 4 (29, 5, 1, 28)" to 29, 28

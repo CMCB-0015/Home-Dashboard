@@ -28,6 +28,7 @@
 
 import { cacheDelete, cacheGet, cacheSet } from './cache.ts'
 import { runKey } from '../src/lib/vacuum.ts'
+import { HOME } from '../src/config/home.ts'
 import type { VacuumEstimates } from '../src/types.ts'
 
 export type CleanMode = 'vacmop' | 'vac' | 'mop'
@@ -62,6 +63,20 @@ void (async () => {
     if (changed) { void cacheSet(key, s); console.log(`[vacuum] dropped short Kitchen samples from ${key}`) }
   }
   void cacheSet('vacuum-kitchen-fix-1.23.1', true)
+})()
+// One-time reset (1.23.2, Connor's call): clear the learned whole-run times of the three presets
+// (Kitchen, Margaux's room, Bedrooms) — runs since 1.20.4 could be cut short at a mop wash. Each
+// relearns from its next run. Full clean and room times are left alone.
+void (async () => {
+  if (await cacheGet<boolean>('vacuum-presets-reset-1.23.2')) return
+  await new Promise((r) => setTimeout(r, 2500)) // after the loads and the 1.23.1 clean-up above
+  for (const p of HOME.vacuum.presets) {
+    const mode: CleanMode = p.vacuum && p.mop ? 'vacmop' : p.vacuum ? 'vac' : 'mop'
+    const key = runKey(p.rooms, 1)
+    if (runTimes[mode]?.[key]) { delete runTimes[mode]![key]; console.log(`[vacuum] cleared learned times for preset ${p.name}`) }
+  }
+  void cacheSet('vacuum-run-times', runTimes)
+  void cacheSet('vacuum-presets-reset-1.23.2', true)
 })()
 
 function merge(a: Samples, b: Samples): Samples {
