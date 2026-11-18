@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Clock, TriangleAlert, Undo2 } from 'lucide-react'
 import type { IrrigationSummary, ScheduledQuickRun } from '../../types'
 import { useIrrigationActions } from '../tiles/SmallTiles'
-import { QuickRunPicker, QuickRunSheet, type PickZone } from './QuickRunPicker'
+import { QuickRunPicker, QuickRunSheet, SchedulePicker, type PickZone } from './QuickRunPicker'
 import { inLabel, timeOf, totalMinutes, whenLabel, MINUTE } from './scheduled'
 
 const CYAN = 'var(--color-irrigation)'
@@ -24,6 +24,16 @@ export function ScheduledRunSheet({ run, summary, zones, onCancel, onClose }: {
   const total = totalMinutes(run.zones)
   const rows = run.zones.map((z) => ({ zoneId: z.zoneId, minutes: z.minutes }))
 
+  if (editing && run.schedule) {
+    // A whole schedule: only the time changes (Rachio's schedule decides the zones)
+    return (
+      <QuickRunSheet eyebrow="Edit scheduled run" title={run.schedule} onClose={onClose}>
+        <SchedulePicker zoneNames={run.zones.map((z) => z.name)} minutes={total} initialAt={at} editId={run.id} summary={summary}
+          onStart={() => { onClose(); void a.runScheduledNow(run.id) }}
+          onSchedule={(t) => { onClose(); void a.updateScheduled(run.id, rows, t) }} />
+      </QuickRunSheet>
+    )
+  }
   if (editing) {
     return (
       <QuickRunSheet title="Edit scheduled quick run" onClose={onClose}>
@@ -44,16 +54,17 @@ export function ScheduledRunSheet({ run, summary, zones, onCancel, onClose }: {
           <span>{run.reason}{waiting && run.reason.endsWith('is watering') ? ' — it starts as soon as that ends.' : '.'}</span>
         </p>
       )}
+      {run.schedule && <p className="text-[13px] text-ink-dim">Starts the <span className="font-medium text-ink">{run.schedule}</span> schedule — zone times are Rachio's on the day</p>}
       <ol className="flex flex-col gap-1.5" aria-label="Zones">
         {run.zones.map((z, k) => (
           <li key={z.zoneId} className="flex min-h-10 items-center gap-2.5 rounded-[10px] border border-edge bg-surface px-3 text-[13px]">
             <span className="font-mono text-[11px] text-ink-faint">{k + 1}</span>
             <span className="min-w-0 flex-1 truncate font-medium">{z.name}</span>
-            <span className="font-mono text-xs text-ink-dim">{z.minutes}m</span>
+            <span className="font-mono text-xs text-ink-dim">{run.schedule ? '~' : ''}{z.minutes}m</span>
           </li>
         ))}
       </ol>
-      <p className="text-[12.5px] text-ink-dim">{total} min total{!missed && !waiting ? <> · done ~<span className="font-mono text-ink">{timeOf(at + total * MINUTE)}</span></> : null}</p>
+      <p className="text-[12.5px] text-ink-dim">{run.schedule ? '~' : ''}{total} min total{!missed && !waiting ? <> · done ~<span className="font-mono text-ink">{timeOf(at + total * MINUTE)}</span></> : null}</p>
       {missed ? (
         <div className="flex gap-2">
           <button type="button" onClick={() => { onClose(); void a.runScheduledNow(run.id) }} className="min-h-12 flex-1 rounded-xl text-sm font-semibold text-bg" style={{ background: CYAN }}>Run now · {total} min</button>

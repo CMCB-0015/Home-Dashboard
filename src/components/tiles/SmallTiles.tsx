@@ -43,6 +43,8 @@ export function useIrrigationActions() {
     },
     /** Quick runs set to start later (kept by Panel, not Rachio) */
     scheduleRun: (rows: { zoneId: string; minutes: number }[], at: number) => send('rachio/scheduled', { action: 'add', zones: rows, at: new Date(at).toISOString() }),
+    /** A whole Rachio schedule (schedule chip) at a time */
+    scheduleSchedule: (quickId: string, at: number) => send('rachio/scheduled', { action: 'add', quickId, at: new Date(at).toISOString() }),
     updateScheduled: (id: string, rows: { zoneId: string; minutes: number }[], at: number) => send('rachio/scheduled', { action: 'update', id, zones: rows, at: new Date(at).toISOString() }),
     cancelScheduled: (id: string) => send('rachio/scheduled', { action: 'cancel', id }),
     dismissScheduled: (id: string) => send('rachio/scheduled', { action: 'dismiss', id }),

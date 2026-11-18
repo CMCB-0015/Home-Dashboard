@@ -16,12 +16,16 @@
 
 import { randomUUID } from 'node:crypto'
 import { cacheGet, cacheSet } from './cache.ts'
-import { latestRachio, rachioCommand } from './rachio.ts'
+import { latestRachio, rachioCommand, scheduleRunPlan } from './rachio.ts'
 import type { ScheduledQuickRun } from '../src/types.ts'
 
 interface Saved {
   id: string
+  /** Zones and minutes (for a schedule run: Rachio's estimate when it was set up, shown only) */
   zones: { zoneId: string; minutes: number }[]
+  /** A whole Rachio schedule (a schedule quick-run button, e.g. "Lawns"): starts the schedule itself */
+  quickId?: string
+  schedule?: string
   at: number
   createdAt: number
   state: 'pending' | 'waiting' | 'missed'
@@ -66,6 +70,11 @@ export async function startQuickRunScheduler(update: () => void) {
   void tick()
 }
 
+/** Start a run: a schedule button starts the Rachio schedule (its times that day); otherwise the zones */
+const startRun = (r: Saved) => r.quickId
+  ? rachioCommand('quick', '', undefined, r.quickId)
+  : rachioCommand('start-zones', '', undefined, undefined, { zones: r.zones })
+
 async function tick() {
   if (!loaded || busy) return
   busy = true
@@ -90,9 +99,9 @@ async function tick() {
         break // one at a time; the next waits its turn
       }
       try {
-        await rachioCommand('start-zones', '', undefined, undefined, { zones: r.zones })
+        await startRun(r)
         runs = runs.filter((x) => x.id !== r.id)
-        console.log(`[rachio] scheduled quick run started (${r.zones.length} zone${r.zones.length > 1 ? 's' : ''})`)
+        console.log(`[rachio] scheduled quick run started (${r.schedule ? `${r.schedule} schedule` : `${r.zones.length} zone${r.zones.length > 1 ? 's' : ''}`})`)
         await save()
         break // the next one (if due) waits until this one has finished
       } catch (e) {
@@ -118,6 +127,7 @@ export function scheduledQuickRuns(zoneNames: Map<string, string>): ScheduledQui
     createdAt: new Date(r.createdAt).toISOString(),
     state: r.state,
     reason: r.reason ?? null,
+    schedule: r.schedule ?? null,
     zones: r.zones.map((z) => ({ zoneId: z.zoneId, name: zoneNames.get(z.zoneId) ?? 'Zone', minutes: z.minutes })),
   }))
 }
@@ -146,20 +156,31 @@ function checkTime(at: unknown): number {
 }
 
 /** Actions from the dashboard: add, update, cancel, run-now, dismiss */
-export async function scheduledCommand(action: string, b: { id?: string; zones?: unknown; at?: unknown }): Promise<void> {
+/** A schedule button's run: name + zones (Rachio's estimate) */
+async function checkSchedule(quickId: unknown) {
+  const plan = typeof quickId === 'string' ? await scheduleRunPlan(quickId) : null
+  if (!plan) throw new Error('That schedule isn’t matched in Rachio')
+  if (!plan.zones.length) throw new Error('That schedule has no zones')
+  return { quickId: quickId as string, schedule: plan.name, zones: plan.zones }
+}
+
+export async function scheduledCommand(action: string, b: { id?: string; zones?: unknown; quickId?: unknown; at?: unknown }): Promise<void> {
   if (!loaded) throw new Error('Panel is still starting — try again in a moment')
   const find = () => { const r = runs.find((x) => x.id === b.id); if (!r) throw new Error('That scheduled run is gone (it may have just started)'); return r }
 
   if (action === 'add') {
     if (runs.filter((r) => r.state !== 'missed').length >= MAX_PENDING) throw new Error(`Up to ${MAX_PENDING} scheduled quick runs at a time`)
-    runs.push({ id: randomUUID(), zones: checkZones(b.zones), at: checkTime(b.at), createdAt: Date.now(), state: 'pending' })
+    const what = b.quickId !== undefined ? await checkSchedule(b.quickId) : { zones: checkZones(b.zones) }
+    runs.push({ id: randomUUID(), ...what, at: checkTime(b.at), createdAt: Date.now(), state: 'pending' })
     await save(); return
   }
   if (action === 'update') {
     const r = find()
     if (r.state === 'waiting') throw new Error('It’s already due and waiting to start — cancel it or start it now')
-    const zones = checkZones(b.zones), at = checkTime(b.at)
-    Object.assign(r, { zones, at, state: 'pending', reason: undefined, failingSince: undefined })
+    // A schedule run only changes its time (Rachio's schedule decides the zones)
+    const what = r.quickId ? await checkSchedule(r.quickId) : { zones: checkZones(b.zones) }
+    const at = checkTime(b.at)
+    Object.assign(r, { ...what, at, state: 'pending', reason: undefined, failingSince: undefined })
     await save(); return
   }
   if (action === 'cancel' || action === 'dismiss') {
@@ -169,8 +190,8 @@ export async function scheduledCommand(action: string, b: { id?: string; zones?:
   }
   if (action === 'run-now') {
     const r = find()
-    const zones = b.zones !== undefined ? checkZones(b.zones) : r.zones
-    await rachioCommand('start-zones', '', undefined, undefined, { zones })
+    if (r.quickId || b.zones === undefined) await startRun(r)
+    else await rachioCommand('start-zones', '', undefined, undefined, { zones: checkZones(b.zones) })
     runs = runs.filter((x) => x.id !== r.id)
     await save(); return
   }

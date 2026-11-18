@@ -10,7 +10,7 @@ import { Pill, StatusPill } from '../../components/Buttons'
 import { nextRunText, useIrrigationActions, IrrigationControls } from '../../components/tiles/SmallTiles'
 import { QuickRunPicker, QuickRunSheet, DEFAULT_MINUTES } from '../../components/irrigation/QuickRunPicker'
 import { ScheduledRunSheet, useCancelWithUndo } from '../../components/irrigation/ScheduledRuns'
-import { whenLabel } from '../../components/irrigation/scheduled'
+import { runLabel, whenLabel } from '../../components/irrigation/scheduled'
 import type { IrrigationZone } from '../../types'
 
 const cfg = categories.irrigation
@@ -68,7 +68,7 @@ export function IrrigationPage() {
                   {warn ? <TriangleAlert size={17} style={{ color: '#f2c14e' }} /> : <Clock size={17} style={{ color: cfg.color }} />}
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-medium">{r.state === 'missed' ? 'Missed · ' : r.state === 'waiting' ? 'Waiting · ' : ''}{whenLabel(Date.parse(r.at))}</span>
-                    <span className="block truncate text-xs text-ink-dim">{r.reason && warn ? `${r.reason} · ` : ''}{r.zones.map((z) => `${z.name} ${z.minutes}m`).join(', ')}</span>
+                    <span className="block truncate text-xs text-ink-dim">{r.reason && warn ? `${r.reason} · ` : ''}{r.schedule ? runLabel(r) : r.zones.map((z) => `${z.name} ${z.minutes}m`).join(', ')}</span>
                   </span>
                   <ChevronRight size={16} className="text-ink-faint" />
                 </button>

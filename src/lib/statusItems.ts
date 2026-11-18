@@ -14,7 +14,7 @@
 //     Twilight's feed already leaves out launched and scrubbed ones.
 
 import { HOME, matchName } from '../config/home'
-import { whenLabel, zonesLabel } from '../components/irrigation/scheduled'
+import { whenLabel, runLabel } from '../components/irrigation/scheduled'
 import type { AlertItem, Category, CalendarEvent, HomeState, LaunchEvent, SportsEvent } from '../types'
 
 export type StatusKind = 'alert' | 'calendar' | 'sports' | 'launch' | 'motion' | 'quickrun' | 'vacrun'
@@ -145,7 +145,7 @@ export function statusItems(data: Pick<HomeState, 'alerts' | 'calendar' | 'sport
   //   "Quick run waiting · Lawns is watering · starts after", "Quick run missed · Panel was off at 6:00 AM · Run now?"
   const quick: StatusItem[] = (data.irrigation?.scheduled ?? []).map((q) => {
     const at = Date.parse(q.at), mins = Math.round((at - nowMs) / 60_000)
-    const what = zonesLabel(q.zones)
+    const what = runLabel(q)
     const href = `/irrigation?scheduled=${encodeURIComponent(q.id)}`
     if (q.state === 'missed') return { id: `quick-${q.id}`, kind: 'quickrun', label: 'Quick run missed', text: q.reason ?? what, detail: 'Run now?', href, warn: true }
     if (q.state === 'waiting') return { id: `quick-${q.id}`, kind: 'quickrun', label: 'Quick run waiting', text: q.reason ? `${q.reason} · starts after` : what, href, warn: true }

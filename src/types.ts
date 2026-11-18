@@ -265,6 +265,8 @@ export interface ScheduledQuickRun {
   /** pending = waiting for its time; waiting = due, but something else is watering / Rachio busy; missed = didn't start (Run now or dismiss) */
   state: 'pending' | 'waiting' | 'missed'
   reason: string | null
+  /** A whole Rachio schedule (e.g. "Lawns"): its name. Zones/minutes are Rachio's estimate; the schedule's own times that day are used */
+  schedule?: string | null
   zones: { zoneId: string; name: string; minutes: number }[]
 }
 

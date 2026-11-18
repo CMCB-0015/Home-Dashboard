@@ -192,6 +192,52 @@ export function QuickRunPicker({ zones, first, firstRows, onStart, onSchedule, s
   )
 }
 
+/**
+ * A whole Rachio schedule (a schedule chip, e.g. "Lawns"): its zones, then
+ * Starts: Now | Start at… — no minute wheel, the schedule sets its own times.
+ * At the time Panel starts the schedule itself, so that day's Rachio times win.
+ */
+export function SchedulePicker({ zoneNames, minutes, onStart, onSchedule, summary, initialAt, editId }: {
+  zoneNames: string[]
+  /** Rachio's estimate for the whole schedule */
+  minutes?: number
+  onStart: () => void
+  onSchedule: (at: number) => void
+  summary?: IrrigationSummary
+  initialAt?: number
+  editId?: string
+}) {
+  const [later, setLater] = useState(initialAt !== undefined)
+  const [at, setAt] = useState<number>(() => initialAt ?? defaultStart())
+  return (
+    <div className="flex flex-col gap-2.5">
+      <p className="text-[13px] text-ink-dim">{zoneNames.length ? zoneNames.join(', ') : 'The whole schedule'}{minutes ? ` · ~${minutes} min` : ''}</p>
+      <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Starts</p>
+      <div role="radiogroup" aria-label="When to start" className="grid grid-cols-2 rounded-xl border border-edge bg-surface p-[3px]">
+        {([false, true] as const).map((v) => (
+          <button key={String(v)} type="button" role="radio" aria-checked={later === v} onClick={() => setLater(v)}
+            className="flex min-h-10 items-center justify-center gap-1.5 rounded-[9px] text-[13.5px] font-medium transition-colors"
+            style={later === v ? { background: 'var(--color-edge)', color: 'var(--color-ink)' } : { color: 'var(--color-ink-dim)' }}>
+            {v ? <><Clock size={14} />Start at…</> : 'Now'}
+          </button>
+        ))}
+      </div>
+      {later && <StartAt value={at} onChange={setAt} summary={summary} minutes={minutes ?? 10} editId={editId}
+        note={minutes ? `done ~${timeOf(at + minutes * MINUTE)}` : undefined} />}
+      {later ? (
+        <button type="button" disabled={!startOk(at)} onClick={() => onSchedule(at)}
+          className="min-h-12 rounded-xl text-sm font-semibold text-bg active:scale-[0.98] disabled:opacity-40" style={{ background: CYAN }}>
+          {editId ? 'Save' : 'Schedule'} · {whenLabel(at)}
+        </button>
+      ) : (
+        <button type="button" onClick={onStart} className="min-h-12 rounded-xl text-sm font-semibold text-bg active:scale-[0.98]" style={{ background: CYAN }}>
+          {editId ? 'Start now' : 'Start'}{minutes ? ` · ~${minutes} min` : ''}
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ── Start at…: day + time ─────────────────────────────────────────────────
 const AHEAD_DAYS = 14
 export const startOk = (t: number) => t >= Date.now() + MINUTE && t <= Date.now() + AHEAD_DAYS * 86_400_000

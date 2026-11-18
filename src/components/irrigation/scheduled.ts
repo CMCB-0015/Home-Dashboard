@@ -35,6 +35,13 @@ export function zonesLabel(zones: { name: string; minutes: number }[]) {
   return zones.length === 1 ? `${zones[0].name} ${total}m` : `${zones.length} zones · ${total}m`
 }
 
+/** "Back Lawn 10m", "2 zones · 15m", or a schedule: "Lawns · 3 zones · ~19m" */
+export function runLabel(r: Pick<ScheduledQuickRun, 'zones' | 'schedule'>) {
+  if (!r.schedule) return zonesLabel(r.zones)
+  const n = r.zones.length
+  return `${r.schedule} · ${n} zone${n === 1 ? '' : 's'} · ~${totalMinutes(r.zones)}m`
+}
+
 export const totalMinutes = (zones: { minutes: number }[]) => zones.reduce((n, z) => n + z.minutes, 0)
 
 /** Pending (not missed) runs, soonest first */

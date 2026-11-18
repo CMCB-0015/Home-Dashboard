@@ -7,8 +7,8 @@ import { categories } from '../../lib/categories'
 import { clockTime } from '../../lib/format'
 import { useLongPress } from '../../lib/useLongPress'
 import { PAUSE_MINUTES, RAIN_EFFECT } from '../../config/irrigation'
-import { QuickRunPicker, QuickRunSheet, DEFAULT_MINUTES, type PickZone, type RunRow } from './QuickRunPicker'
-import { dayKey, firstScheduled, upcomingScheduled, totalMinutes, timeOf } from './scheduled'
+import { QuickRunPicker, QuickRunSheet, SchedulePicker, DEFAULT_MINUTES, type PickZone, type RunRow } from './QuickRunPicker'
+import { dayKey, firstScheduled, upcomingScheduled, totalMinutes, timeOf, runLabel } from './scheduled'
 import { Card } from '../Card'
 import { RainLayer } from './RainLayer'
 import { useIrrigationActions } from '../tiles/SmallTiles'
@@ -189,9 +189,9 @@ const sbtn = 'flex min-h-11 items-center justify-center rounded-[10px] border bo
  * on the chip's time, Add another zone) — the same one as the Irrigation page; it
  * needs more room than the card has. A schedule shows its zones and Start in the card.
  */
-function HoldPanel({ q, zones, summary, onStartSchedule, onStartZones, onScheduleZones, onClose }: {
+function HoldPanel({ q, zones, summary, onStartSchedule, onStartZones, onScheduleZones, onScheduleSchedule, onClose }: {
   q: QuickRun; zones: PickZone[]; summary: IrrigationSummary; onStartSchedule: () => void; onStartZones: (rows: RunRow[]) => void
-  onScheduleZones: (rows: RunRow[], at: number) => void; onClose: () => void
+  onScheduleZones: (rows: RunRow[], at: number) => void; onScheduleSchedule: (at: number) => void; onClose: () => void
 }) {
   if (q.kind !== 'schedule' && q.zoneIds?.[0]) {
     return (
@@ -200,12 +200,11 @@ function HoldPanel({ q, zones, summary, onStartSchedule, onStartZones, onSchedul
       </QuickRunSheet>
     )
   }
+  // A whole schedule (e.g. Lawns): same pop-up and Starts: Now | Start at… as a zone, without the minute wheel
   return (
-    <Panel title={q.label} onClose={onClose}>
-      {lastRanText(q.lastRunAt) && <p className="-mt-2 text-xs text-ink-dim">{lastRanText(q.lastRunAt)}</p>}
-      <p className="text-[13px] text-ink-dim">{q.zoneNames?.length ? q.zoneNames.join(', ') : 'The whole schedule'}{q.minutes ? ` · ~${q.minutes} min` : ''}</p>
-      <button onClick={onStartSchedule} className="min-h-12 rounded-xl text-sm font-semibold text-bg active:scale-[0.98]" style={{ background: CYAN }}>Start</button>
-    </Panel>
+    <QuickRunSheet eyebrow="Schedule" title={q.label} subtitle={lastRanText(q.lastRunAt) ?? undefined} onClose={onClose}>
+      <SchedulePicker zoneNames={q.zoneNames ?? []} minutes={q.minutes} summary={summary} onStart={onStartSchedule} onSchedule={onScheduleSchedule} />
+    </QuickRunSheet>
   )
 }
 
@@ -220,7 +219,7 @@ function DayPanel({ date, runs, quick, onSkip, onOpenQuick, onClose }: {
         <button key={q.id} type="button" onClick={() => onOpenQuick(q)} className="flex items-center justify-between gap-2.5 rounded-xl border bg-surface px-3 py-2.5 text-left" style={{ borderColor: CYAN }}>
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-sm font-medium leading-snug"><Clock size={13} style={{ color: CYAN }} />Quick run <span className="font-mono" style={{ color: CYAN }}>{timeOf(Date.parse(q.at))}</span></p>
-            <p className="mt-0.5 truncate text-xs text-ink-dim">{totalMinutes(q.zones)} min · {q.zones.map((z) => z.name).join(', ')}</p>
+            <p className="mt-0.5 truncate text-xs text-ink-dim">{q.schedule ? runLabel(q) : `${totalMinutes(q.zones)} min · ${q.zones.map((z) => z.name).join(', ')}`}</p>
           </div>
           <span className={`${sbtn} shrink-0 px-3.5`}>Details</span>
         </button>
@@ -346,7 +345,8 @@ export function IrrigationCard() {
     <>
       {RAIN_EFFECT && <RainLayer active={!!active && !paused} />}
       {hold && <HoldPanel q={hold} zones={pickZones} summary={s} onStartSchedule={() => startQuick(hold)} onStartZones={(rows) => { setHold(null); a.startZones(rows) }}
-        onScheduleZones={(rows, at) => { setHold(null); void a.scheduleRun(rows, at) }} onClose={() => setHold(null)} />}
+        onScheduleZones={(rows, at) => { setHold(null); void a.scheduleRun(rows, at) }}
+        onScheduleSchedule={(at) => { const id = hold.id; setHold(null); void a.scheduleSchedule(id, at) }} onClose={() => setHold(null)} />}
       {day !== null && week[day] && !active && (
         <DayPanel date={week[day].date} runs={week[day].runs} quick={upcomingScheduled(s).filter((q) => dayKey(Date.parse(q.at)) === week[day].date)}
           onSkip={(r) => skipRun(week[day].date, r)} onOpenQuick={openQuick} onClose={() => setDay(null)} />
@@ -396,7 +396,7 @@ export function IrrigationCard() {
               <p className="font-mono text-[22px] leading-tight @min-[300px]:text-[26px]">{whenText(firstQuick.at)}</p>
               <p className="mt-1 truncate text-[13px] text-ink-dim">
                 {firstQuick.state === 'waiting' && firstQuick.reason ? `${firstQuick.reason} · starts after`
-                  : ['Quick run', firstQuick.zones.length === 1 ? firstQuick.zones[0].name : `${firstQuick.zones.length} zones`, `${totalMinutes(firstQuick.zones)} min`].join(' · ')}
+                  : (firstQuick.schedule ? `Quick run · ${runLabel(firstQuick)}` : ['Quick run', firstQuick.zones.length === 1 ? firstQuick.zones[0].name : `${firstQuick.zones.length} zones`, `${totalMinutes(firstQuick.zones)} min`].join(' · '))}
               </p>
             </button>
           ) : (

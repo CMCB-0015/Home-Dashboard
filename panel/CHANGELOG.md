@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.25.1
+- Irrigation, **schedule chips get Start at… too**: holding a schedule chip (e.g. **Lawns**) now opens the same pop-up as a zone chip — its zones and estimate, then **Starts: Now | Start at…** (same day / time picker, done-by time, and the warning if it would run into another Rachio run). No minute wheel: the schedule sets its own times
+- At the time Panel starts the **Rachio schedule itself**, so that day's zone times win (seasonal adjustment included). Same rules as other scheduled quick runs: runs even with Rachio skips on, waits if something is watering, "Quick run missed · Run now" if the Lenovo was off
+- Shows as "Lawns · 3 zones · ~21m" on the status chip, the card's Next run and the Irrigation page. Details list the zones with Rachio's estimated times; Edit changes only the day and time
+
 ## 1.25.0
 - Vacuum, **scheduled cleans ("Start at…")**, kept by Panel on the Lenovo — not a Roborock app schedule. Map & rooms: a clock button beside Start, or press and hold any preset (page or card), opens a Start sheet: **Now** (default, unchanged) or **Start at…** — the Rachio quick run's day + type-or-pick time picker, in white, with the estimated finish. One time only, up to 14 days ahead, up to 10 pending
 - At the time Panel checks the robot first (Roborock app schedules can't be seen from Home Assistant): **already cleaning** → skipped; **cleaned the same rooms in the last 2 h** → skipped (Panel's own cleans by room; one Panel didn't follow — Roborock app, Panel off — counts as every room); **dock can't mop** (clean water empty / dirty water full, mopping runs only) or **battery under 20%** → skipped. Otherwise it starts exactly like Start. Panel off at the time → "missed", never started late. Skipped / missed stay 24 h with **Run now** / Dismiss

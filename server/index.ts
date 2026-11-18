@@ -130,7 +130,7 @@ const routes: Record<string, Handler> = {
   '/api/gcal/link-finish': act(async (b: { pasted?: string }) => { await linkFinish(String(b.pasted ?? '')); changed() }),
   '/api/gcal/unlink': act(async () => { unlink(); changed() }),
   // Quick runs set to start later: { action: add | update | cancel | dismiss | run-now, id?, zones?, at? }
-  '/api/rachio/scheduled': act(async (b: { action?: string; id?: string; zones?: unknown; at?: unknown }) => {
+  '/api/rachio/scheduled': act(async (b: { action?: string; id?: string; zones?: unknown; quickId?: unknown; at?: unknown }) => {
     if (!rachioConfigured()) throw new Error('Add your Rachio API key in the app settings')
     await scheduledCommand(String(b.action), b)
   }),

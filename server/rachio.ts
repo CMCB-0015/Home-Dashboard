@@ -650,6 +650,23 @@ const MAX_SECONDS = 3 * 3600
 /** Longest quick run from the dashboard, per zone (Connor: never more than an hour) */
 const MAX_QUICK_MINUTES = 60
 
+/**
+ * A schedule quick-run button (e.g. "Lawns"): its name and zone times as Rachio
+ * would run it today (same estimate as the Start button), or null if the button
+ * isn't a schedule. Used to show a scheduled "Start at…" run; at its time the run
+ * starts the schedule itself, so Rachio's times on that day win.
+ */
+export async function scheduleRunPlan(quickId: string): Promise<{ name: string; zones: { zoneId: string; minutes: number }[] } | null> {
+  const state = await cached(stateKey(), STATE_MAX_AGE, loadState)
+  const scheduleId = state.quick[quickId]?.scheduleId
+  if (!scheduleId) return null
+  const rule = state.rules?.[scheduleId]
+  const k = 1 + (rule?.seasonal ?? 0)
+  const times = state.runTimes?.[scheduleId] ?? (rule?.zoneRuns ?? []).map((z) => ({ zoneId: z.zoneId, seconds: z.seconds ? Math.round(z.seconds * k) : 0 }))
+  const name = QUICK_RUNS.find((x) => x.id === quickId)?.label ?? rule?.name ?? 'Schedule'
+  return { name, zones: times.map((z) => ({ zoneId: z.zoneId, minutes: Math.max(1, Math.round((z.seconds || 0) / 60)) })) }
+}
+
 export async function rachioCommand(action: string, zoneId: string, durationSeconds = 600, quickId?: string, extra: { minutes?: number; scheduleId?: string; date?: string; zones?: unknown } = {}): Promise<void> {
   if (action === 'start-zones') {
     // Quick run: one or more zones, each for its own minutes, in the order given
