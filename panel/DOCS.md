@@ -153,6 +153,11 @@ The map is Connor's Roborock map, cleaned up (`public/images/vacuum-map/`, one p
 room). To re-do it after the robot remaps the house: take a new Edit Room screenshot and
 have Claude clean it up again and re-measure the room tap areas (`vacuum.rooms[].rects`).
 
+**Scheduled cleans:** the clock beside Start on Map & rooms (or hold a preset) → Start at…
+Kept by Panel on the Lenovo, one time only. At the time it's skipped if the robot is already
+cleaning, cleaned the same rooms in the last 2 hours, the dock can't mop (for mopping runs) or
+the battery is under 20% — a chip says why, with Run now.
+
 **Drawn areas** need the map lined up with the robot's own map, once: Map & rooms → Areas →
 1 · robot on the dock → Read position; 2 · start a clean, pause it far from the dock (the far
 side of the Master bedroom), tap that spot. Saved on the Lenovo. Rooms work without it.

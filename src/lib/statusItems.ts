@@ -17,7 +17,7 @@ import { HOME, matchName } from '../config/home'
 import { whenLabel, zonesLabel } from '../components/irrigation/scheduled'
 import type { AlertItem, Category, CalendarEvent, HomeState, LaunchEvent, SportsEvent } from '../types'
 
-export type StatusKind = 'alert' | 'calendar' | 'sports' | 'launch' | 'motion' | 'quickrun'
+export type StatusKind = 'alert' | 'calendar' | 'sports' | 'launch' | 'motion' | 'quickrun' | 'vacrun'
 
 export interface StatusItem {
   id: string
@@ -65,7 +65,7 @@ function liveLink(alertId: string): string {
   return cam ? `/cameras?live=${encodeURIComponent(cam)}` : '/cameras'
 }
 
-export function statusItems(data: Pick<HomeState, 'alerts' | 'calendar' | 'sports' | 'launches'> & Partial<Pick<HomeState, 'irrigation'>>, now = new Date()): StatusItem[] {
+export function statusItems(data: Pick<HomeState, 'alerts' | 'calendar' | 'sports' | 'launches'> & Partial<Pick<HomeState, 'irrigation' | 'vacuum'>>, now = new Date()): StatusItem[] {
   const nowMs = now.getTime()
   const today = startOfDay(now), tomorrow = startOfDay(now, 1), dayAfter = startOfDay(now, 2), bigLimit = startOfDay(now, 4)
 
@@ -153,5 +153,16 @@ export function statusItems(data: Pick<HomeState, 'alerts' | 'calendar' | 'sport
     return { id: `quick-${q.id}`, kind: 'quickrun', label: 'Quick run scheduled', text: what, detail: whenLabel(at, nowMs), href }
   })
 
-  return [...alerts, ...quick, ...timed.map((t) => t.item)]
+  // Scheduled vacuum cleans (kept by Panel): "Vacuum scheduled · Bedrooms · Wed 10:00 AM", "Vacuum in 4 min",
+  //   amber "Vacuum skipped · clean water empty · Run now?", "Vacuum missed · Panel was off at 10:00 AM · Run now?"
+  const vac: StatusItem[] = (data.vacuum?.scheduled ?? []).map((q) => {
+    const at = Date.parse(q.at), mins = Math.round((at - nowMs) / 60_000)
+    const href = `/vacuum?scheduled=${encodeURIComponent(q.id)}`
+    if (q.state === 'skipped') return { id: `vac-${q.id}`, kind: 'vacrun', label: 'Vacuum skipped', text: q.reason ?? q.name, detail: 'Run now?', href, warn: true }
+    if (q.state === 'missed') return { id: `vac-${q.id}`, kind: 'vacrun', label: 'Vacuum missed', text: q.reason ?? q.name, detail: 'Run now?', href, warn: true }
+    if (mins <= 60) return { id: `vac-${q.id}`, kind: 'vacrun', label: mins <= 0 ? 'Vacuum starting' : `Vacuum in ${mins} min`, text: q.name, href }
+    return { id: `vac-${q.id}`, kind: 'vacrun', label: 'Vacuum scheduled', text: q.name, detail: whenLabel(at, nowMs), href }
+  })
+
+  return [...alerts, ...quick, ...vac, ...timed.map((t) => t.item)]
 }

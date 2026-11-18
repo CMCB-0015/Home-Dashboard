@@ -8,6 +8,9 @@ import { Switch } from '../../components/Sheet'
 import { FloorPlan, tint } from '../../components/vacuum/FloorPlan'
 import { AMBER, GREEN, describe, dockRows, finishText, useVacuumActions } from '../../components/vacuum/useVacuum'
 import type { VacuumRoom, VacuumState } from '../../types'
+import { useSearchParams } from 'react-router-dom'
+import { Clock } from 'lucide-react'
+import { HoldButton, NextCleanRow, VacScheduledSheet, VacStartSheet, useCancelCleanWithUndo, visibleScheduled, type StartCmd } from '../../components/vacuum/Scheduled'
 
 // ── Icons from the mockup ────────────────────────────────────────────────
 const ic = (children: ReactNode, extra: React.SVGProps<SVGSVGElement> = {}) => (
@@ -62,6 +65,12 @@ function MapPage({ v }: { v: VacuumState }) {
   const d = describe(v)
   const init = initial(v)
   const [sheet, setSheet] = useState<Tool | null>(null)
+  // Scheduled cleans: the Start sheet (clock beside Start, or hold a preset) and the details (?scheduled=<id>)
+  const [startSheet, setStartSheet] = useState<{ title: string; subtitle: string; cmd: StartCmd; now: () => void; editId?: string } | null>(null)
+  const [params, setParams] = useSearchParams()
+  const detail = (v.scheduled ?? []).find((x) => x.id === params.get('scheduled')) ?? null
+  const openDetail = (id: string | null) => setParams((p) => { const n = new URLSearchParams(p); if (id) n.set('scheduled', id); else n.delete('scheduled'); return n }, { replace: true })
+  const undoCancel = useCancelCleanWithUndo()
   const [vacOn, setVacOn] = useState(true)
   const [suction, setSuction] = useState(init.suction)
   const [passes, setPasses] = useState(1)
@@ -102,17 +111,21 @@ function MapPage({ v }: { v: VacuumState }) {
   const nothing = !vacOn && !mopOn
   const showEst = !d.running && !nothing && !!est
 
+  /** What Start would send for the rooms and settings picked now (no drawn areas) */
+  const pickedCmd = (): StartCmd => {
+    const order = v.rooms.map((r) => r.id)
+    return {
+      action: 'clean', vacuum: vacOn, mop: mopOn,
+      suction: SUCTION.find(([l]) => l === suction)?.[1], passes,
+      water, route: ROUTE.find(([l]) => l === route)?.[1],
+      rooms: [...sel].sort((x, y) => order.indexOf(x) - order.indexOf(y)),
+    }
+  }
   const start = async () => {
     if (nothing) return
     if (d.running) { void (v.state === 'paused' ? a.resume() : a.pause()); return }
     setSheet(null)
-    const order = v.rooms.map((r) => r.id)
-    const ok = await a.act({
-      action: 'clean', vacuum: vacOn, mop: mopOn,
-      suction: SUCTION.find(([l]) => l === suction)?.[1], passes: zones.length ? zonePasses : passes,
-      water, route: ROUTE.find(([l]) => l === route)?.[1],
-      rooms: [...sel].sort((x, y) => order.indexOf(x) - order.indexOf(y)), areas: zones,
-    }, undefined, 'map')
+    const ok = await a.act({ ...pickedCmd(), passes: zones.length ? zonePasses : passes, areas: zones }, undefined, 'map')
     if (ok) setMsg(`Started · ${what} · ${where}`)
   }
 
@@ -335,6 +348,13 @@ function MapPage({ v }: { v: VacuumState }) {
                 )
               })}
             </div>
+            {!d.running && !nothing && !zones.length && (
+              <button type="button" aria-label="Start at a later time" title="Start at…"
+                onClick={() => { setSheet(null); setStartSheet({ title: sel.length === 1 ? v.rooms.find((r) => r.id === sel[0])?.name ?? what : sel.length ? `${sel.length} rooms` : 'Full clean', subtitle: `${what} · ${where}`, cmd: pickedCmd(), now: () => void start() }) }}
+                className="order-last flex h-16 w-16 shrink-0 items-center justify-center rounded-[14px] border border-edge bg-surface-raised text-ink hover:bg-[#252e38]">
+                <Clock size={22} />
+              </button>
+            )}
             <button onClick={() => void start()} aria-disabled={nothing} disabled={!!a.starting}
               className="flex h-16 min-w-[220px] flex-1 items-center gap-3 rounded-[14px] px-[18px] text-left"
               style={{ background: nothing ? '#252e38' : '#e8edf2', color: nothing ? '#8493a1' : '#0e1318' }}>
@@ -351,11 +371,16 @@ function MapPage({ v }: { v: VacuumState }) {
 
         {/* Presets + dock */}
         <div className="flex w-full shrink-0 flex-col gap-2.5 lg:w-[320px]">
-          <span className="text-[13px] font-semibold text-ink-dim">Presets</span>
+          {visibleScheduled(v).length > 0 && (<>
+            <span className="text-[13px] font-semibold text-ink-dim">Scheduled</span>
+            {visibleScheduled(v).map((s) => <NextCleanRow key={s.id} s={s} onOpen={() => openDetail(s.id)} />)}
+          </>)}
+          <span className="text-[13px] font-semibold text-ink-dim">Presets <span className="font-normal text-ink-faint">· hold to start later</span></span>
           {[{ id: 'full', name: 'Full clean', sub: 'Vacuum + mop · whole home', color: '#e8edf2', available: true, reason: undefined as string | undefined, est: estimateRun(v, { rooms: [], vacuum: true, mop: true }) },
             ...v.presets.map((p) => ({ ...p, est: estimateRun(v, { rooms: p.rooms, vacuum: p.vacuum, mop: p.mop }), sub: `${p.sub}${p.rooms.length > 1 ? ' · ' + p.rooms.map((id) => v.rooms.find((r) => r.id === id)?.name.replace(/ (bedroom|room)$/i, '')).join(', ') : ''}` }))].map((p) => (
-            <button key={p.id} disabled={!p.available || !!a.starting || d.running} title={p.reason}
-              onClick={async () => { const ok = await (p.id === 'full' ? a.full() : a.preset(p.id)); if (ok) setMsg(`Started · ${p.name}`) }}
+            <HoldButton key={p.id} disabled={!p.available || !!a.starting || d.running} title={p.reason ?? 'Tap to start · hold to start later'}
+              onTap={async () => { const ok = await (p.id === 'full' ? a.full() : a.preset(p.id)); if (ok) setMsg(`Started · ${p.name}`) }}
+              onHold={() => setStartSheet({ title: p.name, subtitle: p.sub, cmd: p.id === 'full' ? { action: 'clean', rooms: [], vacuum: true, mop: true } : { action: 'preset', preset: p.id }, now: async () => { const ok = await (p.id === 'full' ? a.full() : a.preset(p.id)); if (ok) setMsg(`Started · ${p.name}`) } })}
               className="flex h-16 items-center gap-3 rounded-[14px] border border-edge bg-surface px-3.5 text-left hover:bg-surface-raised disabled:opacity-45">
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.color }} />
               <span className="flex min-w-0 flex-col gap-0.5">
@@ -365,7 +390,7 @@ function MapPage({ v }: { v: VacuumState }) {
               <span className="ml-auto shrink-0 font-mono text-sm font-semibold" style={{ color: p.est?.state === 'partial' ? AMBER : undefined }}>
                 {estMin(p.est) ?? <span className="text-ink-dim"><Play size={16} /></span>}
               </span>
-            </button>
+            </HoldButton>
           ))}
 
           <div className="mt-auto flex flex-col gap-2.5 rounded-[14px] border border-edge bg-surface p-4">
@@ -384,6 +409,16 @@ function MapPage({ v }: { v: VacuumState }) {
           </div>
         </div>
       </div>
+      {startSheet && (
+        <VacStartSheet v={v} title={startSheet.title} subtitle={startSheet.subtitle} cmd={startSheet.cmd}
+          edit={startSheet.editId ? (v.scheduled ?? []).find((x) => x.id === startSheet.editId) : undefined}
+          onStartNow={startSheet.now} onClose={() => setStartSheet(null)} />
+      )}
+      {detail && !startSheet && (
+        <VacScheduledSheet v={v} s={detail} onClose={() => openDetail(null)} onCancel={() => undoCancel.cancel(detail)}
+          onEdit={() => { const s = detail; openDetail(null); setStartSheet({ title: s.name, subtitle: 'Scheduled clean', cmd: s.cmd, editId: s.id, now: () => {} }) }} />
+      )}
+      {undoCancel.bar}
     </DetailLayout>
   )
 }

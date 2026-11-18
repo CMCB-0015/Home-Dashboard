@@ -37,6 +37,7 @@ const BUILD = (() => {
   catch { return 'dev' }
 })()
 import { vacuumState, vacuumAlerts } from './vacuum.ts'
+import { scheduledCleans } from './vacuumScheduled.ts'
 import { shoppingState, startShopping } from './shopping.ts'
 import { camerasState, cameraAlerts, guardMode, stargazingUntil, startCameras } from './cameras.ts'
 
@@ -134,7 +135,8 @@ export function buildState(): HomeState {
 
   const tesla = fromHa('vehicles', teslaState, demo.tesla ?? null)
 
-  const vacuum = fromHa('vacuum', vacuumState, demo.vacuum ?? null)
+  const vacuumRaw = fromHa('vacuum', vacuumState, demo.vacuum ?? null)
+  const vacuum = vacuumRaw && sources.vacuum === 'live' ? { ...vacuumRaw, scheduled: scheduledCleans() } : vacuumRaw
   if (sources.vacuum === 'live' && vacuum) for (const a of vacuumAlerts(vacuum)) alert('vacuum', a.severity, vacuum.name, a.message)
 
   // The card itself says when Bring! isn't responding; not worth a status-bar chip

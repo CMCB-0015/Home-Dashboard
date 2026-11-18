@@ -25,6 +25,7 @@
 //   POST /api/cameras/live/start | candidate | stop · GET /api/cameras/live/poll   live view (WebRTC set-up)
 //   POST /api/rachio/command          GET /api/rachio/debug
 //   POST /api/rachio/scheduled        (quick runs set to start later)
+//   POST /api/vacuum/scheduled        (vacuum cleans set to start later)
 
 import http from 'node:http'
 import { createReadStream, existsSync, statSync } from 'node:fs'
@@ -47,6 +48,7 @@ import { linkStart, linkFinish, unlink, gcalStatus, listCalendars, gcalLinked } 
 import { sonosCommand, playPreset, playOn, getQueue, jumpToQueue, refreshFavorites, sonosNotes, savePreset, renamePreset, deletePreset } from './sonos.ts'
 import { rachioCommand, rachioConfigured, rachioDebug, startRachioWatcher, pokeRachio, latestRachio, rachioError } from './rachio.ts'
 import { scheduledCommand, startQuickRunScheduler } from './rachioScheduled.ts'
+import { startVacuumScheduler, vacuumScheduledCommand } from './vacuumScheduled.ts'
 import { calendarError } from './calendar.ts'
 import { env } from './env.ts'
 import { tideNotes } from './tides.ts'
@@ -131,6 +133,10 @@ const routes: Record<string, Handler> = {
   '/api/rachio/scheduled': act(async (b: { action?: string; id?: string; zones?: unknown; at?: unknown }) => {
     if (!rachioConfigured()) throw new Error('Add your Rachio API key in the app settings')
     await scheduledCommand(String(b.action), b)
+  }),
+  // Cleans set to start later: { action: add | update | cancel | dismiss | run-now, id?, cmd?, at? }
+  '/api/vacuum/scheduled': act(async (b: { action?: string; id?: string; cmd?: unknown; at?: unknown }) => {
+    await vacuumScheduledCommand(String(b.action), b)
   }),
   '/api/rachio/debug': async () => {
     if (!rachioConfigured()) return fail('No Rachio API key set', 409)
@@ -267,6 +273,7 @@ onCalendarChange(changed)
 ha.start()
 startRachioWatcher(changed)
 if (rachioConfigured()) void startQuickRunScheduler(changed)
+void startVacuumScheduler(changed)
 startBackgroundRefresh(changed)
 
 server.listen(PORT, () => {

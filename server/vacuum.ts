@@ -122,6 +122,27 @@ export function solveCalibration(dockPlan: [number, number], dockRobot: [number,
   return { x: [dockRobot[0] - bx * dockPlan[0], bx], y: [dockRobot[1] - by * dockPlan[1], by] }
 }
 
+// ── Recent cleans (for scheduled cleans: "cleaned these rooms in the last 2 h") ──
+type Clean = { rooms?: string[]; endedAt: number }
+let cleanLog: Clean[] = []
+let lastCleanEndSeen: number | null = null
+void cacheGet<Clean[]>('vacuum-clean-log').then((l) => { if (l) cleanLog = [...l, ...cleanLog] })
+function logClean(c: Clean) {
+  cleanLog = [...cleanLog, c].filter((x) => Date.now() - x.endedAt < 24 * 3_600_000)
+  void cacheSet('vacuum-clean-log', cleanLog)
+}
+/**
+ * Cleans that ended since `since`: Panel's own (with their rooms), plus the
+ * robot's "last clean end" if Panel didn't follow that clean (Roborock app,
+ * Panel off) — rooms unknown, so it counts as the whole home.
+ */
+export function recentCleans(since: number): Clean[] {
+  const out = cleanLog.filter((c) => c.endedAt >= since)
+  const t = lastCleanEndSeen
+  if (t && Number.isFinite(t) && t >= since && !cleanLog.some((c) => Math.abs(c.endedAt - t) < 15 * 60_000)) out.push({ endedAt: t })
+  return out
+}
+
 // ── The run started from the dashboard ──────────────────────────────────
 type Run = NonNullable<VacuumState['run']>
 let run: Run | null = null
@@ -160,7 +181,11 @@ export function vacuumState(): VacuumState | null {
   const stuck = quietDockSince !== null && Date.now() - quietDockSince > 15 * 60_000
   const midRunWash = !!run && (washing || (jobOn && !stuck))
   // A run ends once the robot is back on the dock
-  if (run && (state === 'docked' || state === 'idle') && !midRunWash && Date.now() - Date.parse(run.startedAt) > 120_000) { run = null; void cacheSet('vacuum-run', null) }
+  if (run && (state === 'docked' || state === 'idle') && !midRunWash && Date.now() - Date.parse(run.startedAt) > 120_000) {
+    logClean({ rooms: [...run.rooms], endedAt: Date.now() })
+    run = null; void cacheSet('vacuum-run', null)
+  }
+  lastCleanEndSeen = ok(e.lastCleanEnd) ? Date.parse(e.lastCleanEnd!.state) : null
   // A clean started in the Roborock app (or on the robot): follow it as a full clean
   if (!run && (state === 'cleaning' || state === 'paused')) {
     const mode: CleanMode = String(e.vac.attributes.fan_speed) === 'off' ? 'mop' : ok(e.mopIntensity) && e.mopIntensity!.state === 'off' ? 'vac' : 'vacmop'

@@ -9,7 +9,7 @@ import { AppSheet } from './AppSheet'
 import { Clock } from 'lucide-react'
 
 const AMBER = 'var(--color-weather)'
-const DOT: Record<StatusItem['kind'], string> = { alert: AMBER, calendar: 'var(--color-calendar)', sports: 'var(--color-ink)', launch: '#cfdaff', motion: 'var(--color-cameras)', quickrun: 'var(--color-irrigation)' }
+const DOT: Record<StatusItem['kind'], string> = { alert: AMBER, calendar: 'var(--color-calendar)', sports: 'var(--color-ink)', launch: '#cfdaff', motion: 'var(--color-cameras)', quickrun: 'var(--color-irrigation)', vacrun: 'var(--color-vacuum)' }
 
 /** Launch chips (Option A, Nov 3, 2026): filled with Twilight's night-sky navy, pale star */
 const NAVY = '#070a1c'
@@ -80,17 +80,17 @@ function Chip({ item, onOpenPlanner, onOpenApp }: { item: StatusItem; onOpenPlan
     ? { background: NAVY, borderColor: NAVY_EDGE, boxShadow: '0 0 14px -4px rgba(120,150,230,0.35)' }
     : item.kind === 'motion'
       ? { borderColor: 'var(--color-cameras)', background: 'color-mix(in srgb, var(--color-cameras) 14%, var(--color-surface))' }
-      : item.kind === 'quickrun'
-        ? { borderColor: item.warn ? AMBER : 'color-mix(in srgb, var(--color-irrigation) 60%, transparent)' }
+      : item.kind === 'quickrun' || item.kind === 'vacrun'
+        ? { borderColor: item.warn ? AMBER : `color-mix(in srgb, var(--color-${item.kind === 'vacrun' ? 'vacuum' : 'irrigation'}) 60%, transparent)` }
         : { borderColor: alert ? AMBER : 'var(--color-edge)' }
   const body = (
     <>
       {launch
         ? <Star />
-        : item.kind === 'quickrun'
+        : item.kind === 'quickrun' || item.kind === 'vacrun'
           ? (item.warn
             ? <span style={{ background: AMBER, boxShadow: `0 0 6px ${AMBER}` }} className="h-2 w-2 shrink-0 rounded-full" />
-            : <Clock size={14} strokeWidth={2.2} aria-hidden className="shrink-0" style={{ color: 'var(--color-irrigation)' }} />)
+            : <Clock size={14} strokeWidth={2.2} aria-hidden className="shrink-0" style={{ color: item.kind === 'vacrun' ? '#c9d2db' : 'var(--color-irrigation)' }} />)
         : <span style={{ background: DOT[item.kind], boxShadow: alert ? `0 0 6px ${AMBER}` : item.kind === 'motion' ? '0 0 6px var(--color-cameras)' : undefined }} className={`h-2 w-2 shrink-0 rounded-full ${item.kind === 'motion' && !item.label ? 'animate-pulse' : ''}`} />}
       {item.label && <span className="shrink-0 font-semibold text-ink">{item.label}</span>}
       <span className="truncate font-medium text-ink">{item.text}</span>
@@ -108,6 +108,6 @@ function Chip({ item, onOpenPlanner, onOpenApp }: { item: StatusItem; onOpenPlan
       ? <button role="listitem" onClick={() => onOpenApp({ url: href, app: launch ? 'twilight' : 'brief', subtitle })} className={cls} style={style}>{body}</button>
       : <span role="listitem" className={cls} style={style}>{body}</span>
   }
-  const to = (item.kind === 'motion' || item.kind === 'quickrun') && item.href ? item.href : item.category && PAGES.has(item.category) ? categories[item.category].path : '/alerts'
+  const to = (item.kind === 'motion' || item.kind === 'quickrun' || item.kind === 'vacrun') && item.href ? item.href : item.category && PAGES.has(item.category) ? categories[item.category].path : '/alerts'
   return <Link role="listitem" to={to} className={cls} style={style}>{body}</Link>
 }

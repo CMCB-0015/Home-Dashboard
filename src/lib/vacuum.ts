@@ -91,6 +91,8 @@ export function demoVacuum(lastCleanAt: string): VacuumState {
     mopRoute: 'standard', mopRouteOptions: ['standard', 'deep', 'deep_plus', 'fast'],
     rooms: configRooms().map((r, i) => ({ ...r, segment: 16 + i })),
     presets: configPresets(), areas: false, lastCleanAt, finishAt: null,
+    // Demo: one clean set for tomorrow 10 AM, so the chip, card row and details show
+    scheduled: [((t) => ({ id: 'demo-1', at: t, createdAt: new Date().toISOString(), state: 'pending' as const, reason: null, name: 'Bedrooms', cmd: { action: 'preset' as const, preset: 'bedrooms' }, rooms: ['master', 'margaux', 'guest'] }))(((d) => { d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); return d.toISOString() })(new Date()))],
     estimates: { runs: { vacmop: { kitchen: 25 * 60 } }, rooms: { vacmop: { kitchen: 26 * 60, hall: 300, guest: 600, margaux: 540, master: 900, hallbath: 240, masterbath: 360 }, vac: { margaux: 420 } } },
   }
 }

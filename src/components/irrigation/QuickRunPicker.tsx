@@ -194,10 +194,10 @@ export function QuickRunPicker({ zones, first, firstRows, onStart, onSchedule, s
 
 // ── Start at…: day + time ─────────────────────────────────────────────────
 const AHEAD_DAYS = 14
-const startOk = (t: number) => t >= Date.now() + MINUTE && t <= Date.now() + AHEAD_DAYS * 86_400_000
+export const startOk = (t: number) => t >= Date.now() + MINUTE && t <= Date.now() + AHEAD_DAYS * 86_400_000
 
 /** The next whole hour (at least 15 min away) */
-function defaultStart() {
+export function defaultStart() {
   const d = new Date(Date.now() + 15 * MINUTE)
   d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1)
   return d.getTime()
@@ -212,7 +212,12 @@ const withMin = (t: number, min: number) => { const d = new Date(t); d.setHours(
  * picker in the irrigation color. Warns when the run would overlap a Rachio run
  * or another scheduled quick run, with the nearest clear times one tap away.
  */
-function StartAt({ value, onChange, summary, minutes, editId }: { value: number; onChange: (t: number) => void; summary?: IrrigationSummary; minutes: number; editId?: string }) {
+export function StartAt({ value, onChange, summary, minutes, editId, color = CYAN, note }: { value: number; onChange: (t: number) => void; summary?: IrrigationSummary; minutes: number; editId?: string
+  /** Accent (irrigation cyan by default; the vacuum uses white) */
+  color?: string
+  /** Extra words after "Tomorrow 7:00 AM · in 20 h" (e.g. the estimated finish) */
+  note?: string }) {
+  const tintC = (a: number) => `color-mix(in srgb, ${color} ${Math.round(a * 100)}%, transparent)`
   const [month, setMonth] = useState(false)
   const [typed, setTyped] = useState<string | null>(null)
   const today = dayKey(Date.now())
@@ -226,7 +231,7 @@ function StartAt({ value, onChange, summary, minutes, editId }: { value: number;
   const clash = summary && !past ? overlaps(summary, value, minutes, editId) : []
   const fix = summary && clash.length ? clearTimes(summary, value, minutes, editId) : null
   const chip = (on: boolean) => on
-    ? { background: cyan(0.16), borderColor: CYAN, color: CYAN, fontWeight: 600 }
+    ? { background: tintC(0.16), borderColor: color, color, fontWeight: 600 }
     : { background: 'var(--color-surface)', borderColor: 'var(--color-edge)', color: 'var(--color-ink)' }
   const cell = 'min-h-9 rounded-[9px] border font-mono text-[13px] transition-colors'
   const nearestHour = (h: number) => { const am = (h % 12) * 60 + mi, p = am + 720; return Math.abs(am - v) <= Math.abs(p - v) ? am : p }
@@ -241,7 +246,7 @@ function StartAt({ value, onChange, summary, minutes, editId }: { value: number;
             <button key={key} type="button" aria-pressed={on} onClick={() => { setMonth(false); onChange(withDay(value, key)) }}
               className="flex min-h-11 flex-col items-center justify-center rounded-[10px] border px-2.5 text-[12.5px] leading-tight" style={chip(on)}>
               {k === 0 ? 'Today' : k === 1 ? 'Tomorrow' : d.toLocaleDateString('en-US', { weekday: 'short' })}
-              <span className="text-[11px] font-normal" style={{ color: on ? CYAN : 'var(--color-ink-faint)' }}>{k < 2 ? d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }) : d.getDate()}</span>
+              <span className="text-[11px] font-normal" style={{ color: on ? color : 'var(--color-ink-faint)' }}>{k < 2 ? d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }) : d.getDate()}</span>
             </button>
           )
         })}
@@ -253,7 +258,7 @@ function StartAt({ value, onChange, summary, minutes, editId }: { value: number;
         <button type="button" aria-label="Pick another date" aria-expanded={month} onClick={() => setMonth((m) => !m)}
           className="flex min-h-11 w-11 items-center justify-center rounded-[10px] border" style={chip(month)}><CalendarDays size={17} /></button>
       </div>
-      {month && <MiniMonth value={picked} min={today} color={CYAN} onPick={(d) => { onChange(withDay(value, d)); setMonth(false) }} />}
+      {month && <MiniMonth value={picked} min={today} color={color} onPick={(d) => { onChange(withDay(value, d)); setMonth(false) }} />}
 
       <div className="flex items-center gap-2.5">
         <input value={typed ?? minLabel(v)} aria-label={`Start time: ${minLabel(v)}. Type a time or pick one`} inputMode="text" autoComplete="off" spellCheck={false}
@@ -262,10 +267,10 @@ function StartAt({ value, onChange, summary, minutes, editId }: { value: number;
           onBlur={() => setTyped(null)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur() } }}
           className="h-11 w-[112px] rounded-[10px] border px-2 text-center font-mono text-[15px] text-ink outline-none"
-          style={{ borderColor: bad ? AMBER_C : CYAN, background: 'var(--color-surface)' }} />
+          style={{ borderColor: bad ? AMBER_C : color, background: 'var(--color-surface)' }} />
         <span className="min-w-0 flex-1 text-xs font-semibold" aria-live="polite"
           style={{ color: bad || past || tooFar ? AMBER_C : '#4fd18b' }}>
-          {bad ? 'Not a time yet' : past ? 'That time has passed' : tooFar ? 'Up to 14 days ahead' : `${whenLabel(value)} · ${inLabel(value)}`}
+          {bad ? 'Not a time yet' : past ? 'That time has passed' : tooFar ? 'Up to 14 days ahead' : `${whenLabel(value)} · ${inLabel(value)}${note ? ` · ${note}` : ''}`}
         </span>
       </div>
       <div className="grid grid-cols-6 gap-1.5" role="group" aria-label="Hour">
@@ -316,7 +321,7 @@ export function QuickRunSheet({ title, subtitle, eyebrow = 'Quick run', onClose,
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center">
       <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/55" />
-      <div role="dialog" aria-label={`Quick run · ${title}`}
+      <div role="dialog" aria-label={`${eyebrow} · ${title}`}
         className="sheet-up relative flex max-h-[92vh] w-full max-w-md flex-col gap-3 overflow-y-auto rounded-t-2xl border-t border-edge bg-surface-raised px-5 pb-5 pt-3 shadow-[0_-12px_24px_rgba(0,0,0,0.35)]">
         <div className="h-1 w-9 shrink-0 self-center rounded-full bg-edge" />
         <div className="flex items-center justify-between gap-2">

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Panel } from '../irrigation/IrrigationCard'
 import { useHome } from '../../lib/useHome'
@@ -8,6 +8,7 @@ import { Card } from '../Card'
 import { FloorPlan, tint } from './FloorPlan'
 import { AMBER, GREEN, describe, dockRows, finishText, statsText, useVacuumActions } from './useVacuum'
 import type { VacuumState } from '../../types'
+import { HoldButton, NextCleanRow, VacStartSheet, visibleScheduled, type StartCmd } from './Scheduled'
 
 const DOCK_IMG = '/images/vacuum-dock.png'
 
@@ -48,6 +49,8 @@ export function VacuumCard() {
   const { data } = useHome()
   const a = useVacuumActions()
   const [presetsOpen, setPresetsOpen] = useState(false)
+  const [startSheet, setStartSheet] = useState<{ title: string; subtitle: string; cmd: StartCmd; now: () => void } | null>(null)
+  const navigate = useNavigate()
   if (!data) return null
   const v = data.vacuum
   if (!v) {
@@ -96,7 +99,8 @@ export function VacuumCard() {
       overlay={presetsOpen && !d.running ? (
         <Panel title="Presets" onClose={() => setPresetsOpen(false)}>
           {v.presets.map((p) => (
-            <button key={p.id} onClick={() => { setPresetsOpen(false); void a.preset(p.id) }} disabled={!p.available || busy} title={p.reason}
+            <HoldButton key={p.id} onTap={() => { setPresetsOpen(false); void a.preset(p.id) }} disabled={!p.available || busy} title={p.reason ?? 'Tap to start · hold to start later'}
+              onHold={() => { setPresetsOpen(false); setStartSheet({ title: p.name, subtitle: p.sub, cmd: { action: 'preset', preset: p.id }, now: () => void a.preset(p.id) }) }}
               className="flex min-h-12 items-center gap-3 rounded-xl border border-edge bg-surface px-3 text-left active:scale-[0.98] disabled:opacity-45">
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.color }} />
               <span className="flex min-w-0 flex-col">
@@ -112,7 +116,7 @@ export function VacuumCard() {
                   </span>
                 )
               })()}
-            </button>
+            </HoldButton>
           ))}
         </Panel>
       ) : undefined}>
@@ -170,6 +174,9 @@ export function VacuumCard() {
         </div>
       )}
 
+      {/* The next scheduled clean (or one that was skipped / missed): tap = its details */}
+      {visibleScheduled(v)[0] && <NextCleanRow s={visibleScheduled(v)[0]} onOpen={() => navigate(`/vacuum?scheduled=${encodeURIComponent(visibleScheduled(v)[0].id)}`)} />}
+
       {/* Presets: one row that opens a list (the card is narrow on the tablet) */}
       {!d.running && (
         <button onClick={() => setPresetsOpen(true)} aria-expanded={presetsOpen}
@@ -177,6 +184,7 @@ export function VacuumCard() {
           <span>Presets <span className="ml-1 text-xs text-ink-faint">{v.presets.length} saved</span></span><ChevronDown size={16} className="text-ink-faint" />
         </button>
       )}
+      {startSheet && <VacStartSheet v={v} title={startSheet.title} subtitle={startSheet.subtitle} cmd={startSheet.cmd} onStartNow={startSheet.now} onClose={() => setStartSheet(null)} />}
     </Card>
   )
 }

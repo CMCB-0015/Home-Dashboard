@@ -97,6 +97,21 @@ export interface VacuumRoom {
 }
 
 /** Average seconds, by mode: whole runs (by runKey) and single rooms (by room id) */
+/** A clean set to start later ("Start at…"), kept by Panel — not a Roborock schedule */
+export interface ScheduledClean {
+  id: string
+  at: string
+  createdAt: string
+  /** skipped: at the time the robot was busy / had just cleaned / the dock or battery wasn't ready (see reason) */
+  state: 'pending' | 'skipped' | 'missed'
+  reason: string | null
+  name: string
+  /** The Start command it will send */
+  cmd: { action: 'preset' | 'clean'; preset?: string; rooms?: string[]; vacuum?: boolean; mop?: boolean; suction?: string; water?: string; route?: string; passes?: number; name?: string }
+  /** Rooms it cleans (all rooms for a full clean) */
+  rooms: string[]
+}
+
 export interface VacuumEstimates {
   runs: Partial<Record<'vacmop' | 'vac' | 'mop', Record<string, number>>>
   rooms: Partial<Record<'vacmop' | 'vac' | 'mop', Record<string, number>>>
@@ -152,6 +167,8 @@ export interface VacuumState {
   areas: boolean
   /** Lining the map up with the robot's own (Areas → Line up the map) */
   lineUp?: { dockRead: boolean; done: boolean; fromConfig: boolean }
+  /** Cleans set to start later (kept by Panel on the Lenovo), soonest first */
+  scheduled?: ScheduledClean[]
   lastCleanAt: string | null
 }
 
