@@ -19,7 +19,7 @@ Click **Save**, then **Restart** the app after changing settings.
 
 ## Settings menu (1.27.0)
 
-The gear at the top right of either page opens Panel's Settings. Changes save on the Lenovo straight away (no Save / Restart). **Screensaver**: on/off, dim after 1–15 min, clock & text brightness, notification chip brightness (default 40%, 0% hides chips) and Preview now. The version at the bottom opens **System info** (architecture, the Lenovo's hardware with live memory / storage / load, Home Assistant versions, network, update and safety-net reference).
+The small gear after the page dots at the top of either page opens Panel's Settings (1.28.0; before that it sat beside the clock). Changes save on the Lenovo straight away (no Save / Restart). **Screensaver**: on/off, dim after 1–15 min, clock & text brightness, notification chip brightness (default 40%, 0% hides chips) and Preview now. **Roborock** (1.28.0): auto-empty dust bin on/off (shows what Panel last set — the robot can't report it), Empty mode, Empty now, run-time averages, and a Run times pop-up to see each run's time and date and remove anomalies (with Undo). The version at the bottom opens **System info** (architecture, the Lenovo's hardware with live memory / storage / load, Home Assistant versions, network, update and safety-net reference).
 
 ## Idle screensaver (experimental, 1.18.0)
 

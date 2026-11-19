@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.28.0
+- **Settings gear moved and shrunk** (option C): a tiny gear right after the two page dots at the top, in the same faint grey as an inactive dot. It no longer takes its own spot next to the clock. Still a finger-sized (invisible) tap area. On phones, where the dots are hidden, the gear sits there alone
+- **Settings → Roborock** (new section):
+  - **Auto-empty dust bin** on/off. Home Assistant has no switch for this, so Panel sends the robot's own command (`set_dust_collection_switch_status`). The robot can't report the setting back, so the switch shows what Panel last set. *Trial: if it errors, it gets revisited*
+  - **Empty mode** (Smart / Light / Balanced / Max, as the dock offers them) through the dock's Home Assistant control; greyed while auto-empty is off
+  - **Empty dust bin now** (robot must be on the dock)
+  - **Run times**: the average of the last 5 runs for each kind of run, with "unusual run" flagged
+  - **See and edit run times** opens a pop-up: Whole runs / Rooms, each time with its date, "Unusual" marked (more than a third off the others), and **Remove** for anomalies — no confirm step, with **Undo** until the pop-up closes. Averages and the card's "Done ~" use what's left
+- Learned run and room times now keep the date each run finished. Times learned before this update have no date and show as "Earlier"
+- **Removed the Supervisor access (`hassio_api`)** added in 1.27.0. System info gets the Home Assistant Core version through Panel's normal Home Assistant access; the OS version shows "—". Home Assistant may note the app's permissions changed
+- Settings → footer and System info show 1.28.0
+
 ## 1.27.2
 - Weather, **backup source**: when Open-Meteo doesn't answer, Panel now uses the **US National Weather Service** forecast (api.weather.gov, free, no key) automatically, and goes back to Open-Meteo as soon as it answers again (tried first at every 10-minute refresh). Everything on the weather card keeps working on the backup (hourly temperature, rain chance and inches, dew point, humidity, wind, conditions, the dew point card); sunrise and sunset are worked out by Panel. The backup has no UV index or air quality, so those chips are hidden while it's in use
 - **No more sample weather on the real setup**: the DEMO weather only shows when testing without Home Assistant. If neither source answers, the card keeps the last forecast for up to 3 hours, then says "Weather unavailable"

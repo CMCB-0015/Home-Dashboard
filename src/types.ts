@@ -152,6 +152,11 @@ export interface VacuumState {
   finishingUp?: boolean
   /** Learned times (seconds, average of the last 5) for estimating a run before it starts */
   estimates?: VacuumEstimates
+  /**
+   * Dock dust bin (Settings → Roborock). autoEmpty = what Panel last set (HA can't
+   * read it back; null = never set from Panel). emptyMode from the dock's Empty mode select.
+   */
+  dust?: { autoEmpty: boolean | null; emptyMode: string | null; emptyModeOptions: string[] }
   cleanMinutes: number | null
   cleanAreaFt2: number | null
   /** Current Roborock settings, as Roborock names them */

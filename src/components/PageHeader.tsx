@@ -40,19 +40,28 @@ export function PageHeader({ title, subtitle, page, onPageChange, showWeather }:
         </p>
       </div>
 
-      <div className="hidden pt-3 sm:flex" role="tablist" aria-label="Pages">
-        {[0, 1].map((p) => (
-          <button
-            key={p}
-            role="tab"
-            aria-selected={page === p}
-            aria-label={p === 0 ? 'Home page' : 'Calendar page'}
-            onClick={() => onPageChange(p as 0 | 1)}
-            className="flex h-6 w-7 items-center justify-center"
-          >
-            <span className={`block h-1.5 rounded-full transition-all ${page === p ? 'w-5 bg-ink' : 'w-1.5 bg-ink-faint'}`} />
-          </button>
-        ))}
+      {/* Page dots, then Settings: a tiny gear in the dots' faint grey (option C, 1.28.0).
+          The dots hide on phones; the gear stays. The tap area is finger-sized but invisible. */}
+      <div className="flex items-center pt-3">
+        <div className="hidden sm:flex" role="tablist" aria-label="Pages">
+          {[0, 1].map((p) => (
+            <button
+              key={p}
+              role="tab"
+              aria-selected={page === p}
+              aria-label={p === 0 ? 'Home page' : 'Calendar page'}
+              onClick={() => onPageChange(p as 0 | 1)}
+              className="flex h-6 w-7 items-center justify-center"
+            >
+              <span className={`block h-1.5 rounded-full transition-all ${page === p ? 'w-5 bg-ink' : 'w-1.5 bg-ink-faint'}`} />
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setSettingsOpen(true)} aria-label="Settings"
+          className="gear-button -my-[10px] -ml-2 flex h-11 w-11 items-center justify-center rounded-full border-0 bg-transparent text-ink-faint outline-none transition-colors hover:text-ink-dim active:text-ink"
+          style={settingsOpen ? { color: 'var(--color-ink)' } : undefined}>
+          <Settings size={14} strokeWidth={2} />
+        </button>
       </div>
 
       <div className="flex items-center gap-5">
@@ -66,12 +75,6 @@ export function PageHeader({ title, subtitle, page, onPageChange, showWeather }:
             <span className="ml-3 h-10 w-px bg-edge" />
           </button>
         )}
-        {/* Settings: just the gear, no box or outline around it */}
-        <button onClick={() => setSettingsOpen(true)} aria-label="Settings"
-          className="gear-button flex h-11 w-11 items-center justify-center rounded-full border-0 bg-transparent text-ink-dim outline-none transition-colors hover:text-ink active:text-ink"
-          style={settingsOpen ? { color: 'var(--color-ink)' } : undefined}>
-          <Settings size={22} strokeWidth={1.7} />
-        </button>
         <div className="text-right">
           <div className="font-mono text-[28px] leading-none">{time}</div>
           <div className="mt-1.5 text-xs text-ink-dim">{date}</div>

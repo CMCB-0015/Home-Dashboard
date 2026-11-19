@@ -32,6 +32,8 @@ const FIND = {
   currentRoom: ['sensor', /_current_room$/],
   mopIntensity: ['select', /_mop_intensity$/],
   mopMode: ['select', /_mop_mode$/],
+  /** Dock "Empty mode" (Smart / Light / Balanced / Max) — docks that empty the robot */
+  emptyMode: ['select', /_empty_mode$|_dust_collection_mode$/],
   /** On for the whole job, mop-wash trips to the dock included (Roborock's in_cleaning) */
   inCleaning: ['binary_sensor', /_cleaning$/],
 } as const satisfies Record<string, readonly [string, RegExp]>
@@ -50,13 +52,22 @@ function resolve(): ({ vac: HAState } & Partial<Record<Key, HAState>>) | null {
   const out: { vac: HAState } & Partial<Record<Key, HAState>> = { vac }
   for (const [key, [domain, re]] of Object.entries(FIND) as [Key, readonly [string, RegExp]][]) {
     // The dock can be its own device, so dock sensors are looked for everywhere
-    const pool = /dock|water|drying/i.test(key) ? all : mine
+    const pool = /dock|water|drying|empty/i.test(key) ? all : mine
     const hits = pool.filter((s) => s.entity_id.startsWith(domain + '.') && re.test(s.entity_id) && !(key === 'error' && /dock/.test(s.entity_id)))
       .sort((a, b) => a.entity_id.length - b.entity_id.length)
     if (hits[0]) out[key] = hits[0]
   }
   return out
 }
+
+// ── Auto-empty (Settings → Roborock, 1.28.0) ───────────────────────────
+// Home Assistant has no on/off entity for the dock's auto-empty, so Panel sends
+// the robot's own command (set_dust_collection_switch_status {status: 1|0},
+// same shape as the robot's other on/off settings) through vacuum.send_command.
+// HA can't read the setting back, so this is what Panel last set (null = never
+// set from Panel). Connor's call (Nov 19 2026): try it; if it errors, revisit.
+let autoEmpty: boolean | null = null
+void cacheGet<boolean>('vacuum-auto-empty').then((v) => { if (typeof v === 'boolean') autoEmpty = v })
 
 // ── Rooms: Roborock numbers from roborock.get_maps ─────────────────────
 const squash = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[’'`]/g, '').replace(/[^a-z0-9]/g, '')
@@ -258,6 +269,11 @@ export function vacuumState(): VacuumState | null {
     lastCleanAt: ok(e.lastCleanEnd) ? e.lastCleanEnd!.state : null,
     ...(() => { const f = showFinish ? finishAt(run, now) : null; return { finishAt: f?.at ?? null, finishingUp: !!f?.finishingUp } })(),
     estimates: estimateTables(),
+    dust: {
+      autoEmpty,
+      emptyMode: ok(e.emptyMode) ? e.emptyMode!.state : null,
+      emptyModeOptions: opts(e.emptyMode),
+    },
   }
 }
 
@@ -296,6 +312,9 @@ export interface VacuumCommand {
   name?: string
   /** lineup-point: where the robot is, in floor-plan units */
   at?: number[]
+  /** auto-empty: on/off; empty-mode: the option */
+  on?: boolean
+  mode?: string
 }
 
 const clampPasses = (n: unknown, max: number) => Math.min(max, Math.max(1, Math.round(Number(n) || 1)))
@@ -324,6 +343,22 @@ export async function vacuumCommand(b: VacuumCommand) {
   const vac = (service: string, data: Record<string, unknown> = {}) => ha.callService('vacuum', service, data, [id])
 
   switch (b.action) {
+    case 'auto-empty': {
+      if (typeof b.on !== 'boolean') throw new Error('On or off?')
+      await vac('send_command', { command: 'set_dust_collection_switch_status', params: { status: b.on ? 1 : 0 } })
+      autoEmpty = b.on; void cacheSet('vacuum-auto-empty', b.on); ha.notify()
+      return
+    }
+    case 'empty-mode': {
+      if (!e.emptyMode) throw new Error('The dock’s Empty mode isn’t in Home Assistant')
+      const pick = opts(e.emptyMode).find((o) => o.toLowerCase() === String(b.mode ?? '').toLowerCase())
+      if (!pick) throw new Error('That Empty mode isn’t offered by the dock')
+      return ha.callService('select', 'select_option', { option: pick }, [e.emptyMode.entity_id])
+    }
+    case 'empty-now': {
+      if (e.vac.state !== 'docked') throw new Error('The robot has to be on the dock to empty it')
+      return vac('send_command', { command: 'app_start_collect_dust' })
+    }
     case 'pause': return vac('pause')
     case 'resume': return vac('start')
     case 'dock': markRunCut(); return vac('return_to_base')

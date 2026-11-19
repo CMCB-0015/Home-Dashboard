@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronRight, CloudSun, Moon, X } from 'lucide-react'
+import { RoborockSection } from './RoborockSection'
 import { useHome } from '../../lib/useHome'
 import { SCREENSAVER_PREVIEW_EVENT } from '../IdleOverlay'
 import { SystemInfo } from './SystemInfo'
@@ -37,6 +38,7 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
         <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto px-6 pb-4">
           <ScreensaverSection />
           <WeatherSection />
+          <RoborockSection />
         </div>
 
         <div className="border-t border-[#222b34] px-6 pb-4 pt-3">
@@ -54,10 +56,10 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
 }
 
 /** An expandable section: icon, title, one-line summary, chevron */
-function Section({ icon, title, summary, open, onToggle, children }:
+export function Section({ icon, title, summary, open, onToggle, children }:
   { icon: ReactNode; title: string; summary: string; open: boolean; onToggle: () => void; children: ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-[14px] border border-[#222b34] bg-surface">
+    <div className="shrink-0 overflow-hidden rounded-[14px] border border-[#222b34] bg-surface">
       <button onClick={onToggle} aria-expanded={open}
         className="flex min-h-16 w-full items-center gap-3.5 px-4 py-3 text-left">
         <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px] bg-[#1b232b] text-[#a7b4c2]">{icon}</span>

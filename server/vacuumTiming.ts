@@ -32,7 +32,18 @@ import { HOME } from '../src/config/home.ts'
 import type { VacuumEstimates } from '../src/types.ts'
 
 export type CleanMode = 'vacmop' | 'vac' | 'mop'
-type Samples = Partial<Record<CleanMode, Record<string, number[]>>>
+/** One learned time: seconds, and when the run finished (none for runs learned before 1.28.0) */
+export interface Sample { s: number; at?: string }
+type Samples = Partial<Record<CleanMode, Record<string, Sample[]>>>
+/** Before 1.28.0 samples were bare seconds; read either */
+function norm(l: unknown): Samples {
+  const out: Samples = {}
+  for (const [m, keys] of Object.entries((l ?? {}) as Record<string, Record<string, unknown[]>>)) {
+    out[m as CleanMode] = Object.fromEntries(Object.entries(keys ?? {}).map(([k, xs]) =>
+      [k, (Array.isArray(xs) ? xs : []).map((x) => (typeof x === 'number' ? { s: x } : x as Sample)).filter((x) => Number.isFinite(x?.s))]))
+  }
+  return out
+}
 
 const KEEP = 5
 const MIN_ROOM_S = 30          // shorter than this = it just passed through
@@ -41,14 +52,14 @@ const MAX_S = 4 * 3600
 
 // Seed (Connor, Nov 14 2026): a Kitchen-only vacuum + mop run took 24 min.
 // It counts as the first of five, not a fixed time.
-const SEED_RUNS: Samples = { vacmop: { kitchen: [24 * 60] } }
+const SEED_RUNS: Samples = { vacmop: { kitchen: [{ s: 24 * 60 }] } }
 
 let roomTimes: Samples = {}
 let runTimes: Samples = {}
 // v2: the old per-room times (v1) included drive-throughs, so they're dropped once
 void cacheDelete('vacuum-room-times')
-void cacheGet<Samples>('vacuum-room-times-v2').then((l) => { if (l) roomTimes = merge(l, roomTimes) })
-void cacheGet<Samples>('vacuum-run-times').then((l) => { runTimes = merge(l ?? SEED_RUNS, runTimes) })
+void cacheGet<unknown>('vacuum-room-times-v2').then((l) => { if (l) roomTimes = merge(norm(l), roomTimes) })
+void cacheGet<unknown>('vacuum-run-times').then((l) => { runTimes = merge(l ? norm(l) : SEED_RUNS, runTimes) })
 // One-time clean-up (1.23.1, Connor's call): Kitchen/Living Room runs cut short at their first mop
 // wash were learned as 5 and 1 min. Drop Kitchen samples under 10 min from run and room times.
 void (async () => {
@@ -58,7 +69,7 @@ void (async () => {
     let changed = false
     for (const byKey of Object.values(s)) {
       const xs = byKey?.kitchen
-      if (xs?.some((x) => x < 600)) { byKey!.kitchen = xs.filter((x) => x >= 600); changed = true }
+      if (xs?.some((x) => x.s < 600)) { byKey!.kitchen = xs.filter((x) => x.s >= 600); changed = true }
     }
     if (changed) { void cacheSet(key, s); console.log(`[vacuum] dropped short Kitchen samples from ${key}`) }
   }
@@ -88,7 +99,7 @@ function merge(a: Samples, b: Samples): Samples {
   return out
 }
 
-const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+const mean = (xs: Sample[]) => xs.reduce((a, b) => a + b.s, 0) / xs.length
 
 export { runKey }
 
@@ -103,7 +114,7 @@ export const typicalRunSeconds = (mode: CleanMode, rooms: string[], reps: number
 
 function add(s: Samples, cacheKey: string, mode: CleanMode, key: string, secs: number) {
   const byKey = (s[mode] ??= {})
-  byKey[key] = [...(byKey[key] ?? []), Math.round(secs)].slice(-KEEP)
+  byKey[key] = [...(byKey[key] ?? []), { s: Math.round(secs), at: new Date().toISOString() }].slice(-KEEP)
   void cacheSet(cacheKey, s)
 }
 
@@ -270,7 +281,7 @@ export function timingNotes() {
     const out: Record<string, Record<string, string>> = {}
     for (const [mode, keys] of Object.entries(s)) {
       out[mode] = Object.fromEntries(Object.entries(keys ?? {}).map(([k, xs]) =>
-        [k, `${Math.round(mean(xs) / 60)} min avg of ${xs.length} (${xs.map((x) => Math.round(x / 60)).join(', ')})`]))
+        [k, `${Math.round(mean(xs) / 60)} min avg of ${xs.length} (${xs.map((x) => Math.round(x.s / 60)).join(', ')})`]))
     }
     return out
   }
@@ -284,5 +295,39 @@ export function estimateTables(): VacuumEstimates {
   return { runs: avg(runTimes), rooms: avg(roomTimes) }
 }
 
+/** Settings → Roborock → Run times: every learned time, newest last, per mode and run/room key */
+export function timingList() {
+  const list = (src: Samples) => Object.entries(src).flatMap(([mode, keys]) =>
+    Object.entries(keys ?? {}).filter(([, xs]) => xs.length).map(([key, xs]) => ({
+      mode: mode as CleanMode, key, avg: Math.round(mean(xs)),
+      samples: xs.map((x) => ({ s: x.s, at: x.at ?? null })),
+    })))
+  return { runs: list(runTimes), rooms: list(roomTimes) }
+}
+
+/** Remove one learned time (an anomaly or a bad run). index = its place in that list, oldest first. */
+export function removeTiming(kind: 'runs' | 'rooms', mode: CleanMode, key: string, index: number, at?: string | null) {
+  const src = kind === 'rooms' ? roomTimes : runTimes
+  const xs = src[mode]?.[key]
+  if (!xs || !xs[index]) throw new Error('That run is no longer in the list')
+  // Guard against the list having moved on (a new run came in) since the screen was drawn
+  if ((xs[index].at ?? null) !== (at ?? null)) throw new Error('The list changed — close and open Run times again')
+  const removed = xs.splice(index, 1)[0]
+  if (!xs.length) delete src[mode]![key]
+  void cacheSet(kind === 'rooms' ? 'vacuum-room-times-v2' : 'vacuum-run-times', src)
+  return removed
+}
+
+/** Put a removed time back where it was (Undo) */
+export function restoreTiming(kind: 'runs' | 'rooms', mode: CleanMode, key: string, index: number, sample: Sample) {
+  if (!Number.isFinite(sample?.s)) throw new Error('Nothing to put back')
+  const src = kind === 'rooms' ? roomTimes : runTimes
+  const byKey = (src[mode] ??= {})
+  const xs = (byKey[key] ??= [])
+  xs.splice(Math.min(Math.max(0, index), xs.length), 0, { s: Math.round(sample.s), ...(sample.at ? { at: sample.at } : {}) })
+  byKey[key] = xs.slice(-KEEP)
+  void cacheSet(kind === 'rooms' ? 'vacuum-room-times-v2' : 'vacuum-run-times', src)
+}
+
 /** Tests only */
-export function _resetTiming(rooms: Samples = {}, runs: Samples = {}) { roomTimes = rooms; runTimes = runs; track = null }
+export function _resetTiming(rooms: unknown = {}, runs: unknown = {}) { roomTimes = norm(rooms); runTimes = norm(runs); track = null }

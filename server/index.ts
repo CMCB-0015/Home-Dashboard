@@ -28,6 +28,7 @@
 //   POST /api/vacuum/scheduled        (vacuum cleans set to start later)
 //   POST /api/settings                Settings menu (screensaver), saved on the Lenovo
 //   GET  /api/system                  live values for the System info window
+//   GET/POST /api/vacuum/timing       learned run / room times: list, remove one, put it back
 
 import http from 'node:http'
 import { createReadStream, existsSync, statSync } from 'node:fs'
@@ -56,6 +57,7 @@ import { env } from './env.ts'
 import { tideNotes } from './tides.ts'
 import { weatherStatus } from './weather.ts'
 import { loadSettings, saveSettings, systemInfo } from './settings.ts'
+import { removeTiming, restoreTiming, timingList, type CleanMode, type Sample } from './vacuumTiming.ts'
 
 const PORT = Number(env('PANEL_PORT') ?? 8099)
 const DIST = resolve(env('PANEL_DIST') ?? 'dist')
@@ -90,6 +92,16 @@ const act = (fn: (body: any) => Promise<unknown>): Handler => async (req) => {
     return fail(message, 502)
   }
 }
+
+// Settings → Roborock → Run times: remove a learned time, or put it back (Undo)
+const timingEdit = act(async (b: { action?: string; kind?: 'runs' | 'rooms'; cleanMode?: CleanMode; key?: string; index?: number; sampleAt?: string | null; sample?: Sample }) => {
+  if (b.kind !== 'runs' && b.kind !== 'rooms') throw new Error('Runs or rooms?')
+  if (!b.cleanMode || !['vacmop', 'vac', 'mop'].includes(b.cleanMode) || !b.key || !Number.isInteger(b.index)) throw new Error('Which run?')
+  if (b.action === 'remove') removeTiming(b.kind, b.cleanMode, b.key, b.index!, b.sampleAt)
+  else if (b.action === 'restore') restoreTiming(b.kind, b.cleanMode, b.key, b.index!, b.sample!)
+  else throw new Error('Unknown action')
+  changed()
+})
 
 const routes: Record<string, Handler> = {
   '/api/home-state': async () => ok(buildState()),
@@ -179,6 +191,8 @@ const routes: Record<string, Handler> = {
   },
 
   '/api/vacuum/command': act((b) => vacuumCommand(b)),
+  // Settings → Roborock → Run times (1.28.0): list learned times; remove one / put it back
+  '/api/vacuum/timing': async (req) => (req.method === 'GET' ? ok(timingList()) : timingEdit(req)),
   '/api/tesla/command': act((b) => teslaCommand(b)),
   '/api/cameras/command': act(async (b) => { await camerasCommand(b); changed() }),
   '/api/cameras/live/ice': async (req) => ok({ iceServers: await iceServers(new URL(req.url).searchParams.get('camera') ?? '') }),
