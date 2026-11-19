@@ -95,6 +95,8 @@ export async function getWeather(): Promise<Weather> {
     rainChancePct: H.precipitation_probability[i] ?? 0,
     rainIn: Math.round((H.precipitation[i] ?? 0) * 100) / 100,
     icon: describe(H.weather_code[i] ?? 0, H.is_day?.[i] === 1).icon,
+    ...(typeof H.dew_point_2m?.[i] === 'number' ? { dewF: Math.round(H.dew_point_2m[i] * 10) / 10 } : {}),
+    ...(typeof H.relative_humidity_2m?.[i] === 'number' ? { humidityPct: Math.round(H.relative_humidity_2m[i]) } : {}),
   }))
 
   const D = f.daily
@@ -117,6 +119,7 @@ export async function getWeather(): Promise<Weather> {
       uvIndex: Math.round(D.uv_index_max[i] ?? 0),
       humidityMin: hum.length ? Math.round(Math.min(...hum)) : 0,
       humidityMax: hum.length ? Math.round(Math.max(...hum)) : 0,
+      humidityAvg: hum.length ? Math.round(hum.reduce((a, b) => a + b, 0) / hum.length) : 0,
       dewPointF: dew.length ? Math.round(dew.reduce((a, b) => a + b, 0) / dew.length) : 0,
     }
   })

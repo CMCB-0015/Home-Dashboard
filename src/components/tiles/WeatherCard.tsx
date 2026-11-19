@@ -8,6 +8,7 @@ import { isTonight, skyNow, tonightSky } from '../../lib/sky'
 import { SkyChart, SunArc, useWidth } from '../weather/SkyChart'
 import { RadarView } from '../weather/RadarView'
 import { TidesView, tidesReady } from '../weather/TidesView'
+import { DewDetail } from '../weather/DewDetail'
 import { PAGE_EVENT } from '../../lib/tides'
 import { IDLE_EVENT } from '../IdleOverlay'
 import type { Weather, WeatherHour } from '../../types'
@@ -35,6 +36,11 @@ export function skyTone(icon: string, isDay: boolean) {
 
 const chip = 'flex h-7 items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.05] px-3 text-xs text-[#c5ced6]'
 const val = 'font-mono font-medium text-ink'
+// Humidity / dew point chips can be tapped: a thin green ring says so (Option A, Nov 18). The browser's own
+// square tap flash is turned off; the chip's own rounded fill shows the press instead.
+const tapChip = 'flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs text-[#c5ced6] transition-colors [-webkit-tap-highlight-color:transparent] outline-none focus-visible:ring-2 focus-visible:ring-[#8fd6b0]/60 active:bg-[#8fd6b0]/20'
+const tapRest = { borderColor: 'rgba(143,214,176,.5)', background: 'rgba(255,255,255,.05)' }
+const tapOn = { borderColor: 'rgba(143,214,176,.9)', background: 'rgba(143,214,176,.12)' }
 const dayName = (date: string, full = false) => new Date(`${date}T12:00:00`).toLocaleDateString('en-US', full ? { weekday: 'long', month: 'short', day: 'numeric' } : { weekday: 'short' })
 const clock = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 
@@ -129,6 +135,10 @@ function DayPanel({ day, hours, onClose, tonight = false }: { day: Weather['dail
     return () => window.removeEventListener('keydown', key)
   }, [onClose])
   const tone = skyTone(day.icon, !tonight)
+  // Humidity / dew point detail, opened from either chip
+  const [detail, setDetail] = useState<'humidity' | 'dew' | null>(null)
+  const canDetail = hours.filter((h) => typeof h.dewF === 'number').length >= 6
+  const tap = (k: 'humidity' | 'dew') => setDetail((d) => (d === k ? null : k))
   const wettest = hours.reduce<WeatherHour | null>((a, h) => (h.rainIn > (a?.rainIn ?? 0) ? h : a), null)
   const summary = (day.rainIn ?? 0) >= 0.01
     ? `${day.condition ?? 'Rain'}${wettest ? `, heaviest around ${new Date(wettest.time).toLocaleTimeString('en-US', { hour: 'numeric' })}` : ''} · ${day.rainIn!.toFixed(2)} in`
@@ -153,11 +163,21 @@ function DayPanel({ day, hours, onClose, tonight = false }: { day: Weather['dail
           <span className={chip}>Peak chance <b className={val}>{day.rainChancePct}%</b></span>
           {day.windMph !== undefined && <span className={chip}>Wind <b className={val}>{day.windDir} {day.windMph}</b> · gusts <b className={val}>{day.gustMph}</b></span>}
           {day.uvIndex !== undefined && <span className={chip}>UV <b className={val}>{day.uvIndex}</b> {uvLabel(day.uvIndex)}</span>}
-          {day.humidityMax !== undefined && <span className={chip}>Humidity <b className={val}>{day.humidityMin === day.humidityMax ? `${day.humidityMax}%` : `${day.humidityMin}–${day.humidityMax}%`}</b></span>}
-          {day.dewPointF !== undefined && <span className={chip}>Dew point <b className={val}>{day.dewPointF}°</b></span>}
+          {day.humidityMax !== undefined && (() => {
+            const avg = day.humidityAvg ?? Math.round(((day.humidityMin ?? day.humidityMax) + day.humidityMax) / 2)
+            return canDetail
+              ? <button type="button" className={tapChip} style={detail === 'humidity' ? tapOn : tapRest} aria-expanded={detail === 'humidity'} onClick={() => tap('humidity')}
+                  aria-label={`Humidity, average ${avg}%. Show humidity and dew point through the day`}>Humidity <b className={val}>{avg}%</b></button>
+              : <span className={chip}>Humidity <b className={val}>{avg}%</b></span>
+          })()}
+          {day.dewPointF !== undefined && (canDetail
+            ? <button type="button" className={tapChip} style={detail === 'dew' ? tapOn : tapRest} aria-expanded={detail === 'dew'} onClick={() => tap('dew')}
+                aria-label={`Dew point, average ${day.dewPointF}°. Show humidity and dew point through the day`}>Dew point <b className={val}>{day.dewPointF}°</b></button>
+            : <span className={chip}>Dew point <b className={val}>{day.dewPointF}°</b></span>)}
           {day.sunrise && <span className={chip}>Sunrise <b className={val}>{clock(day.sunrise)}</b></span>}
           {day.sunset && <span className={chip}>Sunset <b className={val}>{clock(day.sunset)}</b></span>}
         </div>
+        {detail && canDetail && <DewDetail day={day} hours={hours} />}
         {hours.length > 0 && (
           <>
             <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">Hourly · temperature, rain chance and inches per 3 h</p>

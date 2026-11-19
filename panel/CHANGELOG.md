@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.26.0
+- Weather, a day's details: **Humidity** and **Dew point** chips show the day's **average** and wear a thin green ring: they're the two chips you can tap. Tapping either opens a **humidity / dew point card** under the chips (tap again to close). The browser's square tap flash is off on these chips, so the press shows as the chip's own rounded fill
+- The card: the day's **ranges and averages** for dew point and humidity on top, then **dew point under temperature, hour by hour**, with the gap between them shaded, nights shaded, and a scale of how it feels (dry / comfortable / sticky / muggy). When the two lines come within 3°, a note above the plot says when ("Only 1° apart 12–6 AM · dew or fog likely"). Below: the lowest and highest dew point with times, and a one-line read of the day (steady, or a big swing as dry air mixes down)
+- All text stays outside the plot: ° marks on the left, band names on the right (centered on their bands), the note above, hours below. On a phone the band names move to a key under the plot
+- Hourly dew point and humidity now come along with the forecast (Open-Meteo)
+
 ## 1.25.1
 - Irrigation, **schedule chips get Start at… too**: holding a schedule chip (e.g. **Lawns**) now opens the same pop-up as a zone chip — its zones and estimate, then **Starts: Now | Start at…** (same day / time picker, done-by time, and the warning if it would run into another Rachio run). No minute wheel: the schedule sets its own times
 - At the time Panel starts the **Rachio schedule itself**, so that day's zone times win (seasonal adjustment included). Same rules as other scheduled quick runs: runs even with Rachio skips on, waits if something is watering, "Quick run missed · Run now" if the Lenovo was off

@@ -409,6 +409,10 @@ export interface WeatherHour {
   /** Rain in this hour, inches */
   rainIn: number
   icon: WeatherIcon
+  /** Dew point, °F (one decimal) */
+  dewF?: number
+  /** Relative humidity, % */
+  humidityPct?: number
 }
 
 export interface WeatherDay {
@@ -420,6 +424,9 @@ export interface WeatherDay {
   windMph: number; windDir: string; gustMph: number
   uvIndex: number
   humidityMin: number; humidityMax: number
+  /** The day's average humidity, % */
+  humidityAvg?: number
+  /** The day's average dew point, °F */
   dewPointF: number
 }
 
