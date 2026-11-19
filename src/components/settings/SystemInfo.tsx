@@ -113,7 +113,7 @@ export function SystemInfo({ onClose }: { onClose: () => void }) {
               <Arrow />
               <div className="flex flex-col gap-2">
                 <Box label="Through Home Assistant" tight>Hue · Sonos · Nest · Eufy (eufy-sdk bridge) · Roborock · Tesla (Teslemetry) · Bring! · Google Calendar (read) · LG / Frame TVs</Box>
-                <Box label="Panel talks to directly" tight>Rachio · Google Calendar (add/edit) · Google Maps · Open-Meteo · NOAA tides · NWS radar · The Brief · Twilight</Box>
+                <Box label="Panel talks to directly" tight>Rachio · Google Calendar (add/edit) · Google Maps · Open-Meteo (weather) · National Weather Service (backup weather, radar) · NOAA tides · The Brief · Twilight</Box>
               </div>
             </div>
             <p className="mt-2 text-xs text-ink-dim">Local only: nothing on the internet can reach into the house. Panel only calls out.</p>

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.27.2
+- Weather, **backup source**: when Open-Meteo doesn't answer, Panel now uses the **US National Weather Service** forecast (api.weather.gov, free, no key) automatically, and goes back to Open-Meteo as soon as it answers again (tried first at every 10-minute refresh). Everything on the weather card keeps working on the backup (hourly temperature, rain chance and inches, dew point, humidity, wind, conditions, the dew point card); sunrise and sunset are worked out by Panel. The backup has no UV index or air quality, so those chips are hidden while it's in use
+- **No more sample weather on the real setup**: the DEMO weather only shows when testing without Home Assistant. If neither source answers, the card keeps the last forecast for up to 3 hours, then says "Weather unavailable"
+- **Settings → Weather** (new section): which source the forecast is coming from, when it last loaded, and how each source is doing, with the real error when one fails
+- The log now gives the real reason a weather request fails (e.g. "fetch failed (ENOTFOUND)", "no answer within 15 s") instead of just "fetch failed"; `/api/setup-check` gains a `weather` section
+- Settings → System info: services list now shows Open-Meteo (weather) and National Weather Service (backup weather, radar)
+
 ## 1.27.1
 - Weather: the **Humidity** and **Dew point** chips on the front of the card (the readings right now) can be tapped too, with the same thin green ring. Tapping either opens **today's** details with the humidity / dew point card already showing
 - Settings → footer and System info show 1.27.1 (no other System info changes)

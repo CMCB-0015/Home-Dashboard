@@ -228,7 +228,7 @@ sunset as an arc, a temperature curve over rain-chance bars for the next 12 hour
 next 6 days (today first) as low-to-high bars with the rain chance and inches, and under them an
 hour-by-hour rain plot lined up with the days (1.8.1). Tap a day (or today's temperature) for that day: rain total
 and peak chance, wind and gusts, UV, humidity range, dew point, sunrise/sunset and a 24-hour
-chart with inches of rain per 3 hours. Data: Open-Meteo, every 10 minutes.
+chart with inches of rain per 3 hours. Data: Open-Meteo, every 10 minutes; if Open-Meteo doesn't answer, the National Weather Service (api.weather.gov) takes over automatically and Open-Meteo is tried again at every refresh. Settings → Weather shows which source is in use, and `/api/setup-check` → `weather` shows each source's last result. The backup has no UV index or air quality, so those chips are hidden while it's in use.
 
 **Radar** (header button) loops the last hour of National Weather Service radar in 5-minute
 frames (Iowa State University's free tile service, `nexrad-n0q`), on a dark Google map

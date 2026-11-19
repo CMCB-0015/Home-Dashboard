@@ -422,7 +422,8 @@ export interface WeatherDay {
   rainIn: number
   sunrise: string; sunset: string
   windMph: number; windDir: string; gustMph: number
-  uvIndex: number
+  /** Not sent by the backup weather source */
+  uvIndex?: number
   humidityMin: number; humidityMax: number
   /** The day's average humidity, % */
   humidityAvg?: number
@@ -446,8 +447,28 @@ export interface Tides {
   updatedAt: string
 }
 
+export interface WeatherSourceStatus {
+  name: string
+  role: 'main' | 'backup'
+  /** null = not tried yet */
+  ok: boolean | null
+  lastOk: string | null
+  lastTry: string | null
+  error: string | null
+}
+
+/** Which weather source is in use (Settings → Weather) */
+export interface WeatherStatus {
+  source: 'open-meteo' | 'nws' | null
+  sourceName: string | null
+  updatedAt: string | null
+  sources: WeatherSourceStatus[]
+}
+
 export interface Weather {
   location: string
+  /** Where this forecast came from ("Open-Meteo" or "National Weather Service") */
+  source?: string
   updatedAt: string
   /** For the radar map */
   lat?: number; lon?: number
@@ -455,7 +476,7 @@ export interface Weather {
     tempF: number; feelsLikeF: number; condition: string; icon: WeatherIcon
     humidityPct: number; dewPointF: number
     windMph: number; windDir: string
-    rainChancePct: number; uvIndex: number; aqi: number | null
+    rainChancePct: number; uvIndex?: number; aqi: number | null
     isDay?: boolean
   }
   today: { highF: number; lowF: number; sunrise: string; sunset: string }
@@ -592,6 +613,7 @@ export interface HomeState {
   tesla?: Tesla | null
   sonos: SonosState | null
   weather: Weather | null
+  weatherStatus?: WeatherStatus
   /** Tide highs and lows (null = NOAA not reached yet) */
   tides?: Tides | null
   calendar: CalendarEvent[]

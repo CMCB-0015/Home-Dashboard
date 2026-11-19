@@ -9,7 +9,7 @@
 import type { AlertItem, Category, HomeState, Tides, Weather } from '../src/types.ts'
 import { buildMockState } from '../src/data/mockData.ts'
 import { ha } from './ha.ts'
-import { getWeather } from './weather.ts'
+import { getWeather, weatherStatus } from './weather.ts'
 import { getTides } from './tides.ts'
 import { latestRachio, rachioConfigured, rachioError, rachioNotice } from './rachio.ts'
 import { scheduledQuickRuns } from './rachioScheduled.ts'
@@ -52,7 +52,11 @@ export function startBackgroundRefresh(changed: () => void) {
   // Motion chips come and go with time (3 minutes, 9 AM), not only when Home Assistant changes
   setInterval(changed, 30_000)
   const loadWeather = async () => {
-    try { weather = await getWeather(); changed() } catch (e) { console.warn('[weather]', e instanceof Error ? e.message : e) }
+    // getWeather logs each source's error. If both fail, keep the last forecast for up to 3 hours
+    try { weather = await getWeather(); changed() } catch {
+      if (weather && Date.now() - Date.parse(weather.updatedAt) > 3 * 3_600_000) weather = null
+      changed()
+    }
   }
   void loadWeather()
   setInterval(loadWeather, 10 * 60_000)
@@ -132,7 +136,7 @@ export function buildState(): HomeState {
   if (rachioError()) alert('irrigation', 'warning', 'Rachio', rachioError()!)
   if (rachioNotice()) alert('irrigation', 'warning', 'Rachio', rachioNotice()!)
 
-  sources.weather = weather ? 'live' : 'demo'
+  sources.weather = weather ? 'live' : haConfigured ? 'off' : 'demo'
 
   const tesla = fromHa('vehicles', teslaState, demo.tesla ?? null)
 
@@ -170,7 +174,9 @@ export function buildState(): HomeState {
     launches: haConfigured ? launchEvents() : demo.launches,
     irrigationZones,
     irrigation,
-    weather: weather ?? demo.weather,
+    // Sample weather only when testing without Home Assistant; a real setup says it's unavailable
+    weather: weather ?? (haConfigured ? null : demo.weather),
+    weatherStatus: weatherStatus(),
     tides,
     alerts: haConfigured ? alerts : demo.alerts,
     sources,

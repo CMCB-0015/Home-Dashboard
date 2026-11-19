@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, ChevronRight, Moon, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, CloudSun, Moon, X } from 'lucide-react'
 import { useHome } from '../../lib/useHome'
 import { SCREENSAVER_PREVIEW_EVENT } from '../IdleOverlay'
 import { SystemInfo } from './SystemInfo'
@@ -36,6 +36,7 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
 
         <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto px-6 pb-4">
           <ScreensaverSection />
+          <WeatherSection />
         </div>
 
         <div className="border-t border-[#222b34] px-6 pb-4 pt-3">
@@ -202,5 +203,62 @@ function Slider({ label, value, min, max, step, onChange }:
       <input type="range" className="panel-range" min={min} max={max} step={step} value={value} aria-label={label}
         onChange={(e) => onChange(Number(e.target.value))} />
     </div>
+  )
+}
+
+const ago = (iso: string | null, now: number) => {
+  if (!iso) return null
+  const m = Math.round((now - Date.parse(iso)) / 60_000)
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ${m % 60} min ago`
+}
+const at = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—')
+
+/** Where the forecast comes from (1.27.2): main source, backup, and how each is doing */
+function WeatherSection() {
+  const { data } = useHome()
+  const st = data?.weatherStatus
+  const [open, setOpen] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(t) }, [])
+  const using = st?.sources.find((s) => s.name === st.sourceName) ?? null
+  const main = st?.sources.find((s) => s.role === 'main') ?? null
+  const updated = ago(st?.updatedAt ?? null, now)
+  const summary = !st ? 'Waiting for the first forecast' : using ? `${using.name}${using.role === 'backup' ? ' (backup)' : ''} · updated ${updated}` : 'Unavailable · retrying every 10 min'
+  const dot = !using ? '#e5484d' : using.role === 'main' ? '#4fd18b' : '#f2c14e'
+
+  return (
+    <Section icon={<CloudSun size={18} />} title="Weather" summary={summary} open={open} onToggle={() => setOpen((o) => !o)}>
+      <div className="flex items-center gap-3">
+        <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ background: dot }} aria-hidden />
+        <div className="min-w-0">
+          <div className="text-xs text-ink-dim">Pulling from</div>
+          <div className="text-[17px] font-medium">{using ? using.name : 'Nothing right now'}</div>
+        </div>
+      </div>
+      <p className="m-0 text-xs leading-relaxed text-ink-dim">
+        {!using
+          ? 'Neither source answered. Panel keeps the last forecast for up to 3 hours and tries both again every 10 minutes.'
+          : using.role === 'backup'
+            ? `${main?.name ?? 'The main source'} isn't answering, so Panel is using the backup. It tries ${main?.name ?? 'the main source'} again every 10 minutes and switches back on its own. The backup has no UV index or air quality, so those chips are hidden for now.`
+            : 'The main source is working. If it stops answering, Panel switches to the backup automatically.'}
+      </p>
+      <div className="flex flex-col divide-y divide-[#222b34] rounded-xl border border-[#222b34]">
+        {(st?.sources ?? []).map((s) => (
+          <div key={s.name} className="flex flex-col gap-0.5 px-3.5 py-2.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm font-medium">{s.name} <span className="text-xs font-normal text-ink-dim">· {s.role}</span></span>
+              <span className="text-xs" style={{ color: s.ok === null ? '#8493a1' : s.ok ? '#4fd18b' : '#f2c14e' }}>
+                {s.ok === null ? 'Not needed yet' : s.ok ? 'Working' : 'Not answering'}
+              </span>
+            </div>
+            <span className="text-xs text-ink-dim">
+              {s.ok === null ? 'Only tried when the main source fails' : s.ok ? `Last loaded ${at(s.lastOk)}` : `Last tried ${at(s.lastTry)}${s.lastOk ? ` · last worked ${at(s.lastOk)}` : ''}`}
+            </span>
+            {s.ok === false && s.error && <span className="break-words font-mono text-[11px] text-[#a3b0bc]">{s.error}</span>}
+          </div>
+        ))}
+      </div>
+      <div className="text-xs text-ink-dim">Location: {data?.weather?.location ?? 'San Clemente'} · refreshes every 10 minutes</div>
+    </Section>
   )
 }

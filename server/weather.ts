@@ -1,6 +1,10 @@
-// Live weather from Open-Meteo (https://open-meteo.com) — free, no account or API key.
-import type { Weather, WeatherDay, WeatherHour, WeatherIcon } from '../src/types.ts'
+// Live weather. Main source: Open-Meteo (https://open-meteo.com). Backup: the US National
+// Weather Service (api.weather.gov), used automatically when Open-Meteo doesn't answer.
+// Both are free, no account or key. Panel tries Open-Meteo first on every refresh, so it
+// switches back on its own. With neither, the card says the weather is unavailable.
+import type { Weather, WeatherDay, WeatherHour, WeatherIcon, WeatherSourceStatus, WeatherStatus } from '../src/types.ts'
 import { env } from './env.ts'
+import { nwsForecast } from './nws.ts'
 
 const DEFAULT = { lat: '33.4270', lon: '-117.6120', name: 'San Clemente' }
 
@@ -54,13 +58,53 @@ function withOffset(local: string, offsetSec: number): string {
 let cache: { at: number; data: Weather } | null = null
 const CACHE_MS = 10 * 60_000
 
+// Where the weather is coming from, for Settings → Weather and the setup check
+const status: Record<'open-meteo' | 'nws', WeatherSourceStatus> = {
+  'open-meteo': { name: 'Open-Meteo', role: 'main', ok: null, lastOk: null, lastTry: null, error: null },
+  nws: { name: 'National Weather Service', role: 'backup', ok: null, lastOk: null, lastTry: null, error: null },
+}
+let using: 'open-meteo' | 'nws' | null = null
+
+export function weatherStatus(): WeatherStatus {
+  return { source: using, sourceName: using ? status[using].name : null, updatedAt: cache?.data.updatedAt ?? null, sources: [status['open-meteo'], status.nws] }
+}
+
+/** The real reason behind Node's bare "fetch failed" (DNS, refused, timeout…) */
+function why(e: unknown): string {
+  if (!(e instanceof Error)) return String(e)
+  const c = (e as { cause?: { code?: string; message?: string } }).cause
+  if (e.name === 'TimeoutError' || e.name === 'AbortError') return 'no answer within 15 s'
+  return c ? `${e.message} (${c.code ?? c.message ?? 'unknown'})` : e.message
+}
+
 export async function getWeather(): Promise<Weather> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.data
-
   const lat = env('WEATHER_LAT') ?? DEFAULT.lat
   const lon = env('WEATHER_LON') ?? DEFAULT.lon
   const name = env('WEATHER_LOCATION_NAME') ?? DEFAULT.name
+  const errors: string[] = []
+  for (const src of ['open-meteo', 'nws'] as const) {
+    const s = status[src]
+    s.lastTry = new Date().toISOString()
+    try {
+      const { f, aqi } = src === 'open-meteo' ? await fromOpenMeteo(lat, lon) : { f: await nwsForecast(Number(lat), Number(lon)), aqi: null }
+      const data = build(f, aqi, { name, lat, lon, source: s.name, hasUv: src === 'open-meteo' })
+      Object.assign(s, { ok: true, lastOk: s.lastTry, error: null })
+      if (using !== src) console.log(`[weather] using ${s.name}`)
+      using = src
+      cache = { at: Date.now(), data }
+      return data
+    } catch (e) {
+      Object.assign(s, { ok: false, error: why(e) })
+      errors.push(`${s.name}: ${why(e)}`)
+      console.warn('[weather]', `${s.name}: ${why(e)}`)
+    }
+  }
+  using = null
+  throw new Error(errors.join('; '))
+}
 
+async function fromOpenMeteo(lat: string, lon: string) {
   const q = new URLSearchParams({
     latitude: lat, longitude: lon, timezone: 'auto', forecast_days: '7',
     temperature_unit: 'fahrenheit', wind_speed_unit: 'mph', precipitation_unit: 'inch',
@@ -70,12 +114,19 @@ export async function getWeather(): Promise<Weather> {
   })
 
   const [fRes, aRes] = await Promise.all([
-    fetch(`${env('OPEN_METEO_URL') ?? 'https://api.open-meteo.com/v1/forecast'}?${q}`),
-    fetch(`${env('OPEN_METEO_AQ_URL') ?? 'https://air-quality-api.open-meteo.com/v1/air-quality'}?latitude=${lat}&longitude=${lon}&current=us_aqi`).catch(() => null),
+    fetch(`${env('OPEN_METEO_URL') ?? 'https://api.open-meteo.com/v1/forecast'}?${q}`, { signal: AbortSignal.timeout(15_000) }),
+    fetch(`${env('OPEN_METEO_AQ_URL') ?? 'https://air-quality-api.open-meteo.com/v1/air-quality'}?latitude=${lat}&longitude=${lon}&current=us_aqi`, { signal: AbortSignal.timeout(15_000) }).catch(() => null),
   ])
   if (!fRes.ok) throw new Error(`Open-Meteo returned ${fRes.status}`)
   const f = await fRes.json()
-  const aqi = aRes && aRes.ok ? ((await aRes.json())?.current?.us_aqi ?? null) : null
+  const aqi = aRes && aRes.ok ? ((await aRes.json().catch(() => null))?.current?.us_aqi ?? null) : null
+  return { f, aqi }
+}
+
+/** An Open-Meteo-shaped forecast (from Open-Meteo itself, or the NWS translated) → the card's weather */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function build(f: any, aqi: number | null, o: { name: string; lat: string; lon: string; source: string; hasUv: boolean }): Weather {
+  const { name, lat, lon } = o
 
   const off: number = f.utc_offset_seconds
   const cur = f.current
@@ -116,7 +167,7 @@ export async function getWeather(): Promise<Weather> {
       windMph: Math.round(D.wind_speed_10m_max[i] ?? 0),
       windDir: compass(D.wind_direction_10m_dominant[i] ?? 0),
       gustMph: Math.round(D.wind_gusts_10m_max[i] ?? 0),
-      uvIndex: Math.round(D.uv_index_max[i] ?? 0),
+      ...(o.hasUv ? { uvIndex: Math.round(D.uv_index_max[i] ?? 0) } : {}),
       humidityMin: hum.length ? Math.round(Math.min(...hum)) : 0,
       humidityMax: hum.length ? Math.round(Math.max(...hum)) : 0,
       humidityAvg: hum.length ? Math.round(hum.reduce((a, b) => a + b, 0) / hum.length) : 0,
@@ -136,6 +187,7 @@ export async function getWeather(): Promise<Weather> {
 
   const data: Weather = {
     location: name,
+    source: o.source,
     updatedAt: new Date().toISOString(),
     lat: Number(lat), lon: Number(lon),
     current: {
@@ -147,7 +199,7 @@ export async function getWeather(): Promise<Weather> {
       windMph: Math.round(cur.wind_speed_10m),
       windDir: compass(cur.wind_direction_10m),
       rainChancePct: f.hourly.precipitation_probability[nowIdx] ?? 0,
-      uvIndex: Math.round(f.hourly.uv_index[nowIdx] ?? 0),
+      ...(o.hasUv ? { uvIndex: Math.round(f.hourly.uv_index[nowIdx] ?? 0) } : {}),
       aqi: aqi === null ? null : Math.round(aqi),
       isDay: cur.is_day === 1,
     },
@@ -161,6 +213,5 @@ export async function getWeather(): Promise<Weather> {
     daily,
     tonight,
   }
-  cache = { at: Date.now(), data }
   return data
 }

@@ -54,6 +54,7 @@ import { startVacuumScheduler, vacuumScheduledCommand } from './vacuumScheduled.
 import { calendarError } from './calendar.ts'
 import { env } from './env.ts'
 import { tideNotes } from './tides.ts'
+import { weatherStatus } from './weather.ts'
 import { loadSettings, saveSettings, systemInfo } from './settings.ts'
 
 const PORT = Number(env('PANEL_PORT') ?? 8099)
@@ -164,6 +165,7 @@ const routes: Record<string, Handler> = {
     launches: { notes: launchNotes(), upcoming: launchEvents().length },
     rachio: { configured: rachioConfigured(), working: !!latestRachio(), problem: rachioError() },
     tides: tideNotes(),
+    weather: weatherStatus(),
   }),
 
   '/api/ha-image': async (req) => {

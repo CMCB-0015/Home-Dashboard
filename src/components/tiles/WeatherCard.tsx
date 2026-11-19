@@ -394,7 +394,7 @@ export function WeatherCard() {
             </>
           )}
           <span className={chip}>Wind <b className={val}>{c.windDir} {c.windMph}</b></span>
-          <span className={chip}>UV <b className={val}>{c.uvIndex}</b> {uvLabel(c.uvIndex)}</span>
+          {c.uvIndex !== undefined && <span className={chip}>UV <b className={val}>{c.uvIndex}</b> {uvLabel(c.uvIndex)}</span>}
           {c.aqi !== null && <span className={chip}>Air <b className={val}>{c.aqi}</b> {aqiLabel(c.aqi)}</span>}
         </div>
         <div role="tablist" aria-label="Weather view" className="flex w-fit gap-1 rounded-xl border border-white/[0.07] bg-white/[0.04] p-[3px]">
