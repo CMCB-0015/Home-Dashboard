@@ -26,6 +26,8 @@
 //   POST /api/rachio/command          GET /api/rachio/debug
 //   POST /api/rachio/scheduled        (quick runs set to start later)
 //   POST /api/vacuum/scheduled        (vacuum cleans set to start later)
+//   POST /api/settings                Settings menu (screensaver), saved on the Lenovo
+//   GET  /api/system                  live values for the System info window
 
 import http from 'node:http'
 import { createReadStream, existsSync, statSync } from 'node:fs'
@@ -52,6 +54,7 @@ import { startVacuumScheduler, vacuumScheduledCommand } from './vacuumScheduled.
 import { calendarError } from './calendar.ts'
 import { env } from './env.ts'
 import { tideNotes } from './tides.ts'
+import { loadSettings, saveSettings, systemInfo } from './settings.ts'
 
 const PORT = Number(env('PANEL_PORT') ?? 8099)
 const DIST = resolve(env('PANEL_DIST') ?? 'dist')
@@ -185,6 +188,8 @@ const routes: Record<string, Handler> = {
   '/api/cameras/live/poll': async (req) => ok(await livePoll(new URL(req.url).searchParams.get('id') ?? '')),
   '/api/cameras/live/stop': act(async (b) => liveStop(b)),
   '/api/shopping/command': act(async (b) => { await shoppingCommand(b) }),
+  '/api/settings': act(async (b) => { await saveSettings(b); changed() }),
+  '/api/system': async () => ok(await systemInfo()),
 }
 
 async function login(req: Request): Promise<Response> {
@@ -268,6 +273,7 @@ const server = http.createServer(async (req, res) => {
   }
 })
 
+await loadSettings()
 ha.onChange(changed)
 onCalendarChange(changed)
 ha.start()

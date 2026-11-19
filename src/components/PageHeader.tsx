@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useHome } from '../lib/useHome'
 import { WeatherIcon } from './WeatherIcon'
 import { skyNow } from '../lib/sky'
+import { Settings } from 'lucide-react'
+import { SettingsMenu } from './settings/SettingsMenu'
 
 function useNow(intervalMs = 15_000) {
   const [now, setNow] = useState(() => new Date())
@@ -22,6 +24,7 @@ interface Props {
 
 export function PageHeader({ title, subtitle, page, onPageChange, showWeather }: Props) {
   const now = useNow()
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const { data, live } = useHome()
   const w = data?.weather
   const time = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M/, '')
@@ -63,11 +66,18 @@ export function PageHeader({ title, subtitle, page, onPageChange, showWeather }:
             <span className="ml-3 h-10 w-px bg-edge" />
           </button>
         )}
+        {/* Settings: just the gear, no box or outline around it */}
+        <button onClick={() => setSettingsOpen(true)} aria-label="Settings"
+          className="gear-button flex h-11 w-11 items-center justify-center rounded-full border-0 bg-transparent text-ink-dim outline-none transition-colors hover:text-ink active:text-ink"
+          style={settingsOpen ? { color: 'var(--color-ink)' } : undefined}>
+          <Settings size={22} strokeWidth={1.7} />
+        </button>
         <div className="text-right">
           <div className="font-mono text-[28px] leading-none">{time}</div>
           <div className="mt-1.5 text-xs text-ink-dim">{date}</div>
         </div>
       </div>
+      {settingsOpen && <SettingsMenu onClose={() => setSettingsOpen(false)} />}
     </header>
   )
 }

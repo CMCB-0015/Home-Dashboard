@@ -13,15 +13,19 @@ phones or computer (home Wi-Fi only) and bookmark it.
 - **twilight_feed_key** — the same value as `PANEL_FEED_KEY` in Twilight's Netlify settings. Turns on Vandenberg launch chips in the status bar.
 - **google_client_id / google_client_secret** — Panel's own Google sign-in key, for adding, editing and deleting calendar events (see Calendar below).
 - **google_maps_key** — a Google Maps key for the weather radar and the Tesla map (see Weather and Tesla map below).
-- **idle_dim / idle_minutes / idle_brightness** — the idle screensaver (experimental; see Idle screensaver below). Off = Panel never dims.
+- **idle_dim** — master off switch for the screensaver. Off = Panel never dims, whatever the Settings menu says. **idle_minutes / idle_brightness** are only the starting values; change them in Panel's Settings menu (gear, top right).
 
 Click **Save**, then **Restart** the app after changing settings.
+
+## Settings menu (1.27.0)
+
+The gear at the top right of either page opens Panel's Settings. Changes save on the Lenovo straight away (no Save / Restart). **Screensaver**: on/off, dim after 1–15 min, clock & text brightness, notification chip brightness (default 40%, 0% hides chips) and Preview now. The version at the bottom opens **System info** (architecture, the Lenovo's hardware with live memory / storage / load, Home Assistant versions, network, update and safety-net reference).
 
 ## Idle screensaver (experimental, 1.18.0)
 
 After **idle_minutes** (default 2) with no touch, Panel fades to a near-black screen with a faint clock, the date, the current weather and any alert, camera or launch chips. **The first tap only wakes Panel** — it never presses the button underneath. Any key wakes it on the Chromebook. An open camera live view closes when it dims (battery cameras).
 
-- **idle_brightness** (10–60, default 32): how bright the clock and text are, in %. The background stays near-black.
+- Wait, clock & text brightness and chip brightness are set in the **Settings menu** (1.27.0). The background stays near-black.
 - The tablet's backlight stays on; a web page can't turn it down. ChromeOS: Settings → Power → When idle → Keep display on.
 - **To turn it off:** set **idle_dim** off, Save, Restart Panel. Panel then works exactly as 1.17.0 did.
 - **To remove it for good:** the baseline is **1.17.0, commit f7d09da** (GitHub branch `baseline-pre-idle-dim`). Revert the 1.18.0 idle commit, or restore f7d09da's code under a *higher* version number (Home Assistant only offers higher versions).

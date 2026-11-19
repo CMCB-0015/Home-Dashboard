@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.27.0
+- **Settings menu**: a gear in the page header (top right, beside the clock — just the icon, no box around it) slides a Settings panel in from the right. Everything in it is saved on the Lenovo the moment it changes (`/data` key `panel-settings`), so no code rebuild and no app restart
+- Sections are expandable headers, so more fit cleanly below. First section: **Screensaver** — live preview, **On** switch, **Dim after** 1 / 2 / 5 / 10 / 15 min, **Clock & text** brightness (10–60%), **Notification chips** brightness (0–100%, default **40%**, separate from the clock; 0% hides the chips), and **Preview now** (shows the screensaver full-screen; tap to go back)
+- `idle_dim` in the Configuration tab stays the master off switch: off there = no screensaver whatever the menu says (the menu shows why). `idle_minutes` / `idle_brightness` are now only the starting values until the menu changes them
+- Footer: **Panel version** · tap for **System info** — architecture (screens → Panel on the Lenovo → Home Assistant / direct services), the Lenovo's hardware with live memory, storage, processor load and up-since, software (Panel build, Home Assistant Core / OS, Node), network, and the update / safety-net reference. Live values refresh every 5 s while it's open
+- The app now has read-only Supervisor access (`hassio_api`) so System info can show the Home Assistant versions
+- The bedtime lamp stays on the Lights page (it's an automation, not a setting)
+
 ## 1.26.0
 - Weather, a day's details: **Humidity** and **Dew point** chips show the day's **average** and wear a thin green ring: they're the two chips you can tap. Tapping either opens a **humidity / dew point card** under the chips (tap again to close). The browser's square tap flash is off on these chips, so the press shows as the chip's own rounded fill
 - The card: the day's **ranges and averages** for dew point and humidity on top, then **dew point under temperature, hour by hour**, with the gap between them shaded, nights shaded, and a scale of how it feels (dry / comfortable / sticky / muggy). When the two lines come within 3°, a note above the plot says when ("Only 1° apart 12–6 AM · dew or fog likely"). Below: the lowest and highest dew point with times, and a one-line read of the day (steady, or a big swing as dry air mixes down)

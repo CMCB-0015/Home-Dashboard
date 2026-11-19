@@ -601,8 +601,12 @@ export interface HomeState {
   calendarRange?: { start: string; end: string }
   /** Google Maps key for the weather radar (a browser key; empty = radar shows how to add one) */
   mapsKey?: string | null
-  /** Idle dim + tap to wake (experimental). enabled = the idle_dim setting */
-  idle?: { enabled: boolean; minutes: number; brightness: number }
+  /**
+   * Screensaver (Settings menu, saved on the Lenovo). enabled = on in the menu AND
+   * `idle_dim` on in the app's Configuration (master = that switch). brightness = clock
+   * & text %, chips = notification chip % (0 hides them).
+   */
+  idle?: { enabled: boolean; on?: boolean; master?: boolean; minutes: number; brightness: number; chips?: number }
   /** Whether the calendar can add, edit and delete events (Panel's Google link) */
   calendarWrite?: CalendarWrite
   /** Upcoming games and races from The Brief (empty until its schedule feed exists) */

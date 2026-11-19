@@ -2,7 +2,7 @@
 # To release an update: push the code to GitHub, raise `version` below, push again,
 # then click Update on the app in Home Assistant.
 name: Panel
-version: "1.26.0"
+version: "1.27.0"
 slug: panel
 description: Connor's home dashboard — open http://192.168.86.207:8099
 url: https://github.com/CMCB-0015/Home-Dashboard
@@ -13,6 +13,8 @@ boot: auto
 init: false
 # Lets the dashboard talk to Home Assistant (Home Assistant hands it a token automatically)
 homeassistant_api: true
+# Read-only: lets the Settings menu's System window show the Home Assistant Core / OS versions
+hassio_api: true
 ports:
   8099/tcp: 8099
 ports_description:
