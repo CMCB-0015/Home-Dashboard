@@ -13,8 +13,6 @@ boot: auto
 init: false
 # Lets the dashboard talk to Home Assistant (Home Assistant hands it a token automatically)
 homeassistant_api: true
-# Read-only: lets the Settings menu's System window show the Home Assistant Core / OS versions
-hassio_api: true
 ports:
   8099/tcp: 8099
 ports_description:

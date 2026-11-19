@@ -68,14 +68,12 @@ export async function saveSettings(body: { screensaver?: Partial<ScreensaverSett
 
 // ── System info (the window behind the version in the menu's footer) ─────
 
-async function supervisor(path: string): Promise<any | null> {
-  const token = env('SUPERVISOR_TOKEN')
-  if (!token) return null
+/** Home Assistant Core version, through the access Panel already has (homeassistant_api). */
+async function haCoreVersion(): Promise<string | null> {
   try {
-    const res = await fetch(`http://supervisor${path}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(4000) })
+    const res = await ha.rest('/api/config')
     if (!res.ok) return null
-    const j = await res.json()
-    return j?.data ?? null
+    return (await res.json())?.version ?? null
   } catch { return null }
 }
 
@@ -101,7 +99,7 @@ export async function systemInfo() {
     const s = await statfs(DATA_DIR)
     disk = { totalGb: (s.blocks * s.bsize) / 1e9, freeGb: (s.bavail * s.bsize) / 1e9 }
   } catch { /* not available */ }
-  const [core, osInfo] = await Promise.all([supervisor('/core/info'), supervisor('/os/info')])
+  const haCore = await haCoreVersion()
   return {
     memory: { totalGb: os.totalmem() / 1e9, usedGb: (os.totalmem() - os.freemem()) / 1e9 },
     disk,
@@ -110,8 +108,9 @@ export async function systemInfo() {
     upSince: new Date(Date.now() - os.uptime() * 1000).toISOString(),
     panelUpSince: new Date(Date.now() - process.uptime() * 1000).toISOString(),
     node: process.version,
-    haCore: core?.version ?? null,
-    haOs: osInfo?.version ?? null,
+    haCore,
+    // OS version needs Supervisor access, which Panel doesn't have (Connor's call, Nov 19 2026): shows "—"
+    haOs: null,
     haStatus: ha.status,
     haConnectedSince: ha.connectedAt ? new Date(ha.connectedAt).toISOString() : null,
   }
