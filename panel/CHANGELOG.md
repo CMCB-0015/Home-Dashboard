@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.27.1
+- Weather: the **Humidity** and **Dew point** chips on the front of the card (the readings right now) can be tapped too, with the same thin green ring. Tapping either opens **today's** details with the humidity / dew point card already showing
+- Settings → footer and System info show 1.27.1 (no other System info changes)
+
 ## 1.27.0
 - **Settings menu**: a gear in the page header (top right, beside the clock — just the icon, no box around it) slides a Settings panel in from the right. Everything in it is saved on the Lenovo the moment it changes (`/data` key `panel-settings`), so no code rebuild and no app restart
 - Sections are expandable headers, so more fit cleanly below. First section: **Screensaver** — live preview, **On** switch, **Dim after** 1 / 2 / 5 / 10 / 15 min, **Clock & text** brightness (10–60%), **Notification chips** brightness (0–100%, default **40%**, separate from the clock; 0% hides the chips), and **Preview now** (shows the screensaver full-screen; tap to go back)

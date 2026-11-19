@@ -128,7 +128,7 @@ function RainRibbon({ days, hours, now }: { days: Weather['daily']; hours: Weath
 }
 
 /** One day in detail: slides up over the card in that day's tint */
-function DayPanel({ day, hours, onClose, tonight = false }: { day: Weather['daily'][number]; hours: WeatherHour[]; onClose: () => void; tonight?: boolean }) {
+function DayPanel({ day, hours, onClose, tonight = false, openWith = null }: { day: Weather['daily'][number]; hours: WeatherHour[]; onClose: () => void; tonight?: boolean; openWith?: 'humidity' | 'dew' | null }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', key)
@@ -136,7 +136,7 @@ function DayPanel({ day, hours, onClose, tonight = false }: { day: Weather['dail
   }, [onClose])
   const tone = skyTone(day.icon, !tonight)
   // Humidity / dew point detail, opened from either chip
-  const [detail, setDetail] = useState<'humidity' | 'dew' | null>(null)
+  const [detail, setDetail] = useState<'humidity' | 'dew' | null>(openWith)
   const canDetail = hours.filter((h) => typeof h.dewF === 'number').length >= 6
   const tap = (k: 'humidity' | 'dew') => setDetail((d) => (d === k ? null : k))
   const wettest = hours.reduce<WeatherHour | null>((a, h) => (h.rainIn > (a?.rainIn ?? 0) ? h : a), null)
@@ -289,6 +289,9 @@ export function WeatherCard() {
   const { data } = useHome()
   const w = data?.weather
   const [dayIdx, setDayIdx] = useState<number | null>(null)
+  // The front Humidity / Dew point chips open today's details with the humidity / dew point card already showing
+  const [openWith, setOpenWith] = useState<'humidity' | 'dew' | null>(null)
+  const pickDay = (i: number | null, withDetail: 'humidity' | 'dew' | null = null) => { setOpenWith(withDetail); setDayIdx(i) }
   const [radar, setRadar] = useState(false)
   // Forecast / Tides. Forecast is always the default; Tides is never remembered
   const [tab, setTab] = useState<'forecast' | 'tides'>('forecast')
@@ -324,6 +327,8 @@ export function WeatherCard() {
   const tonight = isTonight(w, now)
   const days = w.daily.slice(0, 6).map((d, i) => (i === 0 && tonight ? { ...d, ...tonightSky(w) } : d))
   const openDay = dayIdx === null ? null : (days[dayIdx] ?? w.daily[dayIdx])
+  // Today has hourly dew point → the front chips can open its humidity / dew point card
+  const todayDetail = days.length > 0 && hoursOn(hours, days[0].date).filter((h) => typeof h.dewF === 'number').length >= 6
   const radarBtn = (
     <button onClick={() => setRadar(true)} aria-label="Show radar"
       className="flex h-9 items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.06] px-3 text-[12.5px] font-semibold text-ink transition-colors hover:bg-white/10">
@@ -349,13 +354,13 @@ export function WeatherCard() {
                 style={{ width: fold.dragging ? 56 : 44, background: fold.dragging ? 'var(--color-weather)' : 'var(--color-ink-faint)' }} />
             </button>
           )}
-          {openDay && <DayPanel day={openDay} hours={hoursOn(hours, openDay.date)} tonight={dayIdx === 0 && tonight} onClose={() => setDayIdx(null)} />}
+          {openDay && <DayPanel key={`${dayIdx}-${openWith ?? ''}`} day={openDay} hours={hoursOn(hours, openDay.date)} tonight={dayIdx === 0 && tonight} openWith={openWith} onClose={() => pickDay(null)} />}
           {radar && <RadarView lat={w.lat ?? 33.427} lon={w.lon ?? -117.612} mapsKey={data?.mapsKey ?? null} place={w.location} onClose={() => setRadar(false)} />}
         </>
       }>
       <div ref={fold.wrap} className="flex flex-col gap-2.5">
         <div ref={fold.top} className="flex min-h-[100px] flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <button onClick={() => setDayIdx(0)} aria-label={`Today: ${c.tempF}°, high ${w.today.highF}°, low ${w.today.lowF}°. Tap for today in detail`}
+          <button onClick={() => pickDay(0)} aria-label={`Today: ${c.tempF}°, high ${w.today.highF}°, low ${w.today.lowF}°. Tap for today in detail`}
             className="flex w-[150px] flex-col items-center gap-1.5 rounded-xl py-1 hover:bg-white/[0.03]">
             <span className="font-display text-[72px] font-light leading-[0.95] tracking-tight">{c.tempF}°</span>
             <span className="flex gap-2.5 font-display text-[17px]"><span className="font-bold text-temp-high">{w.today.highF}°</span><span className="text-ink-faint">/</span><span className="font-bold text-temp-low">{w.today.lowF}°</span></span>
@@ -375,8 +380,19 @@ export function WeatherCard() {
         </div>
         <div className="flex flex-col gap-2.5" style={more} aria-hidden={!fold.expanded} inert={!fold.expanded}>
         <div className="flex flex-wrap gap-1.5">
-          <span className={chip}>Humidity <b className={val}>{c.humidityPct}%</b></span>
-          <span className={chip}>Dew point <b className={val}>{c.dewPointF}°</b></span>
+          {todayDetail ? (
+            <>
+              <button type="button" className={tapChip} style={tapRest} onClick={() => pickDay(0, 'humidity')}
+                aria-label={`Humidity now ${c.humidityPct}%. Show today's humidity and dew point`}>Humidity <b className={val}>{c.humidityPct}%</b></button>
+              <button type="button" className={tapChip} style={tapRest} onClick={() => pickDay(0, 'dew')}
+                aria-label={`Dew point now ${c.dewPointF}°. Show today's humidity and dew point`}>Dew point <b className={val}>{c.dewPointF}°</b></button>
+            </>
+          ) : (
+            <>
+              <span className={chip}>Humidity <b className={val}>{c.humidityPct}%</b></span>
+              <span className={chip}>Dew point <b className={val}>{c.dewPointF}°</b></span>
+            </>
+          )}
           <span className={chip}>Wind <b className={val}>{c.windDir} {c.windMph}</b></span>
           <span className={chip}>UV <b className={val}>{c.uvIndex}</b> {uvLabel(c.uvIndex)}</span>
           {c.aqi !== null && <span className={chip}>Air <b className={val}>{c.aqi}</b> {aqiLabel(c.aqi)}</span>}
@@ -393,7 +409,7 @@ export function WeatherCard() {
         {tab === 'forecast' ? (
           <>
             <SkyChart hours={next12} color={tone.color} firstLabel="Now" />
-            {days.length > 0 && <RangeBars days={days} tonight={tonight} onPick={(i) => setDayIdx(i)} />}
+            {days.length > 0 && <RangeBars days={days} tonight={tonight} onPick={(i) => pickDay(i)} />}
             {days.length > 0 && <RainRibbon days={days} hours={hours} now={now} />}
           </>
         ) : tidesReady(data?.tides, now) ? (
