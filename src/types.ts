@@ -35,6 +35,10 @@ export interface Light {
   /** A Hue room or zone that controls several lights at once */
   isGroup?: boolean
   available?: boolean
+  /** A smart outlet (VeSync) running lights: on/off only, never touched by All off (1.29.0) */
+  outlet?: boolean
+  /** The outlet's power draw right now, in watts (null if it doesn't report one) */
+  watts?: number | null
 }
 
 /** One of the four buttons on the Lights card */

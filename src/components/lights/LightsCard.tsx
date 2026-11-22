@@ -29,7 +29,9 @@ export function LightsCard() {
   const outside = singles.filter((l) => l.outdoor)
   const inOn = inside.filter((l) => l.on).length
   const outOn = outside.filter((l) => l.on).length
-  const nonTimerOn = singles.some((l) => l.on && !l.timer)
+  const nonTimerOn = singles.some((l) => l.on && !l.timer && !l.outlet)
+  // The landscape outlets never count for All off (it leaves them on)
+  const anyOffable = singles.some((l) => l.on && !l.outlet)
   const bedtime = data.lighting?.bedtime
   const quick = data.lighting?.quick ?? []
 
@@ -46,7 +48,7 @@ export function LightsCard() {
               style={{ background: cfg.dim, color: cfg.color }}>
               All indoor off
             </button>
-            <ConfirmButton label="All off" icon={<Power size={11} />} disabled={inOn + outOn === 0}
+            <ConfirmButton label="All off" icon={<Power size={11} />} disabled={!anyOffable}
               onConfirm={() => void allOff('all')} color="var(--color-critical)" dim="var(--color-critical-dim)" />
           </div>
         }>

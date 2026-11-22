@@ -112,7 +112,7 @@ export function SystemInfo({ onClose }: { onClose: () => void }) {
               </Box>
               <Arrow />
               <div className="flex flex-col gap-2">
-                <Box label="Through Home Assistant" tight>Hue · Sonos · Nest · Eufy (eufy-sdk bridge) · Roborock · Tesla (Teslemetry) · Bring! · Google Calendar (read) · LG / Frame TVs</Box>
+                <Box label="Through Home Assistant" tight>Hue · VeSync (landscape outlets) · Sonos · Nest · Eufy (eufy-sdk bridge) · Roborock · Tesla (Teslemetry) · Bring! · Google Calendar (read) · LG / Frame TVs</Box>
                 <Box label="Panel talks to directly" tight>Rachio · Google Calendar (add/edit) · Google Maps · Open-Meteo (weather) · National Weather Service (backup weather, radar) · NOAA tides · The Brief · Twilight</Box>
               </div>
             </div>

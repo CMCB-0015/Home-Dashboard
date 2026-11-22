@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.29.0
+- **Landscape lights on the Lights page**: the two VeSync outlets, **Front Yard Landscape** and **Backyard Landscape**, show with the Hue lights in their Home Assistant area: on/off switch, an "outlet" tag, and the power they're drawing ("on · 24 W"). They count as Out lights on the card
+- **All indoor off and All off never touch the landscape outlets** (they stay on and keep their VeSync schedules). The card's All off is greyed when only the outlets are on
+- Outlets are found by exact id (`switch.front_yard`, `switch.backyard_landscape_lights`), never by name, so nothing can mix them up with the Front Yard camera
+- **Stargazing now also sets the front lights for the hour**: **Front Door off**, **Garage down to 60%**, **Front Yard Landscape off** (only the ones that are on; Garage only if brighter than 60%; nothing is ever turned on). At the end, or ×, each goes back exactly as it was (brightness and color) — unless a Hue timer, scene or VeSync schedule changed it during the hour, in which case that change wins. Tapping Stargazing again to restart the hour sets any of them that came on since. Survives an app restart, like the camera
+- Settings → footer and System info show 1.29.0; System info lists VeSync under "Through Home Assistant"
+
 ## 1.28.0
 - **Settings gear moved and shrunk** (option C): a tiny gear right after the two page dots at the top, in the same faint grey as an inactive dot. It no longer takes its own spot next to the clock. Still a finger-sized (invisible) tap area. On phones, where the dots are hidden, the gear sits there alone
 - **Settings → Roborock** (new section):

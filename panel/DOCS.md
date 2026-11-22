@@ -251,14 +251,30 @@ in the Eufy app needs no change here.
   Intensity. Tap a camera for live view.
 - **Live view** uses Home Assistant's own WebRTC (no extra setting). It ends when the pop-up closes, when the
   screen stops checking in for 30 seconds, and after 10 minutes, so a battery camera is never left streaming.
-- **Stargazing** turns the cameras' "Spotlight Enabled" switches off for an hour (only the ones that were on),
-  and back on when the hour is up. It survives an app restart.
+- **Stargazing** turns the **Front Yard camera off** for an hour (its "Enabled" switch; Garage stays on; Panel
+  never touches "Spotlight Enabled"). Since 1.29.0 it also turns **Front Door** off, dims **Garage** to 60%
+  and turns the **Front Yard Landscape** outlet off — only the ones that are on, and Garage only if it's
+  brighter than 60%. Tap again to restart the hour, × to end. At the end each one goes back the way it was,
+  unless something else changed it during the hour (a Hue timer, a scene, a VeSync schedule): then that
+  change wins. Survives an app restart. Which lights: `stargazing` in `src/config/home.ts`.
 - **Motion chips:** 3 minutes for motion now; motion between 10 PM and 6 AM stays until 9 AM.
 - **Nothing showing?** Open `/api/setup-check` → `cameras`: each camera lists the entities it found. A
   `null` means that entity is missing or disabled in Home Assistant (Settings → Devices & services → eufy-sdk →
   the camera → entities).
 - **Bridge log noise:** `get_devs_list failed (10003)` repeats with a shared (secondary) account; harmless.
 - The secondary Eufy account must stay **signed out of the Eufy app** on phones (Eufy allows one session).
+
+## Landscape lights (VeSync outlets, 1.29.0)
+
+The two VeSync smart outlets show on the **Lights** page with the Hue lights, in their Home Assistant area:
+**Front Yard Landscape** (`switch.front_yard`) and **Backyard Landscape** (`switch.backyard_landscape_lights`).
+Each row has an on/off switch, an "outlet" tag and the power it's drawing ("on · 24 W"; 0 W while on can mean
+a bulb or wire problem). They count as Out lights on the card.
+
+- **All indoor off** and **All off** never touch them: they're meant to stay on and run on the VeSync app's own
+  schedules. Only their own switch and Stargazing change them.
+- Panel finds them by their exact ids in `src/config/home.ts` (`lights.outlets`), not by name, so the Front
+  Yard camera can never be mixed up with them. If one is missing, the Lights page Setup check says so.
 
 ## Shopping list (Bring!)
 

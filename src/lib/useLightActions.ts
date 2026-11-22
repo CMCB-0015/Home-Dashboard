@@ -35,7 +35,7 @@ export function useLightActions() {
   const toggle = useCallback((light: Light) => set([light.id], { on: !light.on }, { linked: false }), [set])
 
   const allOff = useCallback((scope: 'indoor' | 'all') => {
-    update((s) => ({ ...s, lights: s.lights.map((l) => (scope === 'all' || !l.timer ? { ...l, on: false, color: null } : l)) }))
+    update((s) => ({ ...s, lights: s.lights.map((l) => (!l.outlet && (scope === 'all' || !l.timer) ? { ...l, on: false, color: null, watts: null } : l)) }))
     return send('lights/off', { scope })
   }, [update, send])
 

@@ -91,6 +91,8 @@ export function buildMockState(): HomeState {
       L('light.front_door', 'Front door', 'Front Yard', true, 100, '#ffd6a0', 2900, { outdoor: true, timer: true }),
       L('light.garage', 'Garage', 'Front Yard', true, 100, '#ffd6a0', 2900, { outdoor: true, timer: true }),
       L('light.side_yard', 'Side yard', 'Front Yard', false, 0, null, null, { outdoor: true, timer: true }),
+      L('switch.front_yard', 'Front Yard Landscape', 'Front Yard', true, 100, '#ffd6a0', null, { outdoor: true, outlet: true, watts: 24.3, supports: { color: false, white: false, dim: false } }),
+      L('switch.backyard_landscape_lights', 'Backyard Landscape', 'Patio', true, 100, '#ffd6a0', null, { outdoor: true, outlet: true, watts: 6.8, supports: { color: false, white: false, dim: false } }),
     ],
     lighting: {
       quick: [

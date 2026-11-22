@@ -107,6 +107,8 @@ const coarse = (ms: number) => `${Math.max(5, Math.ceil(ms / 300_000) * 5)} min`
 
 /**
  * Stargazing: the Front Yard camera off for 1 hour (no motion light; the Garage stays on).
+ * Since 1.29.0 the server also turns Front Door off, Garage down to 60% and the Front Yard Landscape
+ * outlet off (whichever are on), and puts them back at the end (src/config/home.ts → stargazing).
  * Tap while on = back to a full hour. The × on the countdown ends it now.
  * The Lenovo turns the camera back on when the hour is up, even if no screen is open.
  */
@@ -132,11 +134,11 @@ export function StargazingButton() {
         <span className="flex h-9 items-center gap-1 rounded-full border pl-3 pr-1 text-xs font-medium tabular-nums"
           style={{ borderColor: NAVY_EDGE, color: STAR, background: 'rgba(7,10,28,.6)' }}>
           {coarse(left)}
-          <button onClick={end} aria-label="End stargazing: Front Yard camera back on"
+          <button onClick={end} aria-label="End stargazing: Front Yard camera and lights back as they were"
             className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10"><X size={13} aria-hidden /></button>
         </span>
       )}
-      <button onClick={start} aria-pressed={on} aria-label={on ? 'Stargazing on: tap to restart the hour' : 'Stargazing: Front Yard camera off for 1 hour'}
+      <button onClick={start} aria-pressed={on} aria-label={on ? 'Stargazing on: tap to restart the hour' : 'Stargazing: Front Yard camera and front lights off for 1 hour'}
         className="flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors"
         style={on ? { background: NAVY, borderColor: NAVY_EDGE, color: STAR, boxShadow: `0 0 14px -4px ${STAR}` } : { borderColor: 'var(--color-edge)', color: 'var(--color-ink-dim)', background: 'var(--color-surface-raised)' }}>
         <Moon size={14} fill={on ? STAR : 'none'} aria-hidden />

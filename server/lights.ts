@@ -46,6 +46,34 @@ function toLight(s: HAState, timerIds: Set<string>): Light {
   }
 }
 
+// ── Outlets that run lights (VeSync landscape lights, 1.29.0) ─────────────
+// Only the exact ids in HOME.lights.outlets: never found by name, so nothing
+// here can reach the Front Yard camera's switch.
+
+const OUTLET_IDS = new Set<string>(HOME.lights.outlets.map((o) => o.id))
+export const isOutlet = (id: string) => OUTLET_IDS.has(id)
+
+/** The outlet's power sensor (Current power) on the same device */
+function outletWatts(id: string): number | null {
+  const dev = ha.deviceOf(id)
+  if (!dev) return null
+  const p = ha.entitiesOnDevice(dev).find((e) => e.entity_id.startsWith('sensor.')
+    && (e.attributes.device_class === 'power' || e.attributes.unit_of_measurement === 'W'))
+  const w = p ? Number(p.state) : NaN
+  return Number.isFinite(w) ? Math.round(w * 10) / 10 : null
+}
+
+function toOutlet(o: { id: string; name: string }, s: HAState): Light {
+  const on = s.state === 'on'
+  return {
+    id: o.id, name: o.name, room: ha.area(o.id) ?? 'Outside', on,
+    brightnessPct: on ? 100 : 0, color: on ? WARM_WHITE : null, kelvin: null,
+    supports: { color: false, white: false, dim: false },
+    outdoor: true, timer: false, isGroup: false, available: s.state !== 'unavailable',
+    outlet: true, watts: on ? outletWatts(o.id) : null,
+  }
+}
+
 /** Every light in Home Assistant, as the dashboard sees it. */
 function allLights(): { lights: Light[]; singles: { id: string; name: string }[]; everything: { id: string; name: string }[]; notes: string[] } {
   const states = ha.all('light')
@@ -58,7 +86,13 @@ function allLights(): { lights: Light[]; singles: { id: string; name: string }[]
     if (m.item) timerIds.add(m.item.id)
     else notes.push(`Timer light: ${m.reason}`)
   }
-  const lights = states.map((s) => toLight(s, timerIds)).sort((a, b) => a.room.localeCompare(b.room) || a.name.localeCompare(b.name))
+  const outlets: Light[] = []
+  for (const o of HOME.lights.outlets) {
+    const s = ha.states.get(o.id)
+    if (s) outlets.push(toOutlet(o, s))
+    else notes.push(`Outlet "${o.name}": ${o.id} isn't in Home Assistant (check the id in src/config/home.ts)`)
+  }
+  const lights = [...states.map((s) => toLight(s, timerIds)), ...outlets].sort((a, b) => a.room.localeCompare(b.room) || a.name.localeCompare(b.name))
   return { lights, singles, everything, notes }
 }
 
@@ -142,7 +176,11 @@ const LINKED_KEY = 'bedroom-cans-linked'
 
 export async function setLights(c: LightChange) {
   const ids = (c.ids ?? []).filter((id) => typeof id === 'string' && id.startsWith('light.') && ha.states.has(id))
-  if (!ids.length) throw new Error("That light isn't in Home Assistant")
+  // Outlets: on/off only, and only the exact configured ids
+  const plugs = (c.ids ?? []).filter((id) => typeof id === 'string' && isOutlet(id) && ha.states.has(id))
+  if (!ids.length && !plugs.length) throw new Error("That light isn't in Home Assistant")
+  if (plugs.length) await ha.callService('switch', c.on === false ? 'turn_off' : 'turn_on', {}, plugs)
+  if (!ids.length) return
   if (c.on === false) { await ha.callService('light', 'turn_off', {}, ids); return }
 
   const data: Record<string, unknown> = {}
@@ -171,10 +209,10 @@ export async function setLights(c: LightChange) {
   await ha.callService('light', 'turn_on', data, ids)
 }
 
-/** indoor: everything except the timer lights · all: every light */
+/** indoor: everything except the timer lights · all: every light. Never the outlets (landscape lights stay on). */
 export async function allOff(scope: 'indoor' | 'all') {
   const { lights } = allLights()
-  const ids = lights.filter((l) => !l.isGroup && l.available && (scope === 'all' || !l.timer)).map((l) => l.id)
+  const ids = lights.filter((l) => !l.isGroup && !l.outlet && l.available && (scope === 'all' || !l.timer)).map((l) => l.id)
   if (ids.length) await ha.callService('light', 'turn_off', {}, ids)
 }
 
@@ -250,5 +288,100 @@ export async function bedtimeCommand(body: { action?: string; start?: string; en
 
 /** For the setup check page */
 export function lightNames() {
-  return ha.all('light').map((s) => ({ id: s.entity_id, name: ha.name(s), room: ha.area(s.entity_id), hueGroup: isGroup(s), state: s.state }))
+  return [
+    ...ha.all('light').map((s) => ({ id: s.entity_id, name: ha.name(s), room: ha.area(s.entity_id), hueGroup: isGroup(s), state: s.state })),
+    ...HOME.lights.outlets.map((o) => {
+      const s = ha.states.get(o.id)
+      return { id: o.id, name: `${o.name} (outlet)`, room: ha.area(o.id), hueGroup: false, state: s ? `${s.state}${s.state === 'on' ? ` · ${outletWatts(o.id) ?? '?'} W` : ''}` : 'missing' }
+    }),
+  ]
+}
+
+// ── Stargazing: front lights for the hour (1.29.0) ───────────────────────
+// Front Door off, Garage down to 60%, Front Yard Landscape outlet off (only
+// what's on; nothing is ever turned on). At the end each one goes back the way
+// it was, but only if it's still how Stargazing left it: a Hue timer, scene or
+// VeSync schedule that changed it in the meantime wins.
+
+export interface StargazeLight {
+  id: string
+  kind: 'light' | 'switch'
+  /** What Stargazing set */
+  set: { on: boolean; brightness?: number }
+  /** How it was before (lights): brightness 0–255 and color */
+  was: { brightness?: number; mode?: string; kelvin?: number; xy?: number[]; hs?: number[] }
+}
+
+function snapshot(s: HAState): StargazeLight['was'] {
+  const a = s.attributes
+  return {
+    brightness: typeof a.brightness === 'number' ? a.brightness : undefined,
+    mode: typeof a.color_mode === 'string' ? a.color_mode : undefined,
+    kelvin: typeof a.color_temp_kelvin === 'number' ? a.color_temp_kelvin : undefined,
+    xy: Array.isArray(a.xy_color) ? a.xy_color : undefined,
+    hs: Array.isArray(a.hs_color) ? a.hs_color : undefined,
+  }
+}
+
+/** Set the Stargazing lights. `skip`: ids already handled this hour. Returns what changed (to restore later). */
+export async function stargazeLights(skip: string[] = []): Promise<{ changed: StargazeLight[]; failed: string[] }> {
+  const cfg = HOME.stargazing
+  const { singles } = allLights()
+  const changed: StargazeLight[] = []
+  const failed: string[] = []
+  const done = new Set(skip)
+  const lightOn = (name: string) => {
+    const id = matchName(name, singles).item?.id
+    const s = id ? ha.states.get(id) : undefined
+    return s && s.state === 'on' && !done.has(s.entity_id) ? s : null
+  }
+  const run = async (label: string, fn: () => Promise<unknown>, rec: StargazeLight) => {
+    try { await fn(); changed.push(rec) } catch (e) { failed.push(label); console.warn(`[stargazing] ${label}:`, e instanceof Error ? e.message : e) }
+  }
+  for (const name of cfg.lightsOff) {
+    const s = lightOn(name)
+    if (s) await run(name, () => ha.callService('light', 'turn_off', {}, [s.entity_id]), { id: s.entity_id, kind: 'light', set: { on: false }, was: snapshot(s) })
+  }
+  for (const d of cfg.lightsDim) {
+    const s = lightOn(d.light)
+    const target = Math.round((d.pct / 100) * 255)
+    // Only ever dims: a light already at or below the level is left alone
+    if (s && (typeof s.attributes.brightness !== 'number' || s.attributes.brightness > target)) {
+      await run(d.light, () => ha.callService('light', 'turn_on', { brightness: target }, [s.entity_id]), { id: s.entity_id, kind: 'light', set: { on: true, brightness: target }, was: snapshot(s) })
+    }
+  }
+  for (const id of cfg.outletsOff) {
+    const s = isOutlet(id) ? ha.states.get(id) : undefined
+    if (s && s.state === 'on' && !done.has(id)) await run(HOME.lights.outlets.find((o) => o.id === id)?.name ?? id, () => ha.callService('switch', 'turn_off', {}, [id]), { id, kind: 'switch', set: { on: false }, was: {} })
+  }
+  return { changed, failed }
+}
+
+/** Put the Stargazing lights back, each only if it's still how Stargazing left it. Safe to run twice. */
+export async function restoreStargazeLights(saved: StargazeLight[]) {
+  for (const l of saved) {
+    const s = ha.states.get(l.id)
+    if (!s || s.state === 'unavailable' || s.state === 'unknown') continue
+    if (l.kind === 'switch') {
+      if (!isOutlet(l.id)) continue
+      if (s.state === 'off') await ha.callService('switch', 'turn_on', {}, [l.id])
+      continue
+    }
+    if (!l.id.startsWith('light.')) continue
+    if (!l.set.on) {
+      if (s.state !== 'off') continue // something turned it back on: leave it
+      const data: Record<string, unknown> = {}
+      if (l.was.brightness) data.brightness = l.was.brightness
+      if (l.was.mode === 'color_temp' && l.was.kelvin) data.color_temp_kelvin = l.was.kelvin
+      else if (l.was.mode === 'xy' && l.was.xy) data.xy_color = l.was.xy
+      else if (l.was.mode === 'hs' && l.was.hs) data.hs_color = l.was.hs
+      await ha.callService('light', 'turn_on', data, [l.id])
+    } else if (typeof l.set.brightness === 'number') {
+      const b = s.attributes.brightness
+      // Still on at Stargazing's level (Hue may round by a step or two): bring the brightness back
+      if (s.state === 'on' && typeof b === 'number' && Math.abs(b - l.set.brightness) <= 3 && l.was.brightness) {
+        await ha.callService('light', 'turn_on', { brightness: l.was.brightness }, [l.id])
+      }
+    }
+  }
 }

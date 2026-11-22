@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Moon, Power, TriangleAlert } from 'lucide-react'
+import { Moon, Plug, Power, TriangleAlert } from 'lucide-react'
 import { useHome } from '../../lib/useHome'
 import { useLightActions, useThrottle } from '../../lib/useLightActions'
 import { rgba, timeLabel, WARM_WHITE } from '../../lib/lightColor'
@@ -53,7 +53,9 @@ export function LightsPage() {
         {rooms.map((room) => (
           <Card key={room} accent={cfg.color} title={room}>
             <div className="divide-y divide-edge-soft">
-              {singles.filter((l) => l.room === room).map((l) => <LightRow key={l.id} light={l} onOpen={() => setPanel(l.id)} />)}
+              {singles.filter((l) => l.room === room).map((l) => l.outlet
+                ? <OutletRow key={l.id} light={l} />
+                : <LightRow key={l.id} light={l} onOpen={() => setPanel(l.id)} />)}
             </div>
           </Card>
         ))}
@@ -84,6 +86,26 @@ function LightRow({ light: l, onOpen }: { light: Light; onOpen: () => void }) {
           className="h-1.5 flex-1 cursor-pointer disabled:opacity-30" style={{ color: color ?? cfg.color }} />
       ) : <span className="flex-1" />}
       <span className="w-14 text-right font-mono text-xs text-ink-faint">{l.available === false ? 'offline' : l.on ? `${shown}%` : 'off'}</span>
+    </div>
+  )
+}
+
+/** A VeSync outlet running lights (1.29.0): on/off and live watts; All off never touches it */
+function OutletRow({ light: l }: { light: Light }) {
+  const { toggle } = useLightActions()
+  const color = l.on ? l.color ?? WARM_WHITE : null
+  const label = l.available === false ? 'offline' : !l.on ? 'off' : typeof l.watts === 'number' ? `on · ${l.watts < 10 ? l.watts : Math.round(l.watts)} W` : 'on'
+  return (
+    <div className="flex items-center gap-3 py-3">
+      <Switch on={l.on} onChange={() => void toggle(l)} color={color ?? cfg.color} label={`${l.name} ${l.on ? 'off' : 'on'}`} disabled={l.available === false} />
+      <span className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={color ? { background: color, boxShadow: `0 0 6px ${color}` } : { background: 'var(--color-edge)' }} />
+        <span className="truncate">{l.name}</span>
+        <span className="flex shrink-0 items-center gap-0.5 text-[9px] uppercase tracking-wider text-ink-faint" title="A VeSync smart outlet: on / off only. All off leaves it on.">
+          <Plug size={10} /> outlet
+        </span>
+      </span>
+      <span className="shrink-0 whitespace-nowrap text-right font-mono text-xs text-ink-faint">{label}</span>
     </div>
   )
 }

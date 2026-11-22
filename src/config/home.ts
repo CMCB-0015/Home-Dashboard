@@ -26,6 +26,31 @@ export const HOME = {
      * Which can is Window and which is Dresser isn't confirmed yet: swap the two names if they're backwards.
      */
     bedroomCans: { group: 'Bedroom Soffit', window: 'Bedroom Recessed 1', dresser: 'Bedroom Recessed 2' },
+
+    /**
+     * Smart outlets that run lights (VeSync), by EXACT Home Assistant id (not by name: "Front Yard"
+     * is also the camera's name). Shown with the lights as on/off rows with live watts.
+     * "All indoor off" and "All off" never touch them: they're meant to stay on (they run on the
+     * VeSync app's own schedules); only their own switch and Stargazing change them. (1.29.0)
+     */
+    outlets: [
+      { id: 'switch.front_yard', name: 'Front Yard Landscape' },
+      { id: 'switch.backyard_landscape_lights', name: 'Backyard Landscape' },
+    ],
+  },
+
+  /**
+   * Stargazing (Cameras card) also sets these for its hour, then puts each one back the way it
+   * was, unless something else (a Hue timer, a scene, a VeSync schedule) changed it in the
+   * meantime: then that change wins. (1.29.0)
+   */
+  stargazing: {
+    /** Hue lights turned off (only if on) */
+    lightsOff: ['Front Door'],
+    /** Hue lights dimmed to this brightness (only if on and brighter; never turned on) */
+    lightsDim: [{ light: 'Garage', pct: 60 }],
+    /** Outlets (ids from lights.outlets) turned off (only if on) */
+    outletsOff: ['switch.front_yard'],
   },
 
   /** "Bedside lamp after TV": when the living room TV turns off in the time window, turn this lamp on */

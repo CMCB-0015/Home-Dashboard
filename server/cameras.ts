@@ -24,6 +24,7 @@ import type { AlertItem, Camera, GuardMode } from '../src/types.ts'
 import { ha, type HAState } from './ha.ts'
 import { cacheDelete, cacheGet, cacheSet } from './cache.ts'
 import { env } from './env.ts'
+import { stargazeLights, restoreStargazeLights, type StargazeLight } from './lights.ts'
 
 const PLATFORM = 'eufy_sdk'
 const TZ = env('TIMEZONE') ?? 'America/Los_Angeles'
@@ -328,7 +329,8 @@ async function refreshPictures() {
 // ── Stargazing: the Front Yard camera off for an hour ─────────────────────
 // Off = no motion light at all (and no Front Yard recording; Connor is out there).
 // The Garage stays on. Uses the camera's "Enabled" switch, never Spotlight Enabled.
-interface Stargaze { until: number; switches: string[] }
+// 1.29.0: also the front lights (Front Door off, Garage 60%, Front Yard Landscape off), put back at the end.
+interface Stargaze { until: number; switches: string[]; lights?: StargazeLight[] }
 let stargaze: Stargaze | null = null
 let stargazeTimer: NodeJS.Timeout | null = null
 /** Only camera on/off switches may be restored (a 1.18/1.19 Stargazing hour saved Spotlight switches) */
@@ -356,6 +358,8 @@ async function endStargazing(): Promise<void> {
   try {
     const switches = safeSwitches(s.switches)
     if (switches.length) await ha.callService('switch', 'turn_on', {}, switches)
+    // Lights only go back if nothing else changed them during the hour (safe to repeat on a retry)
+    if (s.lights?.length) await restoreStargazeLights(s.lights)
     stargaze = null
     await cacheSet('camera-stargazing', null)
     ha.notify()
@@ -368,7 +372,7 @@ async function endStargazing(): Promise<void> {
 export function startCameras() {
   // Pick up a Stargazing hour that was running when the app restarted
   void cacheGet<Stargaze>('camera-stargazing').then((s) => {
-    if (s && !stargaze) { stargaze = { until: s.until, switches: safeSwitches(s.switches ?? []) }; schedule() }
+    if (s && !stargaze) { stargaze = { until: s.until, switches: safeSwitches(s.switches ?? []), lights: s.lights ?? [] }; schedule() }
   })
   setInterval(() => { void refreshPictures() }, REFRESH_MS)
 }
@@ -396,10 +400,14 @@ export async function camerasCommand(b: { action?: string; mode?: string; minute
     // Only turn back on what Stargazing turned off; tapping again keeps the original list
     const switches = stargaze ? stargaze.switches : sw.state === 'on' ? [sw.entity_id] : []
     if (sw.state === 'on') await ha.callService('switch', 'turn_off', {}, [sw.entity_id])
-    stargaze = { until: Date.now() + Math.min(minutes * 60_000, STARGAZE_MS), switches: safeSwitches([...new Set([...switches, ...(sw.state === 'on' ? [sw.entity_id] : [])])]) }
+    // Front lights: a restart tap only sets lights not already handled this hour (keeps their saved "before")
+    const before = stargaze?.lights ?? []
+    const { changed, failed } = await stargazeLights(before.map((l) => l.id))
+    stargaze = { until: Date.now() + Math.min(minutes * 60_000, STARGAZE_MS), switches: safeSwitches([...new Set([...switches, ...(sw.state === 'on' ? [sw.entity_id] : [])])]), lights: [...before, ...changed] }
     await cacheSet('camera-stargazing', stargaze)
     schedule()
     ha.notify()
+    if (failed.length) throw new Error(`Stargazing is on, but ${failed.join(' and ')} didn't change`)
     return
   }
   throw new Error('Unknown camera command')
