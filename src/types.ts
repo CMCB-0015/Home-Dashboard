@@ -638,6 +638,8 @@ export interface HomeState {
    * & text %, chips = notification chip % (0 hides them).
    */
   idle?: { enabled: boolean; on?: boolean; master?: boolean; minutes: number; brightness: number; chips?: number }
+  /** Holiday screensaver themes (1.30.0), by theme id; saved on the Lenovo, kept year to year */
+  holidays?: Record<string, HolidaySettings>
   /** Whether the calendar can add, edit and delete events (Panel's Google link) */
   calendarWrite?: CalendarWrite
   /** Upcoming games and races from The Brief (empty until its schedule feed exists) */
@@ -655,4 +657,16 @@ export interface HomeState {
   sources?: Partial<Record<Category, 'live' | 'demo' | 'off'>>
   /** False when the dashboard is running but can't reach Home Assistant */
   homeAssistant?: 'connected' | 'connecting' | 'not-configured'
+}
+
+/** One holiday theme's choices (Settings → Holiday themes, 1.30.0) */
+export interface HolidaySettings {
+  /** off = never; auto = during the theme's dates every year; on = always */
+  mode: 'off' | 'auto' | 'on'
+  /** Scene brightness, 30–100 % */
+  scene: number
+  snow: 'off' | 'light' | 'normal' | 'heavy'
+  lights: 'few' | 'normal' | 'lots' | 'max'
+  /** Light brightness, 25–100 % */
+  glow: number
 }

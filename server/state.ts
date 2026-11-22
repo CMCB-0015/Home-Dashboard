@@ -23,7 +23,7 @@ import { teslaState } from './tesla.ts'
 import { onTeslaMapChange } from './teslaMap.ts'
 import { gcalStatus } from './gcal.ts'
 import { env } from './env.ts'
-import { screensaverState } from './settings.ts'
+import { holidayState, screensaverState } from './settings.ts'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -170,6 +170,7 @@ export function buildState(): HomeState {
     calendarWrite: gcalStatus(),
     mapsKey: env('GOOGLE_MAPS_KEY') ?? null,
     idle: screensaverState(),
+    holidays: holidayState(),
     sports: haConfigured ? sportsEvents() : demo.sports,
     launches: haConfigured ? launchEvents() : demo.launches,
     irrigationZones,

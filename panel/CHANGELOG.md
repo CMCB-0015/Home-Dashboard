@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.30.0
+- **Holiday themes for the screensaver**, starting with **Christmas** (the "Ridgeline" scene): a snowy mountain ridge with peaks, forest, and big pines in twinkling multicolor lights; falling snow; the real time of day (stars and the moon at night, sun and blue sky by day — the lights stay on in daylight); and **Santa's sleigh crossing the moon** at night every few minutes. The clock, date, weather and chips move to the top-left over the scene, brighter so they read
+- **Comes back every year on its own**: Christmas is set to **Auto**, on from **Dec 1 through Jan 6** every year, and off the rest of the year (the screensaver is exactly as before then). The choices are saved on the Lenovo per theme, so nothing is lost after the season. Other holidays can be added the same way, each with its own dates
+- **Settings → Holiday themes** (new section): Christmas **Off / Auto / On**, **Scene brightness**, **Snow** (Off / Light / Normal / Heavy), **Christmas lights** (Few / Normal / Lots / Max), **Light brightness**, and **Preview Christmas** to see it any time of year
+- The scene only loads and runs while it's on screen (about 30 frames a second, stops the moment Panel wakes)
+- **Settings opens with every section collapsed**, every time
+- Settings footer and System info show 1.30.0
+
 ## 1.29.0
 - **Landscape lights on the Lights page**: the two VeSync outlets, **Front Yard Landscape** and **Backyard Landscape**, show with the Hue lights in their Home Assistant area: on/off switch, an "outlet" tag, and the power they're drawing ("on · 24 W"). They count as Out lights on the card
 - **All indoor off and All off never touch the landscape outlets** (they stay on and keep their VeSync schedules). The card's All off is greyed when only the outlets are on

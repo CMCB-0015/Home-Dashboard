@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, ChevronRight, CloudSun, Moon, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, CloudSun, Moon, Snowflake, X } from 'lucide-react'
 import { RoborockSection } from './RoborockSection'
 import { useHome } from '../../lib/useHome'
 import { SCREENSAVER_PREVIEW_EVENT } from '../IdleOverlay'
 import { SystemInfo } from './SystemInfo'
+import { HolidaySection } from './HolidaySection'
 
 // Panel's Settings menu (1.27.0): slides out from the right, opened by the gear
 // in the page header. Everything here is saved on the Lenovo the moment it
 // changes (POST /api/settings), so no rebuild or app restart is needed.
 // Each section is an expandable header; new sections stack below Screensaver.
+// 1.30.0: every section starts collapsed each time the menu opens (keep it tidy).
 
 const WAITS = [1, 2, 5, 10, 15]
 
@@ -37,6 +39,7 @@ export function SettingsMenu({ onClose }: { onClose: () => void }) {
 
         <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto px-6 pb-4">
           <ScreensaverSection />
+          <HolidaySection icon={<Snowflake size={18} strokeWidth={1.7} />} />
           <WeatherSection />
           <RoborockSection />
         </div>
@@ -77,7 +80,7 @@ export function Section({ icon, title, summary, open, onToggle, children }:
 function ScreensaverSection() {
   const { data, update, send } = useHome()
   const cfg = data?.idle
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   // What was just changed here wins over the live data until it's saved, so a
   // live update arriving mid-drag can't snap a slider back
   const [local, setLocal] = useState<{ on?: boolean; minutes?: number; text?: number; chips?: number }>({})
@@ -195,7 +198,7 @@ function PreviewChip({ children, dot, star, border, color }: { children: ReactNo
   )
 }
 
-function Slider({ label, value, min, max, step, onChange }:
+export function Slider({ label, value, min, max, step, onChange }:
   { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
   return (
     <div>

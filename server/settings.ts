@@ -1,7 +1,7 @@
 // Panel's own Settings menu (1.27.0): changed on the screen, saved on the Lenovo
 // (/data, key `panel-settings`), so nothing needs a code rebuild or an app restart.
 //
-// Sections so far: Screensaver. More sections stack in the same object.
+// Sections so far: Screensaver, Holiday themes (1.30.0). More sections stack in the same object.
 //
 // The app's Configuration tab still has the last word on the screensaver:
 // `idle_dim` off there = no screensaver at all, whatever the menu says
@@ -25,7 +25,29 @@ export interface ScreensaverSettings {
   chips: number
 }
 
-interface Saved { screensaver?: Partial<ScreensaverSettings> }
+// ── Holiday themes (1.30.0) ─────────────────────────────────────────────
+// Seasonal screensaver scenes. Each theme is saved here by its id, forever, so
+// it comes back every year with the same choices. The theme list itself
+// (names, dates, scenes) lives on the screen side in src/lib/holidays.ts;
+// adding a theme = add its id below + its entry there + its scene component.
+export const HOLIDAY_IDS = ['christmas'] as const
+export type HolidayMode = 'off' | 'auto' | 'on'
+export interface HolidaySettings {
+  /** off = never; auto = during the theme's dates every year; on = always */
+  mode: HolidayMode
+  /** Scene brightness, 30–100 % */
+  scene: number
+  snow: 'off' | 'light' | 'normal' | 'heavy'
+  lights: 'few' | 'normal' | 'lots' | 'max'
+  /** Christmas light brightness, 25–100 % */
+  glow: number
+}
+export const HOLIDAY_DEFAULTS: HolidaySettings = { mode: 'auto', scene: 100, snow: 'normal', lights: 'normal', glow: 60 }
+const MODES: HolidayMode[] = ['off', 'auto', 'on']
+const SNOWS: HolidaySettings['snow'][] = ['off', 'light', 'normal', 'heavy']
+const LIGHTS: HolidaySettings['lights'][] = ['few', 'normal', 'lots', 'max']
+
+interface Saved { screensaver?: Partial<ScreensaverSettings>; holidays?: Record<string, Partial<HolidaySettings>> }
 
 const KEY = 'panel-settings'
 export const WAIT_CHOICES = [1, 2, 5, 10, 15]
@@ -49,10 +71,34 @@ export function screensaverState() {
   return { enabled: master && on, on, master, minutes, brightness: text, chips }
 }
 
-/** POST /api/settings  { screensaver: { on?, minutes?, text?, chips? } } */
-export async function saveSettings(body: { screensaver?: Partial<ScreensaverSettings> }) {
-  const s = body?.screensaver
-  if (!s || typeof s !== 'object') throw new Error('Nothing to save')
+/** What the screens get for each holiday theme: saved choices over the defaults */
+export function holidayState(): Record<string, HolidaySettings> {
+  const out: Record<string, HolidaySettings> = {}
+  for (const id of HOLIDAY_IDS) out[id] = { ...HOLIDAY_DEFAULTS, ...(saved.holidays?.[id] ?? {}) }
+  return out
+}
+
+function checkHoliday(id: string, h: Partial<HolidaySettings>): Partial<HolidaySettings> {
+  if (!(HOLIDAY_IDS as readonly string[]).includes(id)) throw new Error(`No holiday theme called ${id}`)
+  const next: Partial<HolidaySettings> = { ...saved.holidays?.[id] }
+  if (h.mode !== undefined) { if (!MODES.includes(h.mode)) throw new Error('Pick Off, Auto or On'); next.mode = h.mode }
+  if (h.snow !== undefined) { if (!SNOWS.includes(h.snow)) throw new Error('Pick a snow amount'); next.snow = h.snow }
+  if (h.lights !== undefined) { if (!LIGHTS.includes(h.lights)) throw new Error('Pick how many lights'); next.lights = h.lights }
+  if (h.scene !== undefined) next.scene = clamp(Number(h.scene) || 100, 30, 100)
+  if (h.glow !== undefined) next.glow = clamp(Number(h.glow) || 60, 25, 100)
+  return next
+}
+
+/** POST /api/settings  { screensaver?: { on?, minutes?, text?, chips? }, holidays?: { [id]: { mode?, scene?, snow?, lights?, glow? } } } */
+export async function saveSettings(body: { screensaver?: Partial<ScreensaverSettings>; holidays?: Record<string, Partial<HolidaySettings>> }) {
+  const s = body?.screensaver, hol = body?.holidays
+  if ((!s || typeof s !== 'object') && (!hol || typeof hol !== 'object')) throw new Error('Nothing to save')
+  if (hol && typeof hol === 'object') {
+    const holidays = { ...saved.holidays }
+    for (const [id, h] of Object.entries(hol)) if (h && typeof h === 'object') holidays[id] = checkHoliday(id, h)
+    saved = { ...saved, holidays }
+  }
+  if (!s || typeof s !== 'object') { await cacheSet(KEY, saved); return }
   const next: Partial<ScreensaverSettings> = { ...saved.screensaver }
   if (typeof s.on === 'boolean') next.on = s.on
   if (s.minutes !== undefined) {

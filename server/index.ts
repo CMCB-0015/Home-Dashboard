@@ -26,7 +26,7 @@
 //   POST /api/rachio/command          GET /api/rachio/debug
 //   POST /api/rachio/scheduled        (quick runs set to start later)
 //   POST /api/vacuum/scheduled        (vacuum cleans set to start later)
-//   POST /api/settings                Settings menu (screensaver), saved on the Lenovo
+//   POST /api/settings                Settings menu (screensaver, holiday themes), saved on the Lenovo
 //   GET  /api/system                  live values for the System info window
 //   GET/POST /api/vacuum/timing       learned run / room times: list, remove one, put it back
 
