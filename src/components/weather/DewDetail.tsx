@@ -1,17 +1,18 @@
 import type { WeatherDay, WeatherHour } from '../../types'
 import { useWidth } from './SkyChart'
+import { dewFeel } from '../../lib/dew'
 
 const GREEN = '#8fd6b0'
 const GOLD = 'rgba(242,193,78,.7)'
 
-// How a dew point feels (°F)
+// How a dew point feels (°F) — names shared with the Climate card (src/lib/dew.ts)
 const BANDS = [
   { name: 'dry', lo: -100, hi: 40, color: 'rgba(214,180,120,.55)' },
   { name: 'comfortable', lo: 40, hi: 55, color: 'rgba(143,214,176,.6)' },
   { name: 'sticky', lo: 55, hi: 65, color: 'rgba(242,193,78,.6)' },
   { name: 'muggy', lo: 65, hi: 200, color: 'rgba(242,154,78,.65)' },
 ]
-const feel = (t: number) => BANDS.find((b) => t < b.hi)?.name ?? 'muggy'
+const feel = dewFeel
 const clock = (t: number) => new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 const f = (x: number) => x.toFixed(1)
 

@@ -36,6 +36,8 @@ interface Props {
   /** Eco and Off: no turning, no target dot in Off */
   locked: boolean
   off?: boolean
+  /** System off: the dial is a thermometer — a soft white arc from the bottom of the scale up to the inside temperature, no dots (nothing is set) */
+  thermometer?: boolean
   /** Range dot colors (blue low, red high; grey in Eco) */
   lowColor: string
   highColor: string
@@ -132,6 +134,7 @@ export function HaloDial(p: Props) {
   const lo = p.range ? shown('low') : 0, hi = p.range ? shown('high') : 0, tg = shown('target')
   const [a1, a2] = p.range ? [lo, hi] : [Math.min(p.cur, tg), Math.max(p.cur, tg)]
   const showArc = !p.off && (!!p.range || a1 !== a2)
+  const mercury = p.thermometer ? arc(angleOf(DIAL_MIN), angleOf(p.cur), R_HALO) : null
   // Range arc: climate blue in Heat · Cool, grey in Eco (both dots grey)
   const arcColor = p.range ? (p.lowColor === p.highColor ? rgba(p.lowColor, 0.55) : rgba('#5b8fc7', 0.75)) : p.color
   const dots = p.off ? [] : p.range
@@ -159,7 +162,11 @@ export function HaloDial(p: Props) {
           <path d={arc(angleOf(a1), angleOf(a2), R_HALO)} fill="none" stroke={arcColor} strokeWidth={3.5} strokeLinecap="round"
             style={{ filter: p.live ? `drop-shadow(0 0 6px ${p.color})` : undefined, transition: 'stroke 0.4s' }} />
         )}
-        <circle cx={cx} cy={cy} r={2.5} fill="#8493a1" />
+        {mercury && (
+          <path d={mercury} fill="none" stroke="rgba(232, 237, 242, 0.55)" strokeWidth={3.5} strokeLinecap="round"
+            style={{ filter: 'drop-shadow(0 0 5px rgba(232, 237, 242, 0.3))' }} />
+        )}
+        {!p.thermometer && <circle cx={cx} cy={cy} r={2.5} fill="#8493a1" />}
         {dots.map((d, i) => {
           const [x, y] = point(angleOf(d.t), R_DOT)
           return <circle key={i} cx={x} cy={y} r={4} fill={d.c} style={{ filter: `drop-shadow(0 0 4px ${d.c})` }} />

@@ -17,6 +17,8 @@ export interface Thermostat {
   targetLowF?: number | null; targetHighF?: number | null
   /** Heating or cooling right now */
   action?: 'heating' | 'cooling' | 'idle' | 'off' | null
+  /** When the mode last changed (ISO time) — the card shows "Since 9:12 PM" while off */
+  modeSince?: string
 }
 
 export interface Light {

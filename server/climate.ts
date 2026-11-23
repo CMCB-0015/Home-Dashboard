@@ -37,6 +37,8 @@ export function thermostats(): Thermostat[] {
       humidityPct: Math.round(num(a.current_humidity) ?? 0),
       mode, modes,
       action: (a.hvac_action as Thermostat['action']) ?? null,
+      // HA's last_changed moves only when the state (the mode) changes, not on temperature updates
+      modeSince: s.last_changed,
     }
   })
 }

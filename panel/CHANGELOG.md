@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.31.0
+- Climate: **when the system is off the card is an indoor thermometer** instead of saying "Off" everywhere. The dial shows the inside temperature with humidity under it, and a soft white glow fills the ring up to the inside temperature. No dot on the ring (nothing is set while off). "Off" now shows only next to "Climate" and on the "Off ⌄" pill (still tap it for Heat / Cool / Off)
+- Climate: two tiles under the dial while off: **Outside** (temperature and humidity from Panel's weather) and the inside **Dew point** with how it feels (Dry / Comfortable / Sticky / Muggy, same bands as the Weather card)
+- Climate: the footer shows when it was turned off ("Since 9:12 PM"); −/+ stay greyed while off
+- Heat, Cool, Heat · Cool and Eco look and work exactly as before
+
 ## 1.30.0
 - **Holiday themes for the screensaver**, starting with **Christmas** (the "Ridgeline" scene): a snowy mountain ridge with peaks, forest, and big pines in twinkling multicolor lights; falling snow; the real time of day (stars and the moon at night, sun and blue sky by day — the lights stay on in daylight); and **Santa's sleigh crossing the moon** at night every few minutes. The clock, date, weather and chips move to the top-left over the scene, brighter so they read
 - **Comes back every year on its own**: Christmas is set to **Auto**, on from **Dec 1 through Jan 6** every year, and off the rest of the year (the screensaver is exactly as before then). The choices are saved on the Lenovo per theme, so nothing is lost after the season. Other holidays can be added the same way, each with its own dates
